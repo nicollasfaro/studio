@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Badge } from '@/components/ui/badge';
 import { useAuth, useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { useUserData } from '@/hooks/use-user-data';
 import { collection, query, where, orderBy } from 'firebase/firestore';
@@ -42,15 +43,24 @@ export default function ProfilePage() {
   const { data: services, isLoading: isLoadingServices } = useCollection<Omit<Service, 'id'>>(servicesRef);
 
   const upcomingAppointmentsQuery = useMemoFirebase(() => {
+    // Wait until we have the user and know their admin status
     if (isUserDataLoading || !firestore || !user?.uid) return null;
 
     const isAdmin = userData?.isAdmin ?? false;
     const baseQuery = collection(firestore, 'appointments');
     
-    // Admins need to fetch all to show in their admin panel, but we filter on the client for this specific page.
-    // Non-admins fetch only their own. This query satisfies both security rules.
+    // Admins need to fetch all, non-admins fetch only their own.
+    if (isAdmin) {
+       return query(
+        baseQuery, 
+        where('startTime', '>=', new Date().toISOString()), 
+        orderBy('startTime', 'asc')
+      );
+    }
+    
     return query(
         baseQuery, 
+        where('clientId', '==', user.uid),
         where('startTime', '>=', new Date().toISOString()), 
         orderBy('startTime', 'asc')
     );
@@ -58,13 +68,23 @@ export default function ProfilePage() {
 
 
   const pastAppointmentsQuery = useMemoFirebase(() => {
+    // Wait until we have the user and know their admin status
     if (isUserDataLoading || !firestore || !user?.uid) return null;
     
     const isAdmin = userData?.isAdmin ?? false;
     const baseQuery = collection(firestore, 'appointments');
+    
+    if (isAdmin) {
+        return query(
+            baseQuery, 
+            where('startTime', '<', new Date().toISOString()), 
+            orderBy('startTime', 'desc')
+        );
+    }
 
     return query(
         baseQuery, 
+        where('clientId', '==', user.uid),
         where('startTime', '<', new Date().toISOString()), 
         orderBy('startTime', 'desc')
     );
@@ -79,7 +99,8 @@ export default function ProfilePage() {
     const isAdmin = userData?.isAdmin ?? false;
 
     return appointments
-      .filter(apt => isAdmin ? apt.clientId === user.uid : true) // For admins, filter to their own appointments for this page
+      // If the user is an admin, we only show their *own* appointments on this page, not all appointments.
+      .filter(apt => isAdmin ? apt.clientId === user.uid : true) 
       .map(apt => ({
         ...apt,
         serviceName: services.find(s => s.id === apt.serviceId)?.name || 'Serviço Desconhecido',
@@ -98,6 +119,22 @@ export default function ProfilePage() {
       console.error('Erro ao sair: ', error);
     }
   };
+  
+  const getBadgeVariant = (status: Appointment['status']) => {
+    switch (status) {
+      case 'scheduled':
+        return 'secondary';
+      case 'confirmed':
+        return 'default';
+      case 'completed':
+        return 'outline';
+      case 'cancelled':
+        return 'destructive';
+      default:
+        return 'secondary';
+    }
+  };
+
 
   if (isUserLoading || isUserDataLoading || !user) {
     return (
@@ -183,7 +220,9 @@ export default function ProfilePage() {
                           {format(new Date(apt.startTime), "EEEE, d 'de' MMM 'às' HH:mm", { locale: ptBR })}
                         </p>
                       </div>
-                      <Button variant="outline" size="sm" disabled>Gerenciar</Button>
+                       <Badge variant={getBadgeVariant(apt.status)} className="capitalize">
+                        {apt.status}
+                      </Badge>
                     </li>
                   ))}
                 </ul>
@@ -255,5 +294,3 @@ export default function ProfilePage() {
     </div>
   );
 }
-
-    
