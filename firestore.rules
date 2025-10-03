@@ -1,137 +1,105 @@
-/**
- * @fileoverview Firestore Security Rules for GlamEase.
- *
- * Core Philosophy: This ruleset enforces a strict user-ownership model for client and appointment data,
- * while allowing public read access to service and promotion information.
- *
- * Data Structure:
- * - /users/{userId}/clients/{clientId}: Client data, accessible only by the owning user.
- * - /services/{serviceId}: Service data, publicly readable.
- * - /promotions/{promotionId}: Promotion data, publicly readable.
- * - /users/{userId}/appointments/{appointmentId}: Appointment data, accessible only by the owning user.
- *
- * Key Security Decisions:
- * - User listing is implicitly denied.
- * - Public read access is granted for services and promotions.
- * - Data validation is minimized in this prototyping phase, focusing on ownership and relational integrity.
- *
- * Denormalization for Authorization:
- *  - The `clientId` and `userId` in the path `/users/{userId}/clients/{clientId}` are used to enforce ownership.
- *  - The `appointmentId` and `userId` in the path `/users/{userId}/appointments/{appointmentId}` are used to enforce ownership.
- */
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
     /**
-     * @description Enforces access control for client documents, ensuring only the owner can read and write.
+     * @description Checks if the request is made by a signed-in user.
+     * @return {boolean} True if the user is signed in, false otherwise.
+     */
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    /**
+     * @description Checks if the authenticated user ID matches the provided user ID.
+     * @param {string} userId The user ID to compare against.
+     * @return {boolean} True if the user IDs match, false otherwise.
+     */
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    /**
+     * @description Checks if the authenticated user is the owner and the resource exists.
+     * @param {string} userId The user ID to compare against.
+     * @return {boolean} True if the user is the owner and the resource exists, false otherwise.
+     */
+    function isExistingOwner(userId) {
+      return isSignedIn() && isOwner(userId) && exists(resource);
+    }
+
+    /**
+     * @description Rules for client documents under a specific user.
      * @path /users/{userId}/clients/{clientId}
-     * @allow (create) User with ID 'user123' creates a new client document with clientId 'client456' under /users/user123/clients/client456.
-     * @allow (get) User with ID 'user123' reads a client document with clientId 'client456' under /users/user123/clients/client456.
-     * @allow (update) User with ID 'user123' updates a client document with clientId 'client456' under /users/user123/clients/client456.
-     * @allow (delete) User with ID 'user123' deletes a client document with clientId 'client456' under /users/user123/clients/client456.
-     * @deny (create) User with ID 'user456' attempts to create a client document under /users/user123/clients/client789.
-     * @deny (get) User with ID 'user456' attempts to read a client document under /users/user123/clients/client789.
-     * @deny (update) User with ID 'user456' attempts to update a client document under /users/user123/clients/client789.
-     * @deny (delete) User with ID 'user456' attempts to delete a client document under /users/user123/clients/client789.
-     * @principle Enforces path-based document ownership, restricting access to the authenticated user's own data.
+     * @allow (create) - Authenticated user "user_abc" can create a client document under their own user ID.
+     *  request.auth.uid: 'user_abc', request.resource.data.id: 'user_abc'
+     * @allow (get, list) - Authenticated user "user_abc" can read (get, list) their own client documents.
+     *  request.auth.uid: 'user_abc'
+     * @allow (update, delete) - Authenticated user "user_abc" can update and delete their own client documents.
+     *  request.auth.uid: 'user_abc'
+     * @deny (create) - Authenticated user "user_xyz" cannot create a client document under another user's ID ("user_abc").
+     *  request.auth.uid: 'user_xyz', request.resource.data.id: 'user_abc'
+     * @deny (get, list, update, delete) - Authenticated user "user_xyz" cannot access client documents under another user's ID ("user_abc").
+     *  request.auth.uid: 'user_xyz'
+     * @principle Enforces document ownership for all operations.
      */
     match /users/{userId}/clients/{clientId} {
-      // Allow the user to read their own client document
-      allow get: if isSignedIn() && isOwner(userId);
-      allow list: if isSignedIn() && isOwner(userId);
+      allow get: if isOwner(userId);
+      allow list: if isOwner(userId);
 
-      // Allow the user to create a client document only if the userId matches the authenticated user's ID
-      allow create: if isSignedIn() && isOwner(userId) && request.resource.data.id == userId;
-
-      // Allow the user to update their own client document
-      allow update: if isSignedIn() && isExistingOwner(userId) && resource.data.id == userId;
-
-      // Allow the user to delete their own client document
-      allow delete: if isSignedIn() && isExistingOwner(userId);
+      allow create: if isOwner(userId);
+      allow update: if isExistingOwner(userId);
+      allow delete: if isExistingOwner(userId);
     }
 
     /**
-     * @description Allows public read access to service documents.
+     * @description Rules for service documents.
      * @path /services/{serviceId}
-     * @allow (get) Any user can read a service document with serviceId 'service123' under /services/service123.
-     * @allow (list) Any user can list all service documents under /services.
-     * @deny (create) Any user attempts to create a service document under /services/service123.
-     * @deny (update) Any user attempts to update a service document under /services/service123.
-     * @deny (delete) Any user attempts to delete a service document under /services/service123.
-     * @principle Grants public read access to service data while restricting write access.
+     * @allow (get, list) - Any user (authenticated or not) can read service documents.
+     * @deny (create, update, delete) - No one can create, update, or delete service documents.
+     * @principle Public read access with no write access.
      */
     match /services/{serviceId} {
-      // Allow anyone to read service documents
       allow get, list: if true;
 
-      // Only allow creation, update, and delete if false (no one can write)
-      allow create: if false;
-      allow update: if false;
-      allow delete: if false;
+      allow create, update, delete: if false;
     }
 
     /**
-     * @description Allows public read access to promotion documents.
+     * @description Rules for promotion documents.
      * @path /promotions/{promotionId}
-     * @allow (get) Any user can read a promotion document with promotionId 'promotion123' under /promotions/promotion123.
-     * @allow (list) Any user can list all promotion documents under /promotions.
-     * @deny (create) Any user attempts to create a promotion document under /promotions/promotion123.
-     * @deny (update) Any user attempts to update a promotion document under /promotions/promotion123.
-     * @deny (delete) Any user attempts to delete a promotion document under /promotions/promotion123.
-     * @principle Grants public read access to promotion data while restricting write access.
+     * @allow (get, list) - Any user (authenticated or not) can read promotion documents.
+     * @deny (create, update, delete) - No one can create, update, or delete promotion documents.
+     * @principle Public read access with no write access.
      */
     match /promotions/{promotionId} {
-      // Allow anyone to read promotion documents
       allow get, list: if true;
 
-      // Only allow creation, update, and delete if false (no one can write)
-      allow create: if false;
-      allow update: if false;
-      allow delete: if false;
+      allow create, update, delete: if false;
     }
 
     /**
-     * @description Enforces access control for appointment documents, ensuring only the owner can read and write.
+     * @description Rules for appointment documents under a specific user.
      * @path /users/{userId}/appointments/{appointmentId}
-     * @allow (create) User with ID 'user123' creates a new appointment document with appointmentId 'appointment456' under /users/user123/appointments/appointment456.
-     * @allow (get) User with ID 'user123' reads an appointment document with appointmentId 'appointment456' under /users/user123/appointments/appointment456.
-     * @allow (update) User with ID 'user123' updates an appointment document with appointmentId 'appointment456' under /users/user123/appointments/appointment456.
-     * @allow (delete) User with ID 'user123' deletes an appointment document with appointmentId 'appointment456' under /users/user123/appointments/appointment456.
-     * @deny (create) User with ID 'user456' attempts to create an appointment document under /users/user123/appointments/appointment789.
-     * @deny (get) User with ID 'user456' attempts to read an appointment document under /users/user123/appointments/appointment789.
-     * @deny (update) User with ID 'user456' attempts to update an appointment document under /users/user123/appointments/appointment789.
-     * @deny (delete) User with ID 'user456' attempts to delete an appointment document under /users/user123/appointments/appointment789.
-     * @principle Enforces path-based document ownership, restricting access to the authenticated user's own data.
+     * @allow (create) - Authenticated user "user_abc" can create an appointment document under their own user ID.
+     *  request.auth.uid: 'user_abc', request.resource.data.clientId: 'user_abc'
+     * @allow (get, list) - Authenticated user "user_abc" can read (get, list) their own appointment documents.
+     *  request.auth.uid: 'user_abc'
+     * @allow (update, delete) - Authenticated user "user_abc" can update and delete their own appointment documents.
+     *  request.auth.uid: 'user_abc'
+     * @deny (create) - Authenticated user "user_xyz" cannot create an appointment document under another user's ID ("user_abc").
+     *  request.auth.uid: 'user_xyz', request.resource.data.clientId: 'user_abc'
+     * @deny (get, list, update, delete) - Authenticated user "user_xyz" cannot access appointment documents under another user's ID ("user_abc").
+     *  request.auth.uid: 'user_xyz'
+     * @principle Enforces document ownership for all operations.
      */
     match /users/{userId}/appointments/{appointmentId} {
-      // Allow the user to read their own appointment document
-      allow get: if isSignedIn() && isOwner(userId);
-      allow list: if isSignedIn() && isOwner(userId);
+      allow get: if isOwner(userId);
+      allow list: if isOwner(userId);
 
-      // Allow the user to create an appointment document only if the userId matches the authenticated user's ID
-      allow create: if isSignedIn() && isOwner(userId) && request.resource.data.clientId == userId;
-
-      // Allow the user to update their own appointment document
-      allow update: if isSignedIn() && isExistingOwner(userId) && resource.data.clientId == userId;
-
-      // Allow the user to delete their own appointment document
-      allow delete: if isSignedIn() && isExistingOwner(userId);
+      allow create: if isOwner(userId);
+      allow update: if isExistingOwner(userId);
+      allow delete: if isExistingOwner(userId);
     }
-  }
-
-  // Helper function to determine if the user is signed in
-  function isSignedIn() {
-    return request.auth != null;
-  }
-
-  // Helper function to determine if the user is the owner of the document based on the userId
-  function isOwner(userId) {
-    return request.auth.uid == userId;
-  }
-
-  // Helper function to determine if the user is the owner of the document and if the document exists
-  function isExistingOwner(userId) {
-    return isSignedIn() && isOwner(userId) && resource != null;
   }
 }
