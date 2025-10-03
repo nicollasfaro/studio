@@ -12,6 +12,7 @@ import {
   LogIn,
   UserPlus,
   LogOut,
+  Shield,
 } from 'lucide-react';
 import { signOut } from 'firebase/auth';
 
@@ -30,6 +31,7 @@ import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { useUser, useAuth } from '@/firebase';
 import { useToast } from '@/hooks/use-toast';
+import { useAdmin } from '@/hooks/use-admin';
 
 const navLinks = [
   { href: '/', label: 'Início', icon: Home },
@@ -41,6 +43,7 @@ const navLinks = [
 export function Header() {
   const pathname = usePathname();
   const { user, isUserLoading } = useUser();
+  const { isAdmin } = useAdmin();
   const auth = useAuth();
   const router = useRouter();
   const { toast } = useToast();
@@ -88,6 +91,18 @@ export function Header() {
                     {label}
                   </Link>
                 ))}
+                {isAdmin && (
+                  <Link
+                    href="/admin"
+                    className={cn(
+                      'flex items-center gap-4 px-2.5 text-muted-foreground hover:text-foreground',
+                      pathname.startsWith('/admin') && 'text-foreground'
+                    )}
+                  >
+                    <Shield className="h-5 w-5" />
+                    Admin
+                  </Link>
+                )}
               </nav>
             </SheetContent>
           </Sheet>
@@ -106,6 +121,17 @@ export function Header() {
               {label}
             </Link>
           ))}
+           {isAdmin && (
+             <Link
+              href="/admin"
+              className={cn(
+                'transition-colors hover:text-accent text-primary-foreground/80',
+                pathname.startsWith('/admin') ? 'text-white font-semibold' : ''
+              )}
+            >
+              Admin
+            </Link>
+          )}
         </nav>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -139,6 +165,14 @@ export function Header() {
                     <span>Meus Agendamentos</span>
                   </Link>
                 </DropdownMenuItem>
+                 {isAdmin && (
+                  <DropdownMenuItem asChild>
+                    <Link href="/admin">
+                      <Shield className="mr-2 h-4 w-4" />
+                      <span>Painel Admin</span>
+                    </Link>
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleLogout}>
                   <LogOut className="mr-2 h-4 w-4" />

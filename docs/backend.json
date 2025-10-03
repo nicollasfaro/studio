@@ -174,7 +174,13 @@
     "providers": [
       "password",
       "anonymous"
-    ]
+    ],
+    "customClaims": {
+      "admin": {
+        "type": "boolean",
+        "description": "Indicates if the user has administrative privileges."
+      }
+    }
   },
   "firestore": {
     "structure": [
