@@ -37,4 +37,5 @@ export type User = {
     name: string;
     email: string;
     createdAt: string;
+    isAdmin?: boolean;
 }

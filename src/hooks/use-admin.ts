@@ -1,50 +1,39 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useUser } from '@/firebase';
-
-// E-mail do administrador para desenvolvimento
-const ADMIN_EMAIL = 'nicollasciuldin@gmail.com';
+import { useUser, useFirestore, useDoc, useMemoFirebase } from '@/firebase';
+import { doc } from 'firebase/firestore';
+import type { User as UserType } from '@/lib/types';
 
 export function useAdmin() {
-  const { user, isUserLoading } = useUser();
+  const { user, isUserLoading: isAuthLoading } = useUser();
+  const firestore = useFirestore();
+
+  const userDocRef = useMemoFirebase(() => {
+    if (!user) return null;
+    return doc(firestore, 'users', user.uid);
+  }, [firestore, user]);
+
+  const { data: userData, isLoading: isUserDocLoading } = useDoc<UserType>(userDocRef);
+
   const [isAdmin, setIsAdmin] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const checkAdminStatus = async () => {
-      if (isUserLoading) {
-        return;
-      }
-      
-      if (!user) {
-        setIsAdmin(false);
-        setIsLoading(false);
-        return;
-      }
+    const loading = isAuthLoading || isUserDocLoading;
+    setIsLoading(loading);
 
-      // **Solução temporária para desenvolvimento**
-      // Concede acesso de administrador ao e-mail especificado.
-      if (user.email === ADMIN_EMAIL) {
-        setIsAdmin(true);
-        setIsLoading(false);
-        return;
-      }
+    if (loading) {
+      return;
+    }
+    
+    if (userData && userData.isAdmin) {
+      setIsAdmin(true);
+    } else {
+      setIsAdmin(false);
+    }
 
-      try {
-        const idTokenResult = await user.getIdTokenResult();
-        const isAdminClaim = !!idTokenResult.claims.admin;
-        setIsAdmin(isAdminClaim);
-      } catch (error) {
-        console.error("Erro ao verificar o status de administrador:", error);
-        setIsAdmin(false);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    checkAdminStatus();
-  }, [user, isUserLoading]);
+  }, [userData, isAuthLoading, isUserDocLoading]);
 
   return { isAdmin, isLoading };
 }

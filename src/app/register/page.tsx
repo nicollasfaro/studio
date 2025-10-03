@@ -65,6 +65,7 @@ export default function RegisterPage() {
             name: values.name,
             email: values.email,
             createdAt: new Date().toISOString(),
+            isAdmin: false,
         }, { merge: true });
       }
       
