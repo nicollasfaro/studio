@@ -30,8 +30,6 @@ export default function ProfilePage() {
   const firestore = useFirestore();
   const router = useRouter();
 
-  const isAdmin = userData?.isAdmin ?? false;
-
   // Redirect if not logged in
   useEffect(() => {
     if (!isUserLoading && !user) {
@@ -44,26 +42,37 @@ export default function ProfilePage() {
   const { data: services, isLoading: isLoadingServices } = useCollection<Omit<Service, 'id'>>(servicesRef);
 
   const upcomingAppointmentsQuery = useMemoFirebase(() => {
-    if (!firestore || !user) return null;
+    // Wait until we know if the user is an admin or not
+    if (isUserDataLoading || !firestore || !user) return null;
+
+    const isAdmin = userData?.isAdmin ?? false;
     const baseQuery = collection(firestore, 'appointments');
+
     if (isAdmin) {
-      // Admins see all upcoming appointments
+      // Admins see all upcoming appointments, ordered by time
       return query(baseQuery, where('startTime', '>=', new Date().toISOString()), orderBy('startTime', 'asc'));
+    } else {
+      // Regular users only see their own appointments
+      return query(baseQuery, where('clientId', '==', user.uid), where('startTime', '>=', new Date().toISOString()), orderBy('startTime', 'asc'));
     }
-    // Regular users only see their own appointments
-    return query(baseQuery, where('clientId', '==', user.uid), where('startTime', '>=', new Date().toISOString()), orderBy('startTime', 'asc'));
-  }, [firestore, user, isAdmin]);
+  }, [firestore, user, userData, isUserDataLoading]);
+
 
   const pastAppointmentsQuery = useMemoFirebase(() => {
-    if (!firestore || !user) return null;
+    // Wait until we know if the user is an admin or not
+    if (isUserDataLoading || !firestore || !user) return null;
+    
+    const isAdmin = userData?.isAdmin ?? false;
     const baseQuery = collection(firestore, 'appointments');
+
     if (isAdmin) {
       // Admins see all past appointments
       return query(baseQuery, where('startTime', '<', new Date().toISOString()), orderBy('startTime', 'desc'));
+    } else {
+      // Regular users only see their own appointments
+      return query(baseQuery, where('clientId', '==', user.uid), where('startTime', '<', new Date().toISOString()), orderBy('startTime', 'desc'));
     }
-    // Regular users only see their own appointments
-    return query(baseQuery, where('clientId', '==', user.uid), where('startTime', '<', new Date().toISOString()), orderBy('startTime', 'desc'));
-  }, [firestore, user, isAdmin]);
+  }, [firestore, user, userData, isUserDataLoading]);
 
   const { data: upcomingAppointmentsData, isLoading: isLoadingUpcoming } = useCollection<Appointment>(upcomingAppointmentsQuery);
   const { data: pastAppointmentsData, isLoading: isLoadingPast } = useCollection<Appointment>(pastAppointmentsQuery);
@@ -120,6 +129,8 @@ export default function ProfilePage() {
       </div>
     );
   }
+  
+  const isAdmin = userData?.isAdmin ?? false;
 
   return (
     <div className="container mx-auto px-4 md:px-6 py-12">
