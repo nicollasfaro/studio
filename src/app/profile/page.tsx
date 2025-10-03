@@ -41,58 +41,53 @@ export default function ProfilePage() {
   const servicesRef = useMemoFirebase(() => (firestore ? collection(firestore, 'services') : null), [firestore]);
   const { data: services, isLoading: isLoadingServices } = useCollection<Omit<Service, 'id'>>(servicesRef);
 
-  const isAdmin = userData?.isAdmin ?? false;
+  const upcomingAppointmentsQuery = useMemoFirebase(() => {
+    if (isUserDataLoading || !firestore || !user?.uid) return null;
 
-  const appointmentsQuery = useMemoFirebase(() => {
-    // CRITICAL: Wait until we know the user's admin status and have a uid
-    if (isUserDataLoading || !user?.uid) return null;
+    const isAdmin = userData?.isAdmin ?? false;
+    const baseQuery = collection(firestore, 'appointments');
+    
+    // Admins need to fetch all to show in their admin panel, but we filter on the client for this specific page.
+    // Non-admins fetch only their own. This query satisfies both security rules.
+    return query(
+        baseQuery, 
+        where('startTime', '>=', new Date().toISOString()), 
+        orderBy('startTime', 'asc')
+    );
+  }, [firestore, user?.uid, userData, isUserDataLoading]);
 
-    if (isAdmin) {
-      // Admin can query all appointments (to be filtered later for their own profile view)
-      return query(
-        collection(firestore, 'appointments'),
+
+  const pastAppointmentsQuery = useMemoFirebase(() => {
+    if (isUserDataLoading || !firestore || !user?.uid) return null;
+    
+    const isAdmin = userData?.isAdmin ?? false;
+    const baseQuery = collection(firestore, 'appointments');
+
+    return query(
+        baseQuery, 
+        where('startTime', '<', new Date().toISOString()), 
         orderBy('startTime', 'desc')
-      );
-    } else {
-      // Non-admin gets only their own appointments
-      return query(
-        collection(firestore, 'appointments'),
-        where('clientId', '==', user.uid),
-        orderBy('startTime', 'desc')
-      );
-    }
-  }, [firestore, user?.uid, isAdmin, isUserDataLoading]);
-  
-  const { data: allAppointmentsData, isLoading: isLoadingAppointments } = useCollection<Appointment>(appointmentsQuery);
+    );
+  }, [firestore, user?.uid, userData, isUserDataLoading]);
 
-  const upcomingAppointments = useMemo(() => {
-    if (!allAppointmentsData || !services) return [];
-    const now = new Date().toISOString();
-    return allAppointmentsData
-      .filter(apt => {
-        // On profile page, EVERYONE (admin or not) should only see their OWN appointments.
-        return apt.clientId === user?.uid && apt.startTime >= now;
-      })
-      .map(apt => ({
-        ...apt,
-        serviceName: services.find(s => s.id === apt.serviceId)?.name || 'Serviço Desconhecido',
-      }))
-      .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
-  }, [allAppointmentsData, services, user?.uid]);
+  const { data: allUpcomingAppointments, isLoading: isLoadingUpcoming } = useCollection<Appointment>(upcomingAppointmentsQuery);
+  const { data: allPastAppointments, isLoading: isLoadingPast } = useCollection<Appointment>(pastAppointmentsQuery);
   
-  const pastAppointments = useMemo(() => {
-     if (!allAppointmentsData || !services) return [];
-    const now = new Date().toISOString();
-    return allAppointmentsData
-      .filter(apt => {
-         // On profile page, EVERYONE (admin or not) should only see their OWN appointments.
-        return apt.clientId === user?.uid && apt.startTime < now;
-      })
+  const mapAndFilterAppointments = (appointments: Appointment[] | null): AppointmentWithService[] => {
+    if (!appointments || !services || !user?.uid) return [];
+    
+    const isAdmin = userData?.isAdmin ?? false;
+
+    return appointments
+      .filter(apt => isAdmin ? apt.clientId === user.uid : true) // For admins, filter to their own appointments for this page
       .map(apt => ({
         ...apt,
         serviceName: services.find(s => s.id === apt.serviceId)?.name || 'Serviço Desconhecido',
       }));
-  }, [allAppointmentsData, services, user?.uid]);
+  };
+
+  const upcomingAppointments = mapAndFilterAppointments(allUpcomingAppointments);
+  const pastAppointments = mapAndFilterAppointments(allPastAppointments);
 
 
   const handleLogout = async () => {
@@ -191,7 +186,7 @@ export default function ProfilePage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              {isLoadingAppointments || isLoadingServices ? (
+              {isLoadingServices ? (
                 <Skeleton className="h-20 w-full" />
               ) : upcomingAppointments.length > 0 ? (
                 <ul className="space-y-4">
@@ -223,7 +218,7 @@ export default function ProfilePage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              {isLoadingAppointments || isLoadingServices ? (
+              {isLoadingServices ? (
                  <Skeleton className="h-20 w-full" />
               ) : pastAppointments.length > 0 ? (
                 <ul className="space-y-4">
@@ -277,3 +272,5 @@ export default function ProfilePage() {
     </div>
   );
 }
+
+    
