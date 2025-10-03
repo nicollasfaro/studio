@@ -259,81 +259,81 @@ export default function AdminServicesPage() {
       </div>
 
       <div className="md:col-span-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Serviços Cadastrados</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Nome</TableHead>
-                  <TableHead>Preço</TableHead>
-                  <TableHead>Duração</TableHead>
-                  <TableHead className="text-right">Ações</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {isLoading &&
-                  Array.from({ length: 3 }).map((_, i) => (
-                    <TableRow key={i}>
-                      <TableCell>
-                        <Skeleton className="h-4 w-[150px]" />
-                      </TableCell>
-                      <TableCell>
-                        <Skeleton className="h-4 w-[60px]" />
-                      </TableCell>
-                      <TableCell>
-                        <Skeleton className="h-4 w-[80px]" />
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Skeleton className="h-8 w-16 ml-auto" />
-                      </TableCell>
+        <AlertDialog>
+            <Card>
+            <CardHeader>
+                <CardTitle>Serviços Cadastrados</CardTitle>
+            </CardHeader>
+            <CardContent>
+                <Table>
+                <TableHeader>
+                    <TableRow>
+                    <TableHead>Nome</TableHead>
+                    <TableHead>Preço</TableHead>
+                    <TableHead>Duração</TableHead>
+                    <TableHead className="text-right">Ações</TableHead>
                     </TableRow>
-                  ))}
-                {services?.map((service) => (
-                  <TableRow key={service.id}>
-                    <TableCell className="font-medium">{service.name}</TableCell>
-                    <TableCell>R${service.price.toFixed(2)}</TableCell>
-                    <TableCell>{service.durationMinutes} min</TableCell>
-                    <TableCell className="text-right">
-                      <Button variant="ghost" size="icon" onClick={() => handleEditClick(service)}>
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <AlertDialogTrigger asChild>
-                          <Button variant="ghost" size="icon" onClick={() => setShowDeleteAlert(service)}>
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                      </AlertDialogTrigger>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-            {!isLoading && services?.length === 0 && (
-              <p className="text-center text-muted-foreground py-8">
-                Nenhum serviço cadastrado ainda.
-              </p>
-            )}
-          </CardContent>
-        </Card>
+                </TableHeader>
+                <TableBody>
+                    {isLoading &&
+                    Array.from({ length: 3 }).map((_, i) => (
+                        <TableRow key={i}>
+                        <TableCell>
+                            <Skeleton className="h-4 w-[150px]" />
+                        </TableCell>
+                        <TableCell>
+                            <Skeleton className="h-4 w-[60px]" />
+                        </TableCell>
+                        <TableCell>
+                            <Skeleton className="h-4 w-[80px]" />
+                        </TableCell>
+                        <TableCell className="text-right">
+                            <Skeleton className="h-8 w-16 ml-auto" />
+                        </TableCell>
+                        </TableRow>
+                    ))}
+                    {services?.map((service) => (
+                    <TableRow key={service.id}>
+                        <TableCell className="font-medium">{service.name}</TableCell>
+                        <TableCell>R${service.price.toFixed(2)}</TableCell>
+                        <TableCell>{service.durationMinutes} min</TableCell>
+                        <TableCell className="text-right">
+                        <Button variant="ghost" size="icon" onClick={() => handleEditClick(service)}>
+                            <Edit className="h-4 w-4" />
+                        </Button>
+                        <AlertDialogTrigger asChild>
+                            <Button variant="ghost" size="icon" onClick={() => setShowDeleteAlert(service)}>
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                        </AlertDialogTrigger>
+                        </TableCell>
+                    </TableRow>
+                    ))}
+                </TableBody>
+                </Table>
+                {!isLoading && services?.length === 0 && (
+                <p className="text-center text-muted-foreground py-8">
+                    Nenhum serviço cadastrado ainda.
+                </p>
+                )}
+            </CardContent>
+            </Card>
+            <AlertDialogContent>
+                <AlertDialogHeader>
+                    <AlertDialogTitle>Você tem certeza?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                        Esta ação não pode ser desfeita. Isso removerá permanentemente o serviço "{showDeleteAlert?.name}" do banco de dados.
+                    </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                    <AlertDialogCancel onClick={() => setShowDeleteAlert(null)}>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleDeleteService} className="bg-destructive hover:bg-destructive/90">
+                        Sim, remover
+                    </AlertDialogAction>
+                </AlertDialogFooter>
+            </AlertDialogContent>
+        </AlertDialog>
       </div>
-      <AlertDialog open={!!showDeleteAlert} onOpenChange={(open) => !open && setShowDeleteAlert(null)}>
-        <AlertDialogContent>
-            <AlertDialogHeader>
-                <AlertDialogTitle>Você tem certeza?</AlertDialogTitle>
-                <AlertDialogDescription>
-                    Esta ação não pode ser desfeita. Isso removerá permanentemente o serviço "{showDeleteAlert?.name}" do banco de dados.
-                </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-                <AlertDialogCancel onClick={() => setShowDeleteAlert(null)}>Cancelar</AlertDialogCancel>
-                <AlertDialogAction onClick={handleDeleteService} className="bg-destructive hover:bg-destructive/90">
-                    Sim, remover
-                </AlertDialogAction>
-            </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }
