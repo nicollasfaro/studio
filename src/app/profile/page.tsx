@@ -42,8 +42,8 @@ export default function ProfilePage() {
   const { data: services, isLoading: isLoadingServices } = useCollection<Omit<Service, 'id'>>(servicesRef);
 
   const upcomingAppointmentsQuery = useMemoFirebase(() => {
-    // Wait until we know if the user is an admin or not
-    if (isUserDataLoading || !firestore || !user) return null;
+    // Wait until we know if the user is an admin or not and the user ID is available
+    if (isUserDataLoading || !firestore || !user?.uid) return null;
 
     const isAdmin = userData?.isAdmin ?? false;
     const baseQuery = collection(firestore, 'appointments');
@@ -55,12 +55,12 @@ export default function ProfilePage() {
       // Regular users only see their own appointments
       return query(baseQuery, where('clientId', '==', user.uid), where('startTime', '>=', new Date().toISOString()), orderBy('startTime', 'asc'));
     }
-  }, [firestore, user, userData, isUserDataLoading]);
+  }, [firestore, user?.uid, userData, isUserDataLoading]);
 
 
   const pastAppointmentsQuery = useMemoFirebase(() => {
-    // Wait until we know if the user is an admin or not
-    if (isUserDataLoading || !firestore || !user) return null;
+    // Wait until we know if the user is an admin or not and the user ID is available
+    if (isUserDataLoading || !firestore || !user?.uid) return null;
     
     const isAdmin = userData?.isAdmin ?? false;
     const baseQuery = collection(firestore, 'appointments');
@@ -72,7 +72,7 @@ export default function ProfilePage() {
       // Regular users only see their own appointments
       return query(baseQuery, where('clientId', '==', user.uid), where('startTime', '<', new Date().toISOString()), orderBy('startTime', 'desc'));
     }
-  }, [firestore, user, userData, isUserDataLoading]);
+  }, [firestore, user?.uid, userData, isUserDataLoading]);
 
   const { data: upcomingAppointmentsData, isLoading: isLoadingUpcoming } = useCollection<Appointment>(upcomingAppointmentsQuery);
   const { data: pastAppointmentsData, isLoading: isLoadingPast } = useCollection<Appointment>(pastAppointmentsQuery);
