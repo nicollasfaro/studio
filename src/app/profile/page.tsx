@@ -48,7 +48,7 @@ export default function ProfilePage() {
     if (isUserDataLoading || !user?.uid) return null;
 
     if (isAdmin) {
-      // Admin gets all appointments (to be filtered later for their own profile view)
+      // Admin can query all appointments (to be filtered later for their own profile view)
       return query(
         collection(firestore, 'appointments'),
         orderBy('startTime', 'desc')
