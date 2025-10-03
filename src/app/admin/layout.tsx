@@ -3,7 +3,9 @@
 
 import React from 'react';
 import { useRouter } from 'next/navigation';
-import { useAdmin } from '@/hooks/use-admin';
+import { useUser, useFirestore, useDoc, useMemoFirebase } from '@/firebase';
+import { doc } from 'firebase/firestore';
+import type { User as AppUser } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SidebarProvider, Sidebar, SidebarTrigger, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarContent, SidebarHeader, SidebarInset } from '@/components/ui/sidebar';
 import { Logo } from '@/components/logo';
@@ -15,8 +17,19 @@ export default function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { isAdmin, isLoading } = useAdmin();
+  const { user, isUserLoading } = useUser();
+  const firestore = useFirestore();
   const router = useRouter();
+
+  const userDocRef = useMemoFirebase(() => {
+    if (!user) return null;
+    return doc(firestore, 'users', user.uid);
+  }, [user, firestore]);
+
+  const { data: userData, isLoading: isUserDataLoading } = useDoc<AppUser>(userDocRef);
+
+  const isAdmin = userData?.isAdmin ?? false;
+  const isLoading = isUserLoading || (user && isUserDataLoading);
 
   if (isLoading) {
     return (
@@ -44,6 +57,15 @@ export default function AdminLayout({
         </div>
     )
   }
+
+  // Clone children to pass down isAdmin prop
+  const childrenWithProps = React.Children.map(children, child => {
+    if (React.isValidElement(child)) {
+      // @ts-ignore
+      return React.cloneElement(child, { isAdmin });
+    }
+    return child;
+  });
 
   return (
     <SidebarProvider>
@@ -87,7 +109,7 @@ export default function AdminLayout({
             <h1 className="text-xl font-semibold">Painel de Administração</h1>
         </header>
         <main className="p-8">
-            {children}
+            {childrenWithProps}
         </main>
       </SidebarInset>
     </SidebarProvider>

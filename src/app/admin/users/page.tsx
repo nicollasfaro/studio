@@ -24,11 +24,16 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { useUser } from '@/firebase';
 
-export default function AdminUsersPage() {
+
+// This component now receives isAdmin as a prop from the layout
+export default function AdminUsersPage({ isAdmin }: { isAdmin: boolean }) {
   const firestore = useFirestore();
   const { user: currentUser } = useUser();
   const { toast } = useToast();
-  const usersRef = useMemoFirebase(() => collection(firestore, 'users'), [firestore]);
+  
+  // The collection can be fetched if the user is an admin.
+  // The layout already protects this route, so this check is an extra layer of safety.
+  const usersRef = useMemoFirebase(() => isAdmin ? collection(firestore, 'users') : null, [firestore, isAdmin]);
   const { data: users, isLoading } = useCollection<User>(usersRef);
 
   const handleRoleChange = async (userId: string, newRole: 'admin' | 'user') => {

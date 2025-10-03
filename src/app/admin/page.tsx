@@ -7,10 +7,13 @@ import { Users, Sparkles, Scissors, Gift } from 'lucide-react';
 import type { Service, User, Promotion } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
 
-export default function AdminDashboardPage() {
+// This component now receives isAdmin as a prop from the layout
+export default function AdminDashboardPage({ isAdmin }: { isAdmin: boolean }) {
   const firestore = useFirestore();
 
-  const usersRef = useMemoFirebase(() => collection(firestore, 'users'), [firestore]);
+  // The collections can be fetched if the user is an admin.
+  // The layout already protects this route, so this check is an extra layer of safety.
+  const usersRef = useMemoFirebase(() => isAdmin ? collection(firestore, 'users') : null, [firestore, isAdmin]);
   const servicesRef = useMemoFirebase(() => collection(firestore, 'services'), [firestore]);
   const promotionsRef = useMemoFirebase(() => collection(firestore, 'promotions'), [firestore]);
 
