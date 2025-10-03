@@ -17,14 +17,19 @@ import {
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/firebase';
+import { signInWithEmailAndPassword } from 'firebase/auth';
+import { useRouter } from 'next/navigation';
 
 const formSchema = z.object({
-  email: z.string().email({ message: 'Invalid email address.' }),
-  password: z.string().min(1, { message: 'Password is required.' }),
+  email: z.string().email({ message: 'Endereço de e-mail inválido.' }),
+  password: z.string().min(1, { message: 'A senha é obrigatória.' }),
 });
 
 export default function LoginPage() {
   const { toast } = useToast();
+  const auth = useAuth();
+  const router = useRouter();
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -33,20 +38,30 @@ export default function LoginPage() {
     },
   });
 
-  function onSubmit(values: z.infer<typeof formSchema>) {
-    console.log(values);
-    toast({
-        title: "Login Successful",
-        description: "Welcome back!",
-    });
-  }
+  const onSubmit = async (values: z.infer<typeof formSchema>) => {
+    try {
+      await signInWithEmailAndPassword(auth, values.email, values.password);
+      toast({
+        title: 'Login bem-sucedido',
+        description: 'Bem-vindo de volta!',
+      });
+      router.push('/profile');
+    } catch (error: any) {
+      console.error('Erro de login:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Falha no login',
+        description: 'E-mail ou senha incorretos. Por favor, tente novamente.',
+      });
+    }
+  };
 
   return (
     <div className="flex items-center justify-center min-h-[calc(100vh-14rem)] py-12 px-4">
       <Card className="w-full max-w-md shadow-2xl">
         <CardHeader className="text-center">
-          <CardTitle className="text-3xl font-headline">Welcome Back!</CardTitle>
-          <CardDescription>Sign in to access your account</CardDescription>
+          <CardTitle className="text-3xl font-headline">Bem-vindo de Volta!</CardTitle>
+          <CardDescription>Faça login para acessar sua conta</CardDescription>
         </CardHeader>
         <CardContent>
           <Form {...form}>
@@ -58,7 +73,7 @@ export default function LoginPage() {
                   <FormItem>
                     <FormLabel>Email</FormLabel>
                     <FormControl>
-                      <Input placeholder="you@example.com" {...field} />
+                      <Input placeholder="voce@exemplo.com" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -69,7 +84,7 @@ export default function LoginPage() {
                 name="password"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Password</FormLabel>
+                    <FormLabel>Senha</FormLabel>
                     <FormControl>
                       <Input type="password" placeholder="••••••••" {...field} />
                     </FormControl>
@@ -77,15 +92,15 @@ export default function LoginPage() {
                   </FormItem>
                 )}
               />
-              <Button type="submit" className="w-full font-bold">
-                Login
+              <Button type="submit" className="w-full font-bold" disabled={form.formState.isSubmitting}>
+                {form.formState.isSubmitting ? 'Entrando...' : 'Login'}
               </Button>
             </form>
           </Form>
           <div className="mt-6 text-center text-sm">
-            Don&apos;t have an account?{' '}
+            Não tem uma conta?{' '}
             <Link href="/register" className="font-semibold text-primary hover:underline">
-              Register here
+              Registre-se aqui
             </Link>
           </div>
         </CardContent>
