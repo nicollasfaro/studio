@@ -3,6 +3,9 @@
 import { useState, useEffect } from 'react';
 import { useUser } from '@/firebase';
 
+// E-mail do administrador para desenvolvimento
+const ADMIN_EMAIL = 'nicollasciuldin@gmail.com';
+
 export function useAdmin() {
   const { user, isUserLoading } = useUser();
   const [isAdmin, setIsAdmin] = useState(false);
@@ -16,6 +19,14 @@ export function useAdmin() {
       
       if (!user) {
         setIsAdmin(false);
+        setIsLoading(false);
+        return;
+      }
+
+      // **Solução temporária para desenvolvimento**
+      // Concede acesso de administrador ao e-mail especificado.
+      if (user.email === ADMIN_EMAIL) {
+        setIsAdmin(true);
         setIsLoading(false);
         return;
       }
