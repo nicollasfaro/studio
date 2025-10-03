@@ -1,16 +1,114 @@
+'use client';
+
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Separator } from '@/components/ui/separator';
-import { User, Edit, LogOut, Calendar, Bell, Shield, Mail } from 'lucide-react';
-import { PlaceHolderImages } from '@/lib/placeholder-images';
-import { userAppointments, pastAppointments } from '@/lib/data';
-import { format } from 'date-fns';
-import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useAuth, useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
+import { collection, query, where, orderBy } from 'firebase/firestore';
+import { signOut } from 'firebase/auth';
+import { format } from 'date-fns';
+import { User, Edit, LogOut, Calendar, Bell } from 'lucide-react';
+import type { Appointment, Service } from '@/lib/types';
+import Link from 'next/link';
+
+interface AppointmentWithService extends Appointment {
+  serviceName?: string;
+}
 
 export default function ProfilePage() {
-  const avatarImage = PlaceHolderImages.find((img) => img.id === 'profile_avatar');
+  const { user, isUserLoading } = useUser();
+  const auth = useAuth();
+  const firestore = useFirestore();
+  const router = useRouter();
+
+  // Redirect if not logged in
+  useEffect(() => {
+    if (!isUserLoading && !user) {
+      router.push('/login');
+    }
+  }, [user, isUserLoading, router]);
+
+  // Fetch services to map serviceId to serviceName
+  const servicesRef = useMemoFirebase(() => collection(firestore, 'services'), [firestore]);
+  const { data: services, isLoading: isLoadingServices } = useCollection<Omit<Service, 'id'>>(servicesRef);
+
+  // Fetch user's appointments
+  const appointmentsRef = useMemoFirebase(() => {
+    if (!user) return null;
+    return collection(firestore, 'users', user.uid, 'appointments');
+  }, [firestore, user]);
+  
+  const upcomingAppointmentsQuery = useMemoFirebase(() => {
+      if (!appointmentsRef) return null;
+      return query(appointmentsRef, where('startTime', '>=', new Date().toISOString()), orderBy('startTime', 'asc'));
+  },[appointmentsRef]);
+
+  const pastAppointmentsQuery = useMemoFirebase(() => {
+      if (!appointmentsRef) return null;
+      return query(appointmentsRef, where('startTime', '<', new Date().toISOString()), orderBy('startTime', 'desc'));
+  },[appointmentsRef]);
+
+
+  const { data: upcomingAppointmentsData, isLoading: isLoadingUpcoming } = useCollection<Appointment>(upcomingAppointmentsQuery);
+  const { data: pastAppointmentsData, isLoading: isLoadingPast } = useCollection<Appointment>(pastAppointmentsQuery);
+  
+  const mapAppointments = (appointments: Appointment[] | null): AppointmentWithService[] => {
+    if (!appointments || !services) return [];
+    return appointments.map(apt => ({
+      ...apt,
+      serviceName: services.find(s => s.id === apt.serviceId)?.name || 'Unknown Service',
+    }));
+  };
+
+  const upcomingAppointments = mapAppointments(upcomingAppointmentsData);
+  const pastAppointments = mapAppointments(pastAppointmentsData);
+
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      router.push('/login');
+    } catch (error) {
+      console.error('Error signing out: ', error);
+    }
+  };
+
+  if (isUserLoading || !user) {
+    return (
+      <div className="container mx-auto px-4 md:px-6 py-12">
+        <div className="grid gap-8 lg:grid-cols-3">
+          <div className="lg:col-span-1">
+            <Card className="shadow-lg">
+              <CardHeader className="items-center text-center p-6">
+                <Skeleton className="w-24 h-24 rounded-full mb-4" />
+                <Skeleton className="h-8 w-3/4" />
+                <Skeleton className="h-5 w-full mt-1" />
+              </CardHeader>
+              <CardContent className="flex flex-col gap-2">
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-10 w-full" />
+              </CardContent>
+            </Card>
+          </div>
+          <div className="lg:col-span-2 space-y-8">
+            <Card className="shadow-lg">
+              <CardHeader>
+                <Skeleton className="h-8 w-1/2" />
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <Skeleton className="h-16 w-full" />
+                <Skeleton className="h-16 w-full" />
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto px-4 md:px-6 py-12">
@@ -19,20 +117,20 @@ export default function ProfilePage() {
           <Card className="shadow-lg">
             <CardHeader className="items-center text-center p-6">
               <Avatar className="w-24 h-24 mb-4">
-                {avatarImage && <AvatarImage src={avatarImage.imageUrl} alt="Jane Doe" data-ai-hint={avatarImage.imageHint} />}
+                {user.photoURL && <AvatarImage src={user.photoURL} alt={user.displayName || 'User'} />}
                 <AvatarFallback>
                   <User className="w-12 h-12" />
                 </AvatarFallback>
               </Avatar>
-              <CardTitle className="font-headline text-2xl">Jane Doe</CardTitle>
-              <CardDescription>jane.doe@example.com</CardDescription>
+              <CardTitle className="font-headline text-2xl">{user.displayName || 'Usuário'}</CardTitle>
+              <CardDescription>{user.email}</CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-2">
-              <Button variant="outline" className="w-full">
+              <Button variant="outline" className="w-full" disabled>
                 <Edit className="mr-2 h-4 w-4" />
-                Edit Profile
+                Editar Perfil
               </Button>
-              <Button variant="destructive" className="w-full">
+              <Button variant="destructive" className="w-full" onClick={handleLogout}>
                 <LogOut className="mr-2 h-4 w-4" />
                 Logout
               </Button>
@@ -45,24 +143,28 @@ export default function ProfilePage() {
             <CardHeader>
               <CardTitle className="font-headline flex items-center gap-2">
                 <Calendar className="text-primary" />
-                Upcoming Appointments
+                Próximos Agendamentos
               </CardTitle>
             </CardHeader>
             <CardContent>
-              {userAppointments.length > 0 ? (
+              {isLoadingUpcoming || isLoadingServices ? (
+                <Skeleton className="h-20 w-full" />
+              ) : upcomingAppointments.length > 0 ? (
                 <ul className="space-y-4">
-                  {userAppointments.map((apt) => (
+                  {upcomingAppointments.map((apt) => (
                     <li key={apt.id} className="flex items-center justify-between p-4 bg-secondary/30 rounded-lg">
-                        <div>
-                            <p className="font-semibold">{apt.serviceName}</p>
-                            <p className="text-sm text-muted-foreground">{format(apt.date, 'EEEE, MMM d')} at {apt.time}</p>
-                        </div>
-                        <Button variant="outline" size="sm">Manage</Button>
+                      <div>
+                        <p className="font-semibold">{apt.serviceName}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {format(new Date(apt.startTime), "EEEE, MMM d 'at' HH:mm")}
+                        </p>
+                      </div>
+                      <Button variant="outline" size="sm" disabled>Gerenciar</Button>
                     </li>
                   ))}
                 </ul>
               ) : (
-                <p className="text-muted-foreground text-center py-4">You have no upcoming appointments.</p>
+                <p className="text-muted-foreground text-center py-4">Você não tem agendamentos futuros.</p>
               )}
             </CardContent>
           </Card>
@@ -71,24 +173,30 @@ export default function ProfilePage() {
             <CardHeader>
               <CardTitle className="font-headline flex items-center gap-2">
                 <Calendar className="text-primary" />
-                Past Appointments
+                Agendamentos Passados
               </CardTitle>
             </CardHeader>
             <CardContent>
-              {pastAppointments.length > 0 ? (
+              {isLoadingPast || isLoadingServices ? (
+                 <Skeleton className="h-20 w-full" />
+              ) : pastAppointments.length > 0 ? (
                 <ul className="space-y-4">
                   {pastAppointments.map((apt) => (
                     <li key={apt.id} className="flex items-center justify-between p-4 bg-secondary/30 rounded-lg">
-                        <div>
-                            <p className="font-semibold">{apt.serviceName}</p>
-                            <p className="text-sm text-muted-foreground">{format(apt.date, 'EEEE, MMM d')} at {apt.time}</p>
-                        </div>
-                        <Button variant="secondary" size="sm">Book Again</Button>
+                      <div>
+                        <p className="font-semibold">{apt.serviceName}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {format(new Date(apt.startTime), "EEEE, MMM d 'at' HH:mm")}
+                        </p>
+                      </div>
+                      <Button asChild variant="secondary" size="sm">
+                        <Link href={`/book?service=${apt.serviceId}`}>Agendar Novamente</Link>
+                      </Button>
                     </li>
                   ))}
                 </ul>
               ) : (
-                <p className="text-muted-foreground text-center py-4">You have no past appointments.</p>
+                <p className="text-muted-foreground text-center py-4">Você não tem agendamentos passados.</p>
               )}
             </CardContent>
           </Card>
@@ -97,22 +205,22 @@ export default function ProfilePage() {
             <CardHeader>
               <CardTitle className="font-headline flex items-center gap-2">
                 <Bell className="text-primary" />
-                Notification Settings
+                Configurações de Notificação
               </CardTitle>
-              <CardDescription>Manage how we communicate with you.</CardDescription>
+              <CardDescription>Gerencie como nos comunicamos com você.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center justify-between p-4 border rounded-lg">
                 <Label htmlFor="promo-notifications" className="flex flex-col gap-1">
-                  <span className="font-semibold">Promotional Notifications</span>
-                  <span className="text-sm text-muted-foreground">Receive updates on special offers and new services.</span>
+                  <span className="font-semibold">Notificações Promocionais</span>
+                  <span className="text-sm text-muted-foreground">Receba atualizações sobre ofertas especiais e novos serviços.</span>
                 </Label>
                 <Switch id="promo-notifications" defaultChecked />
               </div>
               <div className="flex items-center justify-between p-4 border rounded-lg">
                 <Label htmlFor="reminder-notifications" className="flex flex-col gap-1">
-                  <span className="font-semibold">Appointment Reminders</span>
-                   <span className="text-sm text-muted-foreground">Get reminders for your upcoming appointments.</span>
+                  <span className="font-semibold">Lembretes de Agendamento</span>
+                   <span className="text-sm text-muted-foreground">Receba lembretes para seus próximos agendamentos.</span>
                 </Label>
                 <Switch id="reminder-notifications" defaultChecked />
               </div>
