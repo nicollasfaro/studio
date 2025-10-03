@@ -25,7 +25,9 @@ export type Appointment = {
   serviceId: string;
   startTime: string;
   endTime: string;
-  status: 'scheduled' | 'completed' | 'cancelled';
+  status: 'scheduled' | 'confirmed' | 'cancelled' | 'completed';
+  clientName: string;
+  clientEmail: string;
 };
 
 export type TimeSlot = {
