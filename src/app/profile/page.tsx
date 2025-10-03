@@ -43,24 +43,24 @@ export default function ProfilePage() {
   const appointmentsRef = useMemoFirebase(() => (firestore ? collection(firestore, 'appointments') : null), [firestore]);
   
   const upcomingAppointmentsQuery = useMemoFirebase(() => {
-    if (!appointmentsRef || !user) return null;
+    if (!firestore || !user) return null;
     return query(
-      appointmentsRef,
+      collection(firestore, 'appointments'),
       where('clientId', '==', user.uid),
       where('startTime', '>=', new Date().toISOString()),
       orderBy('startTime', 'asc')
     );
-  }, [appointmentsRef, user]);
+  }, [firestore, user]);
 
   const pastAppointmentsQuery = useMemoFirebase(() => {
-    if (!appointmentsRef || !user) return null;
+    if (!firestore || !user) return null;
     return query(
-      appointmentsRef,
+      collection(firestore, 'appointments'),
       where('clientId', '==', user.uid),
       where('startTime', '<', new Date().toISOString()),
       orderBy('startTime', 'desc')
     );
-  }, [appointmentsRef, user]);
+  }, [firestore, user]);
 
   const { data: upcomingAppointmentsData, isLoading: isLoadingUpcoming } = useCollection<Appointment>(upcomingAppointmentsQuery);
   const { data: pastAppointmentsData, isLoading: isLoadingPast } = useCollection<Appointment>(pastAppointmentsQuery);
