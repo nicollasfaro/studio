@@ -38,44 +38,27 @@ export default function ProfilePage() {
     }
   }, [user, isUserLoading, router]);
 
-  const isAdmin = userData?.isAdmin ?? false;
-
   // Fetch services to map serviceId to serviceName
   const servicesRef = useMemoFirebase(() => (firestore ? collection(firestore, 'services') : null), [firestore]);
   const { data: services, isLoading: isLoadingServices } = useCollection<Omit<Service, 'id'>>(servicesRef);
 
+  // Simplified and secure queries that only fetch the current user's appointments.
   const upcomingAppointmentsQuery = useMemoFirebase(() => {
-    if (isUserDataLoading || !firestore || !user?.uid) return null;
-    const baseQuery = collection(firestore, 'appointments');
-    if (isAdmin) {
-      return query(baseQuery, where('startTime', '>=', new Date().toISOString()), orderBy('startTime', 'asc'));
-    }
-    return query(baseQuery, where('clientId', '==', user.uid), where('startTime', '>=', new Date().toISOString()), orderBy('startTime', 'asc'));
-  }, [firestore, user?.uid, isAdmin, isUserDataLoading]);
+    if (!firestore || !user?.uid) return null;
+    return query(collection(firestore, 'appointments'), where('clientId', '==', user.uid), where('startTime', '>=', new Date().toISOString()), orderBy('startTime', 'asc'));
+  }, [firestore, user?.uid]);
 
   const pastAppointmentsQuery = useMemoFirebase(() => {
-    if (isUserDataLoading || !firestore || !user?.uid) return null;
-    const baseQuery = collection(firestore, 'appointments');
-    if (isAdmin) {
-      return query(baseQuery, where('startTime', '<', new Date().toISOString()), orderBy('startTime', 'desc'));
-    }
-    return query(baseQuery, where('clientId', '==', user.uid), where('startTime', '<', new Date().toISOString()), orderBy('startTime', 'desc'));
-  }, [firestore, user?.uid, isAdmin, isUserDataLoading]);
-
+    if (!firestore || !user?.uid) return null;
+    return query(collection(firestore, 'appointments'), where('clientId', '==', user.uid), where('startTime', '<', new Date().toISOString()), orderBy('startTime', 'desc'));
+  }, [firestore, user?.uid]);
 
   const { data: upcomingAppointmentsData, isLoading: isLoadingUpcoming } = useCollection<Appointment>(upcomingAppointmentsQuery);
   const { data: pastAppointmentsData, isLoading: isLoadingPast } = useCollection<Appointment>(pastAppointmentsQuery);
 
   const mapAppointments = (appointments: Appointment[] | null): AppointmentWithService[] => {
     if (!appointments || !services) return [];
-    let userAppointments = appointments;
-    
-    // If the user is an admin, we filter to show only their own appointments on this page.
-    if (isAdmin) {
-        userAppointments = appointments.filter(apt => apt.clientId === user?.uid);
-    }
-    
-    return userAppointments.map(apt => ({
+    return appointments.map(apt => ({
       ...apt,
       serviceName: services.find(s => s.id === apt.serviceId)?.name || 'Serviço Desconhecido',
     }));
@@ -83,7 +66,6 @@ export default function ProfilePage() {
   
   const upcomingAppointments = mapAppointments(upcomingAppointmentsData);
   const pastAppointments = mapAppointments(pastAppointmentsData);
-
 
   const handleLogout = async () => {
     try {
@@ -109,8 +91,9 @@ export default function ProfilePage() {
     }
   };
 
+  const isLoading = isUserLoading || isUserDataLoading;
 
-  if (isUserLoading || isUserDataLoading || !user) {
+  if (isLoading || !user) {
     return (
       <div className="container mx-auto px-4 md:px-6 py-12">
         <div className="grid gap-8 lg:grid-cols-3">
@@ -266,5 +249,3 @@ export default function ProfilePage() {
     </div>
   );
 }
-
-    
