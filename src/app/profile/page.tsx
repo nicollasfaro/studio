@@ -42,15 +42,14 @@ export default function ProfilePage() {
   const servicesRef = useMemoFirebase(() => (firestore ? collection(firestore, 'services') : null), [firestore]);
   const { data: services, isLoading: isLoadingServices } = useCollection<Omit<Service, 'id'>>(servicesRef);
 
-  // This is the single, safe way to query for a user's appointments.
-  // It only runs when we have a firestore instance and a user ID.
+  // This query will only run when we have a firestore instance AND a user ID.
   const upcomingAppointmentsQuery = useMemoFirebase(() => {
     if (!firestore || !user?.uid) return null;
     return query(
-        collection(firestore, 'appointments'),
-        where('clientId', '==', user.uid),
-        where('startTime', '>=', new Date().toISOString()),
-        orderBy('startTime', 'asc')
+      collection(firestore, 'appointments'),
+      where('clientId', '==', user.uid),
+      where('startTime', '>=', new Date().toISOString()),
+      orderBy('startTime', 'asc')
     );
   }, [firestore, user?.uid]);
 
@@ -58,10 +57,10 @@ export default function ProfilePage() {
   const pastAppointmentsQuery = useMemoFirebase(() => {
     if (!firestore || !user?.uid) return null;
     return query(
-        collection(firestore, 'appointments'),
-        where('clientId', '==', user.uid),
-        where('startTime', '<', new Date().toISOString()),
-        orderBy('startTime', 'desc')
+      collection(firestore, 'appointments'),
+      where('clientId', '==', user.uid),
+      where('startTime', '<', new Date().toISOString()),
+      orderBy('startTime', 'desc')
     );
   }, [firestore, user?.uid]);
 
