@@ -42,7 +42,7 @@ export default function ProfilePage() {
   const servicesRef = useMemoFirebase(() => (firestore ? collection(firestore, 'services') : null), [firestore]);
   const { data: services, isLoading: isLoadingServices } = useCollection<Omit<Service, 'id'>>(servicesRef);
 
-  // Simplified and secure queries that only fetch the current user's appointments.
+  // Secure queries that only fetch when the user's UID is available.
   const upcomingAppointmentsQuery = useMemoFirebase(() => {
     if (!firestore || !user?.uid) return null;
     return query(collection(firestore, 'appointments'), where('clientId', '==', user.uid), where('startTime', '>=', new Date().toISOString()), orderBy('startTime', 'asc'));
