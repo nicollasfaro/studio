@@ -7,6 +7,7 @@ import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
 import { collection } from 'firebase/firestore';
 import type { Service } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
+import { PlaceHolderImages } from '@/lib/placeholder-images';
 
 export default function ServicesPage() {
   const firestore = useFirestore();
@@ -44,17 +45,20 @@ export default function ServicesPage() {
           </Card>
         ))}
         {services && services.map((service) => {
+          const serviceImage = PlaceHolderImages.find((img) => img.id === service.imageId);
           return (
             <Card key={service.id} className="flex flex-col overflow-hidden shadow-md hover:shadow-xl transition-shadow duration-300">
               <CardHeader className="p-0">
                   <div className="aspect-w-16 aspect-h-9">
-                    <Image
-                      src={service.imageUrl}
-                      alt={service.name}
-                      width={600}
-                      height={400}
-                      className="object-cover w-full h-full"
-                    />
+                    {serviceImage && (
+                      <Image
+                        src={serviceImage.imageUrl}
+                        alt={service.name}
+                        width={600}
+                        height={400}
+                        className="object-cover w-full h-full"
+                      />
+                    )}
                   </div>
               </CardHeader>
               <CardContent className="p-6 flex-grow">
@@ -77,5 +81,3 @@ export default function ServicesPage() {
     </div>
   );
 }
-
-    

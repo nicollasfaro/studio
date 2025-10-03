@@ -5,7 +5,7 @@ export type Service = {
   description: string;
   price: number;
   durationMinutes: number;
-  imageUrl: string;
+  imageId: string;
 };
 
 export type Promotion = {
