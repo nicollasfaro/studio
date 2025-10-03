@@ -31,9 +31,9 @@ export default function AdminUsersPage({ isAdmin }: { isAdmin: boolean }) {
   const { user: currentUser } = useUser();
   const { toast } = useToast();
   
-  // The collection can be fetched if the user is an admin.
-  // The layout already protects this route, so this check is an extra layer of safety.
-  const usersRef = useMemoFirebase(() => isAdmin ? collection(firestore, 'users') : null, [firestore, isAdmin]);
+  // The layout already protects this route, so the isAdmin check here was redundant
+  // and causing issues with data fetching timing.
+  const usersRef = useMemoFirebase(() => collection(firestore, 'users'), [firestore]);
   const { data: users, isLoading } = useCollection<User>(usersRef);
 
   const handleRoleChange = async (userId: string, newRole: 'admin' | 'user') => {
