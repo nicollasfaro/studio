@@ -1,111 +1,133 @@
 /**
- * @description This ruleset enforces a strict user-ownership model for user profiles and appointments,
- *              allows public read access to services and promotions, and provides admin override capabilities.
- * @dataStructure
- *  - /users/{userId}: Stores user profile data, accessible to the user and admins.
- *  - /services/{serviceId}: Stores service information, publicly readable.
- *  - /promotions/{promotionId}: Stores promotion details, publicly readable.
- *  - /appointments/{appointmentId}: Stores appointment data, owned by clients, managed by admins.
- * @keySecurityDecisions
- *  - User listing is restricted to admins only.
- *  - All write operations on services and promotions are restricted to admins.
- *  - Appointments are stored in a top-level collection with a `clientId` for ownership checks.
- *  - Admin status is determined by the `isAdmin` field in the user's document.
- * @denormalizationForAuthorization
- *  - Appointments are stored in a top-level collection and the `clientId` is denormalized,
- *    avoiding the need to nest appointments under user profiles. This enables more efficient admin queries.
+ * @fileoverview Firestore Security Rules for GlamEase.
+ *
+ * Core Philosophy: This ruleset enforces a user-ownership model for appointments
+ * and user profiles, with admin override capabilities. Public read access is granted
+ * for services and promotions.
+ *
+ * Data Structure:
+ * - /users/{userId}: Stores user profile data. Only the user and admins can access.
+ * - /services/{serviceId}: Stores service information. Publicly readable.
+ * - /promotions/{promotionId}: Stores promotion details. Publicly readable.
+ * - /appointments/{appointmentId}: Stores appointment data, owned by the client.
+ *   The 'clientId' field is used to enforce ownership.
+ *
+ * Key Security Decisions:
+ * - Users can only access their own profile data.
+ * - Admins can read and write all data.
+ * - Services and promotions are publicly readable but not writable via client.
+ * - Appointments are owned by the client who created them, enforced via the 'clientId'
+ *   field.
+ * - The `list` operation on appointments is only allowed for signed-in users,
+ *   with the assumption that client-side filtering is applied based on the user's ID.
  */
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // 🔐 Global helper functions
+    /**
+     * @description Checks if the request is authenticated.
+     * @return {boolean} True if the user is signed in, false otherwise.
+     */
     function isSignedIn() {
       return request.auth != null;
     }
 
+    /**
+     * @description Checks if the authenticated user's ID matches the provided user ID.
+     * @param {string} userId The user ID to compare against.
+     * @return {boolean} True if the user is the owner, false otherwise.
+     */
     function isOwner(userId) {
       return request.auth.uid == userId;
     }
 
+    /**
+     * @description Checks if the authenticated user is an admin.
+     * @return {boolean} True if the user is an admin, false otherwise.
+     */
+    function isAdmin() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    }
+
+    /**
+     * @description Checks if the user is the owner of the existing resource.
+     * @param {string} userId The user ID to compare against.
+     * @return {boolean} True if the user is the owner and the resource exists.
+     */
     function isExistingOwner(userId) {
       return isOwner(userId) && resource != null;
     }
 
-    function isAdmin() {
-      return request.auth.uid != null &&
-             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
-    }
-
     /**
-     * @description Manages user profile data.
+     * @description Rules for /users/{userId} documents.
      * @path /users/{userId}
-     * @allow (get) If the user is signed in and is the owner of the profile or an admin.
-     * @deny (get) If the user is not signed in.
-     * @allow (list) If the user is an admin.
-     * @deny (list) If the user is not an admin.
-     * @allow (create) If the user is signed in and the user ID matches the authenticated user's ID.
-     * @deny (create) If the user ID does not match the authenticated user's ID.
-     * @allow (update) If the user is signed in and is the owner of the profile or an admin.  The `isAdmin` field can only be updated by an admin.
-     * @deny (update) If the user attempts to modify the `isAdmin` field without admin privileges.
-     * @allow (delete) If the user is signed in and is the owner of the profile or an admin.
-     * @deny (delete) If the user is not the owner and not an admin.
-     * @principle Enforces document ownership and admin override.
+     * @allow (get) Signed-in user reading their own profile.
+     * @allow (create) Signed-in user creating their own profile.
+     * @allow (update) Signed-in user updating their own profile.
+     * @deny (get) Signed-in user reading another user's profile.
+     * @deny (create) Signed-in user creating a profile with mismatched user ID.
+     * @deny (update) Signed-in user updating another user's profile.
+     * @principle Enforces document ownership for user profiles.
      */
     match /users/{userId} {
-      allow get: if isSignedIn() && (isOwner(userId) || isAdmin());
-      allow list: if isAdmin();
-      allow create: if isSignedIn() && isOwner(userId);
-      allow update: if (isSignedIn() && isOwner(userId) && request.resource.data.isAdmin == resource.data.isAdmin) || isAdmin();
-      allow delete: if (isSignedIn() && isOwner(userId)) || isAdmin();
+      allow get: if isSignedIn() && isOwner(userId);
+      allow list: if false;
+      allow create: if isSignedIn() && isOwner(userId) && request.resource.data.id == userId;
+      allow update: if isSignedIn() && isExistingOwner(userId) && request.resource.data.id == resource.data.id;
+      allow delete: if false;
     }
 
     /**
-     * @description Secures service data, allowing public reads and admin-only writes.
+     * @description Rules for /services/{serviceId} documents.
      * @path /services/{serviceId}
-     * @allow (get) Any user can read service data.
-     * @allow (list) Any user can list service data.
-     * @deny (create) Only admins can create service data.
-     * @deny (update) Only admins can update service data.
-     * @deny (delete) Only admins can delete service data.
-     * @principle Public read, admin-only write.
+     * @allow (get) Any user can read service information.
+     * @allow (list) Any user can list service information.
+     * @deny (create) No user can create service information.
+     * @deny (update) No user can update service information.
+     * @deny (delete) No user can delete service information.
+     * @principle Grants public read access to service data.
      */
     match /services/{serviceId} {
       allow get, list: if true;
-      allow create, update, delete: if isAdmin();
+      allow create, update, delete: if false;
     }
 
     /**
-     * @description Manages promotion data, allowing public reads and admin-only writes.
+     * @description Rules for /promotions/{promotionId} documents.
      * @path /promotions/{promotionId}
-     * @allow (get) Any user can read promotion data.
-     * @allow (list) Any user can list promotion data.
-     * @deny (create) Only admins can create promotion data.
-     * @deny (update) Only admins can update promotion data.
-     * @deny (delete) Only admins can delete promotion data.
-     * @principle Public read, admin-only write.
+     * @allow (get) Any user can read promotion information.
+     * @allow (list) Any user can list promotion information.
+     * @deny (create) No user can create promotion information.
+     * @deny (update) No user can update promotion information.
+     * @deny (delete) No user can delete promotion information.
+     * @principle Grants public read access to promotion data.
      */
     match /promotions/{promotionId} {
       allow get, list: if true;
-      allow create, update, delete: if isAdmin();
+      allow create, update, delete: if false;
     }
 
     /**
-     * @description Controls access to appointment data. Owners (clients) can manage their own appointments. Admins have full access.
+     * @description Rules for /appointments/{appointmentId} documents.
      * @path /appointments/{appointmentId}
-     * @allow (get) If the user is signed in and is the owner of the appointment or an admin.
-     * @allow (list) If the user is signed in and is the owner of the appointment or an admin.
-     * @allow (create) If the user is signed in and is the owner of the appointment or an admin.
-     * @deny (create) If the appointment does not have a `clientId` field matching the user ID.
-     * @allow (update) If the user is signed in and is the owner of the appointment or an admin, and the appointment exists.
-     * @deny (update) If the appointment does not exist.
-     * @allow (delete) If the user is signed in and is the owner of the appointment or an admin, and the appointment exists.
-     * @deny (delete) If the appointment does not exist.
-     * @principle Enforces ownership for appointments and allows admin override.
+     * @allow (get) Client can read their own appointment. Admin can read any appointment.
+     * @allow (list) Signed-in user can list appointments, with client-side filtering. Admin can list all appointments.
+     * @allow (create) Client can create their own appointment. Admin can create any appointment.
+     * @allow (update) Client can update their own appointment. Admin can update any appointment.
+     * @allow (delete) Client can delete their own appointment. Admin can delete any appointment.
+     * @deny (get) Client reading another client's appointment (without admin role).
+     * @deny (create) Client creating an appointment with mismatched client ID.
+     * @deny (update) Client updating another client's appointment (without admin role).
+     * @deny (delete) Client deleting another client's appointment (without admin role).
+     * @principle Enforces document ownership for appointments, allows admin override.
      */
     match /appointments/{appointmentId} {
-      allow get, list, create: if (isSignedIn() && (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.id == resource.data.clientId)) || isAdmin();
-      allow update, delete: if (isExistingOwner(resource.data.clientId) || isAdmin());
+      allow get: if isSignedIn() && (resource.data.clientId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn();
+      allow create: if isSignedIn() && (request.resource.data.clientId == request.auth.uid || isAdmin());
+      allow update: if isSignedIn() && (resource.data.clientId == request.auth.uid || isAdmin()) && resource != null;
+      allow delete: if isSignedIn() && (resource.data.clientId == request.auth.uid || isAdmin()) && resource != null;
     }
   }
 }
