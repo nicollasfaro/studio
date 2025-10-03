@@ -43,72 +43,47 @@ export default function ProfilePage() {
   const { data: services, isLoading: isLoadingServices } = useCollection<Omit<Service, 'id'>>(servicesRef);
 
   const upcomingAppointmentsQuery = useMemoFirebase(() => {
-    // Wait until we have the user and know their admin status
-    if (isUserDataLoading || !firestore || !user?.uid) return null;
+    // Wait until we have the firestore instance and the user's ID
+    if (!firestore || !user?.uid) return null;
 
-    const isAdmin = userData?.isAdmin ?? false;
     const baseQuery = collection(firestore, 'appointments');
-    
-    // Admins need to fetch all, non-admins fetch only their own.
-    if (isAdmin) {
-       return query(
-        baseQuery, 
-        where('startTime', '>=', new Date().toISOString()), 
-        orderBy('startTime', 'asc')
-      );
-    }
-    
+    // Always fetch appointments for the currently logged-in user for this page.
     return query(
-        baseQuery, 
+        baseQuery,
         where('clientId', '==', user.uid),
-        where('startTime', '>=', new Date().toISOString()), 
+        where('startTime', '>=', new Date().toISOString()),
         orderBy('startTime', 'asc')
     );
-  }, [firestore, user?.uid, userData, isUserDataLoading]);
+  }, [firestore, user?.uid]);
 
 
   const pastAppointmentsQuery = useMemoFirebase(() => {
-    // Wait until we have the user and know their admin status
-    if (isUserDataLoading || !firestore || !user?.uid) return null;
-    
-    const isAdmin = userData?.isAdmin ?? false;
-    const baseQuery = collection(firestore, 'appointments');
-    
-    if (isAdmin) {
-        return query(
-            baseQuery, 
-            where('startTime', '<', new Date().toISOString()), 
-            orderBy('startTime', 'desc')
-        );
-    }
+    // Wait until we have the firestore instance and the user's ID
+    if (!firestore || !user?.uid) return null;
 
+    const baseQuery = collection(firestore, 'appointments');
+     // Always fetch appointments for the currently logged-in user for this page.
     return query(
-        baseQuery, 
+        baseQuery,
         where('clientId', '==', user.uid),
-        where('startTime', '<', new Date().toISOString()), 
+        where('startTime', '<', new Date().toISOString()),
         orderBy('startTime', 'desc')
     );
-  }, [firestore, user?.uid, userData, isUserDataLoading]);
+  }, [firestore, user?.uid]);
 
-  const { data: allUpcomingAppointments, isLoading: isLoadingUpcoming } = useCollection<Appointment>(upcomingAppointmentsQuery);
-  const { data: allPastAppointments, isLoading: isLoadingPast } = useCollection<Appointment>(pastAppointmentsQuery);
-  
-  const mapAndFilterAppointments = (appointments: Appointment[] | null): AppointmentWithService[] => {
-    if (!appointments || !services || !user?.uid) return [];
-    
-    const isAdmin = userData?.isAdmin ?? false;
+  const { data: upcomingAppointmentsData, isLoading: isLoadingUpcoming } = useCollection<Appointment>(upcomingAppointmentsQuery);
+  const { data: pastAppointmentsData, isLoading: isLoadingPast } = useCollection<Appointment>(pastAppointmentsQuery);
 
-    return appointments
-      // If the user is an admin, we only show their *own* appointments on this page, not all appointments.
-      .filter(apt => isAdmin ? apt.clientId === user.uid : true) 
-      .map(apt => ({
-        ...apt,
-        serviceName: services.find(s => s.id === apt.serviceId)?.name || 'Serviço Desconhecido',
-      }));
+  const mapAppointments = (appointments: Appointment[] | null): AppointmentWithService[] => {
+    if (!appointments || !services) return [];
+    return appointments.map(apt => ({
+      ...apt,
+      serviceName: services.find(s => s.id === apt.serviceId)?.name || 'Serviço Desconhecido',
+    }));
   };
 
-  const upcomingAppointments = mapAndFilterAppointments(allUpcomingAppointments);
-  const pastAppointments = mapAndFilterAppointments(allPastAppointments);
+  const upcomingAppointments = mapAppointments(upcomingAppointmentsData);
+  const pastAppointments = mapAppointments(pastAppointmentsData);
 
 
   const handleLogout = async () => {
