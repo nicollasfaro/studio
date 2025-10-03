@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -18,61 +18,90 @@ import { ptBR } from 'date-fns/locale';
 import { User, Edit, LogOut, Calendar, Bell } from 'lucide-react';
 import type { Appointment, Service } from '@/lib/types';
 import Link from 'next/link';
+import { useUserData } from '@/hooks/use-user-data';
 
 interface AppointmentWithService extends Appointment {
   serviceName?: string;
 }
 
 export default function ProfilePage() {
-  const { user, isUserLoading } = useUser();
+  const { user, isUserLoading: isAuthLoading } = useUser();
+  const { userData, isLoading: isUserDataLoading } = useUserData();
   const auth = useAuth();
   const firestore = useFirestore();
   const router = useRouter();
 
   useEffect(() => {
-    if (!isUserLoading && !user) {
+    if (!isAuthLoading && !user) {
       router.push('/login');
     }
-  }, [user, isUserLoading, router]);
+  }, [user, isAuthLoading, router]);
 
   // Fetch services to map serviceId to serviceName
   const servicesRef = useMemoFirebase(() => (firestore ? collection(firestore, 'services') : null), [firestore]);
   const { data: services, isLoading: isLoadingServices } = useCollection<Omit<Service, 'id'>>(servicesRef);
 
-  // Secure queries that only fetch when the user's UID is available.
-  const upcomingAppointmentsQuery = useMemoFirebase(() => {
-    if (!firestore || !user?.uid) return null; // CRITICAL FIX: Ensure user.uid is available
-    return query(
-      collection(firestore, 'appointments'),
-      where('clientId', '==', user.uid),
-      where('startTime', '>=', new Date().toISOString()),
-      orderBy('startTime', 'asc')
-    );
-  }, [firestore, user?.uid]);
+  const isAdmin = userData?.isAdmin ?? false;
 
-  const pastAppointmentsQuery = useMemoFirebase(() => {
-    if (!firestore || !user?.uid) return null; // CRITICAL FIX: Ensure user.uid is available
-    return query(
-      collection(firestore, 'appointments'),
-      where('clientId', '==', user.uid),
-      where('startTime', '<', new Date().toISOString()),
-      orderBy('startTime', 'desc')
-    );
-  }, [firestore, user?.uid]);
+  const appointmentsQuery = useMemoFirebase(() => {
+    // Wait until we know the user's admin status and have a uid
+    if (isUserDataLoading || !user?.uid) return null;
 
-  const { data: upcomingAppointmentsData, isLoading: isLoadingUpcoming } = useCollection<Appointment>(upcomingAppointmentsQuery);
-  const { data: pastAppointmentsData, isLoading: isLoadingPast } = useCollection<Appointment>(pastAppointmentsQuery);
+    if (isAdmin) {
+      // Admin gets all appointments
+      return query(
+        collection(firestore, 'appointments'),
+        orderBy('startTime', 'desc')
+      );
+    } else {
+      // Non-admin gets only their own appointments
+      return query(
+        collection(firestore, 'appointments'),
+        where('clientId', '==', user.uid),
+        orderBy('startTime', 'desc')
+      );
+    }
+  }, [firestore, user?.uid, isAdmin, isUserDataLoading]);
   
-  const mapAppointments = (appointments: Appointment[] | null): AppointmentWithService[] => {
-    if (!appointments || !services) return [];
-    return appointments.map(apt => ({
-      ...apt,
-      serviceName: services.find(s => s.id === apt.serviceId)?.name || 'Serviço Desconhecido',
-    }));
-  };
+  const { data: allAppointmentsData, isLoading: isLoadingAppointments } = useCollection<Appointment>(appointmentsQuery);
+
+  const upcomingAppointments = useMemo(() => {
+    if (!allAppointmentsData || !services) return [];
+    const now = new Date().toISOString();
+    return allAppointmentsData
+      .filter(apt => {
+        // Admin on their profile page sees only their own upcoming appointments
+        if (isAdmin) {
+          return apt.clientId === user?.uid && apt.startTime >= now;
+        }
+        // User sees their upcoming appointments
+        return apt.startTime >= now;
+      })
+      .map(apt => ({
+        ...apt,
+        serviceName: services.find(s => s.id === apt.serviceId)?.name || 'Serviço Desconhecido',
+      }))
+      .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+  }, [allAppointmentsData, services, isAdmin, user?.uid]);
   
-  const upcomingAppointments = mapAppointments(upcomingAppointmentsData);
-  const pastAppointments = mapAppointments(pastAppointmentsData);
+  const pastAppointments = useMemo(() => {
+     if (!allAppointmentsData || !services) return [];
+    const now = new Date().toISOString();
+    return allAppointmentsData
+      .filter(apt => {
+        // Admin on their profile page sees only their own past appointments
+        if (isAdmin) {
+          return apt.clientId === user?.uid && apt.startTime < now;
+        }
+        // User sees their past appointments
+        return apt.startTime < now;
+      })
+      .map(apt => ({
+        ...apt,
+        serviceName: services.find(s => s.id === apt.serviceId)?.name || 'Serviço Desconhecido',
+      }));
+  }, [allAppointmentsData, services, isAdmin, user?.uid]);
+
 
   const handleLogout = async () => {
     try {
@@ -98,7 +127,7 @@ export default function ProfilePage() {
     }
   };
 
-  const isLoading = isUserLoading;
+  const isLoading = isAuthLoading || isUserDataLoading;
 
   if (isLoading || !user) {
     return (
@@ -170,7 +199,7 @@ export default function ProfilePage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              {isLoadingUpcoming || isLoadingServices ? (
+              {isLoadingAppointments || isLoadingServices ? (
                 <Skeleton className="h-20 w-full" />
               ) : upcomingAppointments.length > 0 ? (
                 <ul className="space-y-4">
@@ -202,7 +231,7 @@ export default function ProfilePage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              {isLoadingPast || isLoadingServices ? (
+              {isLoadingAppointments || isLoadingServices ? (
                  <Skeleton className="h-20 w-full" />
               ) : pastAppointments.length > 0 ? (
                 <ul className="space-y-4">
@@ -256,3 +285,5 @@ export default function ProfilePage() {
     </div>
   );
 }
+
+    
