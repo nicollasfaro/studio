@@ -1,13 +1,14 @@
 
 'use client';
 
-import React, { useEffect } from 'react';
+import React from 'react';
 import { useRouter } from 'next/navigation';
 import { useAdmin } from '@/hooks/use-admin';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SidebarProvider, Sidebar, SidebarTrigger, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarContent, SidebarHeader, SidebarInset } from '@/components/ui/sidebar';
 import { Logo } from '@/components/logo';
 import { LayoutDashboard, Users, Calendar, Scissors, Gift } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 export default function AdminLayout({
   children,
@@ -17,13 +18,7 @@ export default function AdminLayout({
   const { isAdmin, isLoading } = useAdmin();
   const router = useRouter();
 
-  useEffect(() => {
-    if (!isLoading && !isAdmin) {
-      router.push('/');
-    }
-  }, [isAdmin, isLoading, router]);
-
-  if (isLoading || !isAdmin) {
+  if (isLoading) {
     return (
         <div className="flex items-center justify-center h-screen">
             <div className="flex flex-col items-center gap-4">
@@ -36,6 +31,18 @@ export default function AdminLayout({
             </div>
         </div>
     );
+  }
+
+  if (!isAdmin) {
+    return (
+        <div className="flex items-center justify-center h-screen">
+            <div className="text-center">
+                <h1 className="text-2xl font-bold">Acesso Negado</h1>
+                <p className="text-muted-foreground">Você não tem permissão para acessar esta página.</p>
+                <Button onClick={() => router.push('/')} className="mt-4">Voltar para a Home</Button>
+            </div>
+        </div>
+    )
   }
 
   return (
@@ -86,5 +93,3 @@ export default function AdminLayout({
     </SidebarProvider>
   );
 }
-
-    
