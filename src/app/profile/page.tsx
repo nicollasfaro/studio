@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect } from 'react';
@@ -35,25 +36,31 @@ export default function ProfilePage() {
   }, [user, isUserLoading, router]);
 
   // Fetch services to map serviceId to serviceName
-  const servicesRef = useMemoFirebase(() => collection(firestore, 'services'), [firestore]);
+  const servicesRef = useMemoFirebase(() => (firestore ? collection(firestore, 'services') : null), [firestore]);
   const { data: services, isLoading: isLoadingServices } = useCollection<Omit<Service, 'id'>>(servicesRef);
 
   // Fetch user's appointments
-  const appointmentsRef = useMemoFirebase(() => {
-    if (!user) return null;
-    return collection(firestore, 'users', user.uid, 'appointments');
-  }, [firestore, user]);
+  const appointmentsRef = useMemoFirebase(() => (firestore ? collection(firestore, 'appointments') : null), [firestore]);
   
   const upcomingAppointmentsQuery = useMemoFirebase(() => {
-      if (!appointmentsRef) return null;
-      return query(appointmentsRef, where('startTime', '>=', new Date().toISOString()), orderBy('startTime', 'asc'));
-  },[appointmentsRef]);
+    if (!appointmentsRef || !user) return null;
+    return query(
+      appointmentsRef,
+      where('clientId', '==', user.uid),
+      where('startTime', '>=', new Date().toISOString()),
+      orderBy('startTime', 'asc')
+    );
+  }, [appointmentsRef, user]);
 
   const pastAppointmentsQuery = useMemoFirebase(() => {
-      if (!appointmentsRef) return null;
-      return query(appointmentsRef, where('startTime', '<', new Date().toISOString()), orderBy('startTime', 'desc'));
-  },[appointmentsRef]);
-
+    if (!appointmentsRef || !user) return null;
+    return query(
+      appointmentsRef,
+      where('clientId', '==', user.uid),
+      where('startTime', '<', new Date().toISOString()),
+      orderBy('startTime', 'desc')
+    );
+  }, [appointmentsRef, user]);
 
   const { data: upcomingAppointmentsData, isLoading: isLoadingUpcoming } = useCollection<Appointment>(upcomingAppointmentsQuery);
   const { data: pastAppointmentsData, isLoading: isLoadingPast } = useCollection<Appointment>(pastAppointmentsQuery);

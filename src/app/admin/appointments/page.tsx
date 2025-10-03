@@ -26,7 +26,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { MoreHorizontal, CheckCircle, XCircle } from 'lucide-react';
 import { useCollection, useFirestore, useMemoFirebase, updateDocumentNonBlocking } from '@/firebase';
-import { collection, collectionGroup, query, orderBy, doc } from 'firebase/firestore';
+import { collection, query, orderBy, doc } from 'firebase/firestore';
 import type { Appointment, Service } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
@@ -41,7 +41,7 @@ function AppointmentsTable({ services }: AppointmentsTableProps) {
   const { toast } = useToast();
 
   const appointmentsQuery = useMemoFirebase(
-    () => (firestore ? query(collectionGroup(firestore, 'appointments'), orderBy('startTime', 'desc')) : null),
+    () => (firestore ? query(collection(firestore, 'appointments'), orderBy('startTime', 'desc')) : null),
     [firestore]
   );
   
@@ -53,8 +53,8 @@ function AppointmentsTable({ services }: AppointmentsTableProps) {
   };
 
   const handleStatusChange = (appointment: Appointment, newStatus: 'confirmed' | 'cancelled') => {
-    if (!firestore || !appointment.clientId || !appointment.id) return;
-    const appointmentRef = doc(firestore, 'users', appointment.clientId, 'appointments', appointment.id);
+    if (!firestore || !appointment.id) return;
+    const appointmentRef = doc(firestore, 'appointments', appointment.id);
     updateDocumentNonBlocking(appointmentRef, { status: newStatus });
     toast({
       title: 'Status do Agendamento Atualizado!',

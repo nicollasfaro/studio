@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState } from 'react';
@@ -20,11 +21,10 @@ import { Check, ArrowLeft, ArrowRight, PartyPopper } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
-import { useAuth, useCollection, useFirestore, useUser, useMemoFirebase, addDocumentNonBlocking } from '@/firebase';
+import { useCollection, useFirestore, useUser, useMemoFirebase, addDocumentNonBlocking } from '@/firebase';
 import { collection } from 'firebase/firestore';
 import type { Service } from '@/lib/types';
 import { timeSlots } from '@/lib/data';
-import { initiateAnonymousSignIn } from '@/firebase/non-blocking-login';
 import { ptBR } from 'date-fns/locale';
 import {
   AlertDialog,
@@ -51,7 +51,7 @@ export default function BookAppointmentPage() {
 
   const firestore = useFirestore();
   const { user, isUserLoading } = useUser();
-  const servicesCollectionRef = useMemoFirebase(() => collection(firestore, 'services'), [firestore]);
+  const servicesCollectionRef = useMemoFirebase(() => (firestore ? collection(firestore, 'services') : null), [firestore]);
   const { data: services, isLoading: isLoadingServices } = useCollection<Omit<Service, 'id'>>(servicesCollectionRef);
 
   const handleNextStep = () => {
@@ -93,7 +93,7 @@ export default function BookAppointmentPage() {
     startTime.setHours(hours, minutes, 0, 0);
     const endTime = new Date(startTime.getTime() + serviceDetails.durationMinutes * 60000);
 
-    const appointmentsRef = collection(firestore, 'users', user.uid, 'appointments');
+    const appointmentsRef = collection(firestore, 'appointments');
     
     addDocumentNonBlocking(appointmentsRef, {
         clientId: user.uid,
@@ -268,5 +268,3 @@ export default function BookAppointmentPage() {
     </div>
   );
 }
-
-    

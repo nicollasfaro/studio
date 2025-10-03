@@ -231,26 +231,6 @@
         }
       },
       {
-        "path": "/users/{userId}/clients/{clientId}",
-        "definition": {
-          "entityName": "Client",
-          "schema": {
-            "$ref": "#/backend/entities/Client"
-          },
-          "description": "Stores client data. Only the authenticated user (userId) can access their own data. Path-based ownership.",
-          "params": [
-            {
-              "name": "userId",
-              "description": "The unique identifier of the user (client)."
-            },
-            {
-              "name": "clientId",
-              "description": "The unique identifier of the client document."
-            }
-          ]
-        }
-      },
-      {
         "path": "/services/{serviceId}",
         "definition": {
           "entityName": "Service",
@@ -283,18 +263,14 @@
         }
       },
       {
-        "path": "/users/{userId}/appointments/{appointmentId}",
+        "path": "/appointments/{appointmentId}",
         "definition": {
           "entityName": "Appointment",
           "schema": {
             "$ref": "#/backend/entities/Appointment"
           },
-          "description": "Stores appointment data for a specific user. Only the authenticated user (userId) can access their own appointments. Path-based ownership.",
+          "description": "Stores appointment data. Clients own their appointments. Admins can manage all appointments.",
           "params": [
-            {
-              "name": "userId",
-              "description": "The unique identifier of the user (client)."
-            },
             {
               "name": "appointmentId",
               "description": "The unique identifier of the appointment document."
@@ -303,6 +279,6 @@
         }
       }
     ],
-    "reasoning": "The Firestore structure is designed to support GlamEase's core features with a focus on security, scalability, and ease of debugging. It follows the principles of Authorization Independence, Structural Segregation, and Access Modeling.  \n\n*   **Users (Private Data with Admin Override):** User data is stored in a top-level `/users/{userId}` collection. This allows users to manage their own profile information while enabling administrators to have oversight.\n*   **Clients (Private Data):** Client data is stored under `/users/{userId}/clients/{clientId}`. This ensures path-based ownership, meaning only the authenticated user can access their own client data.\n*   **Services (Public Data):** Services are stored in a single collection `/services/{serviceId}`. This allows for easy listing and retrieval of all available services.\n*   **Promotions (Public Data with Service References):** Promotions are stored in a single collection `/promotions/{promotionId}`.  Each promotion document contains an array `serviceIds` referencing the services to which the promotion applies.  This allows for easy listing and retrieval of all promotions.\n*   **Appointments (User-Owned with Service Reference):** Appointments are stored under `/users/{userId}/appointments/{appointmentId}`. This structure ensures that each user can only access their appointments.  The `serviceId` field references the service associated with the appointment.\n\n**Authorization Independence:**\n\n*   Authorization Independence is achieved by avoiding `get()` calls in the security rules where possible. Client data is secured via path-based rules under `/users/{userId}`. Admin access is handled by checking a flag on the user's own document.\n\n**QAPs (Rules are not Filters):**\n\n*   The structure enables secure `list` operations by segregating data based on access requirements.  Public data (services, promotions) resides in dedicated collections, allowing for simple rules that permit listing all documents. Private client data is secured through path-based ownership in `/users/{userId}/clients`. Appointments, also user-owned, follow a similar pattern in `/users/{userId}/appointments`. Admin users are granted list access on the `users` collection.\n\nThis structure ensures that security rules are simple, efficient, and easy to debug."
+    "reasoning": "The Firestore structure is designed to support GlamEase's core features with a focus on security, scalability, and ease of debugging. It follows the principles of Authorization Independence, Structural Segregation, and Access Modeling.  \n\n*   **Users (Private Data with Admin Override):** User data is stored in a top-level `/users/{userId}` collection. This allows users to manage their own profile information while enabling administrators to have oversight.\n*   **Services (Public Data):** Services are stored in a single collection `/services/{serviceId}`. This allows for easy listing and retrieval of all available services.\n*   **Promotions (Public Data with Service References):** Promotions are stored in a single collection `/promotions/{promotionId}`.  Each promotion document contains an array `serviceIds` referencing the services to which the promotion applies.  This allows for easy listing and retrieval of all promotions.\n*   **Appointments (Centralized with Ownership):** Appointments are stored in a single, top-level `/appointments/{appointmentId}` collection. This simplifies queries for administrators who need to view all appointments. Each appointment document contains a `clientId` field to link it to the user who created it, ensuring data ownership can still be enforced in security rules. This is more efficient for admin-level queries than nesting appointments under each user.\n\n**Authorization Independence:**\n\n*   Authorization Independence is achieved by avoiding `get()` calls in the security rules where possible. Client data is secured via path-based rules under `/users/{userId}`. Admin access is handled by checking a flag on the user's own document.\n\n**QAPs (Rules are not Filters):**\n\n*   The structure enables secure `list` operations by segregating data based on access requirements. Public data (services, promotions) resides in dedicated collections. The centralized `/appointments` collection allows admins to `list` all documents, while individual user queries are filtered by `where('clientId', '==', uid)` on the client-side, which is then enforced by security rules."
   }
 }
