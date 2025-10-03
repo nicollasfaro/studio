@@ -13,9 +13,9 @@ export default function AdminDashboardPage({ isAdmin }: { isAdmin: boolean }) {
 
   // The layout already protects this route, so checking for isAdmin here was redundant
   // and causing a race condition where the query would be null on initial render.
-  const usersRef = useMemoFirebase(() => collection(firestore, 'users'), [firestore]);
-  const servicesRef = useMemoFirebase(() => collection(firestore, 'services'), [firestore]);
-  const promotionsRef = useMemoFirebase(() => collection(firestore, 'promotions'), [firestore]);
+  const usersRef = useMemoFirebase(() => (firestore ? collection(firestore, 'users') : null), [firestore]);
+  const servicesRef = useMemoFirebase(() => (firestore ? collection(firestore, 'services') : null), [firestore]);
+  const promotionsRef = useMemoFirebase(() => (firestore ? collection(firestore, 'promotions') : null), [firestore]);
 
 
   const { data: users, isLoading: isLoadingUsers } = useCollection<User>(usersRef);

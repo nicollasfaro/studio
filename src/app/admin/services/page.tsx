@@ -73,7 +73,7 @@ export default function AdminServicesPage() {
   const [isEditing, setIsEditing] = useState<Service | null>(null);
   const [showDeleteAlert, setShowDeleteAlert] = useState<Service | null>(null);
 
-  const servicesRef = useMemoFirebase(() => collection(firestore, 'services'), [firestore]);
+  const servicesRef = useMemoFirebase(() => (firestore ? collection(firestore, 'services') : null), [firestore]);
   const { data: services, isLoading } = useCollection<Service>(servicesRef);
 
   const form = useForm<ServiceFormValues>({
@@ -88,6 +88,7 @@ export default function AdminServicesPage() {
   });
 
   const onSubmit = async (values: ServiceFormValues) => {
+    if (!firestore || !servicesRef) return;
     try {
       if (isEditing) {
         // Update existing service
@@ -118,7 +119,7 @@ export default function AdminServicesPage() {
   };
 
   const handleDeleteService = async () => {
-    if (!showDeleteAlert) return;
+    if (!showDeleteAlert || !firestore) return;
     try {
         const serviceDocRef = doc(firestore, 'services', showDeleteAlert.id);
         deleteDocumentNonBlocking(serviceDocRef);

@@ -141,7 +141,7 @@ function AppointmentsTable({ services }: AppointmentsTableProps) {
 export default function AdminAppointmentsPage() {
   const firestore = useFirestore();
   const servicesRef = useMemoFirebase(() => (firestore ? collection(firestore, 'services') : null), [firestore]);
-  const { data: services, isLoading: isLoadingServices } = useCollection<Omit<Service, 'id'>>(servicesRef);
+  const { data: services, isLoading: isLoadingServices } = useCollection<Service>(servicesRef);
 
   return (
     <Card>
