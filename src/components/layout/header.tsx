@@ -16,6 +16,7 @@ import {
   Shield,
 } from 'lucide-react';
 import { signOut } from 'firebase/auth';
+import { doc } from 'firebase/firestore';
 
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
@@ -30,9 +31,10 @@ import {
 import { Logo } from '@/components/logo';
 import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
-import { useUser, useAuth } from '@/firebase';
+import { useUser, useAuth, useFirestore, useDoc, useMemoFirebase } from '@/firebase';
 import { useToast } from '@/hooks/use-toast';
-import { useAdmin } from '@/hooks/use-admin';
+import type { User as AppUser } from '@/lib/types';
+
 
 const navLinks = [
   { href: '/', label: 'Início', icon: Home },
@@ -44,10 +46,19 @@ const navLinks = [
 export function Header() {
   const pathname = usePathname();
   const { user, isUserLoading } = useUser();
-  const { isAdmin } = useAdmin();
   const auth = useAuth();
+  const firestore = useFirestore();
   const router = useRouter();
   const { toast } = useToast();
+
+  const userDocRef = useMemoFirebase(() => {
+    if (!user) return null;
+    return doc(firestore, 'users', user.uid);
+  }, [user, firestore]);
+
+  const { data: userData, isLoading: isUserDataLoading } = useDoc<AppUser>(userDocRef);
+  const isAdmin = userData?.isAdmin ?? false;
+
 
   const handleLogout = async () => {
     try {
@@ -65,6 +76,8 @@ export function Header() {
       });
     }
   };
+
+  const isLoading = isUserLoading || isUserDataLoading;
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-primary/20 bg-primary shadow-sm">
@@ -127,7 +140,7 @@ export function Header() {
               {user ? user.displayName || 'Minha Conta' : 'Convidado'}
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            {isUserLoading ? (
+            {isLoading ? (
               <DropdownMenuItem disabled>Carregando...</DropdownMenuItem>
             ) : user ? (
               <>
@@ -179,5 +192,3 @@ export function Header() {
     </header>
   );
 }
-
-    

@@ -30,6 +30,7 @@ export default function AdminLayout({
 
   const isAdmin = userData?.isAdmin ?? false;
   const isLoading = isUserLoading || (user && isUserDataLoading);
+  console.log(isAdmin);
 
   if (isLoading) {
     return (
