@@ -1,5 +1,36 @@
 {
   "entities": {
+    "User": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "User",
+      "type": "object",
+      "description": "Represents a user in the GlamEase application.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the user."
+        },
+        "name": {
+          "type": "string",
+          "description": "The name of the user."
+        },
+        "email": {
+          "type": "string",
+          "description": "The email address of the user.",
+          "format": "email"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "The date and time the user registered.",
+          "format": "date-time"
+        },
+        "isAdmin": {
+          "type": "boolean",
+          "description": "Flag to indicate if the user is an administrator."
+        }
+      },
+      "required": ["id", "name", "email", "createdAt"]
+    },
     "Client": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "Client",
@@ -178,6 +209,22 @@
   },
   "firestore": {
     "structure": [
+       {
+        "path": "/users/{userId}",
+        "definition": {
+          "entityName": "User",
+          "schema": {
+            "$ref": "#/backend/entities/User"
+          },
+          "description": "Stores user profile information. Users can read/write their own data.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier of the user, matching the auth UID."
+            }
+          ]
+        }
+      },
       {
         "path": "/users/{userId}/clients/{clientId}",
         "definition": {
@@ -251,6 +298,8 @@
         }
       }
     ],
-    "reasoning": "The Firestore structure is designed to support GlamEase's core features with a focus on security, scalability, and ease of debugging. It follows the principles of Authorization Independence, Structural Segregation, and Access Modeling.  \n\n*   **Clients (Private Data):** Client data is stored under `/users/{userId}/clients/{clientId}`. This ensures path-based ownership, meaning only the authenticated user can access their own client data.\n*   **Services (Public Data):** Services are stored in a single collection `/services/{serviceId}`. This allows for easy listing and retrieval of all available services.\n*   **Promotions (Public Data with Service References):** Promotions are stored in a single collection `/promotions/{promotionId}`.  Each promotion document contains an array `serviceIds` referencing the services to which the promotion applies.  This allows for easy listing and retrieval of all promotions.\n*   **Appointments (User-Owned with Service Reference):** Appointments are stored under `/users/{userId}/appointments/{appointmentId}`. This structure ensures that each user can only access their appointments.  The `serviceId` field references the service associated with the appointment.\n\n**Authorization Independence:**\n\n*   Authorization Independence is achieved by avoiding `get()` calls in the security rules.  Client data is secured via path-based rules under `/users/{userId}`.\n\n**QAPs (Rules are not Filters):**\n\n*   The structure enables secure `list` operations by segregating data based on access requirements.  Public data (services, promotions) resides in dedicated collections, allowing for simple rules that permit listing all documents. Private client data is secured through path-based ownership in `/users/{userId}/clients`. Appointments, also user-owned, follow a similar pattern in `/users/{userId}/appointments`.\n\nThis structure ensures that security rules are simple, efficient, and easy to debug."
+    "reasoning": "The Firestore structure is designed to support GlamEase's core features with a focus on security, scalability, and ease of debugging. It follows the principles of Authorization Independence, Structural Segregation, and Access Modeling.  \n\n*   **Users (Private Data with Admin Override):** User data is stored in a top-level `/users/{userId}` collection. This allows users to manage their own profile information while enabling administrators to have oversight.\n*   **Clients (Private Data):** Client data is stored under `/users/{userId}/clients/{clientId}`. This ensures path-based ownership, meaning only the authenticated user can access their own client data.\n*   **Services (Public Data):** Services are stored in a single collection `/services/{serviceId}`. This allows for easy listing and retrieval of all available services.\n*   **Promotions (Public Data with Service References):** Promotions are stored in a single collection `/promotions/{promotionId}`.  Each promotion document contains an array `serviceIds` referencing the services to which the promotion applies.  This allows for easy listing and retrieval of all promotions.\n*   **Appointments (User-Owned with Service Reference):** Appointments are stored under `/users/{userId}/appointments/{appointmentId}`. This structure ensures that each user can only access their appointments.  The `serviceId` field references the service associated with the appointment.\n\n**Authorization Independence:**\n\n*   Authorization Independence is achieved by avoiding `get()` calls in the security rules where possible. Client data is secured via path-based rules under `/users/{userId}`. Admin access is handled by checking a flag on the user's own document.\n\n**QAPs (Rules are not Filters):**\n\n*   The structure enables secure `list` operations by segregating data based on access requirements.  Public data (services, promotions) resides in dedicated collections, allowing for simple rules that permit listing all documents. Private client data is secured through path-based ownership in `/users/{userId}/clients`. Appointments, also user-owned, follow a similar pattern in `/users/{userId}/appointments`. Admin users are granted list access on the `users` collection.\n\nThis structure ensures that security rules are simple, efficient, and easy to debug."
   }
 }
+
+    

@@ -1,3 +1,4 @@
+
 'use client';
 
 import Link from 'next/link';
@@ -12,6 +13,7 @@ import {
   LogIn,
   UserPlus,
   LogOut,
+  Shield,
 } from 'lucide-react';
 import { signOut } from 'firebase/auth';
 
@@ -30,6 +32,7 @@ import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { useUser, useAuth } from '@/firebase';
 import { useToast } from '@/hooks/use-toast';
+import { useAdmin } from '@/hooks/use-admin';
 
 const navLinks = [
   { href: '/', label: 'Início', icon: Home },
@@ -41,6 +44,7 @@ const navLinks = [
 export function Header() {
   const pathname = usePathname();
   const { user, isUserLoading } = useUser();
+  const { isAdmin } = useAdmin();
   const auth = useAuth();
   const router = useRouter();
   const { toast } = useToast();
@@ -127,6 +131,14 @@ export function Header() {
               <DropdownMenuItem disabled>Carregando...</DropdownMenuItem>
             ) : user ? (
               <>
+                {isAdmin && (
+                  <DropdownMenuItem asChild>
+                    <Link href="/admin">
+                      <Shield className="mr-2 h-4 w-4" />
+                      <span>Painel de Admin</span>
+                    </Link>
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem asChild>
                   <Link href="/profile">
                     <User className="mr-2 h-4 w-4" />
@@ -167,3 +179,5 @@ export function Header() {
     </header>
   );
 }
+
+    
