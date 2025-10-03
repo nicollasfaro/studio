@@ -1,11 +1,19 @@
+'use client';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
-import { services } from '@/lib/data';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
+import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
+import { collection } from 'firebase/firestore';
+import type { Service } from '@/lib/types';
+import { Skeleton } from '@/components/ui/skeleton';
 
 export default function ServicesPage() {
+  const firestore = useFirestore();
+  const servicesCollectionRef = useMemoFirebase(() => collection(firestore, 'services'), [firestore]);
+  const { data: services, isLoading } = useCollection<Omit<Service, 'id'>>(servicesCollectionRef);
+
   return (
     <div className="container mx-auto px-4 md:px-6 py-12">
       <div className="text-center mb-12">
@@ -16,7 +24,27 @@ export default function ServicesPage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-        {services.map((service) => {
+        {isLoading && Array.from({ length: 6 }).map((_, i) => (
+          <Card key={i} className="flex flex-col overflow-hidden">
+            <CardHeader className="p-0">
+              <Skeleton className="w-full h-48" />
+            </CardHeader>
+            <CardContent className="p-6 flex-grow">
+              <Skeleton className="h-6 w-3/4 mb-2" />
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-full mt-1" />
+              <Skeleton className="h-4 w-1/2 mt-1" />
+            </CardContent>
+            <CardFooter className="p-6 pt-0 flex justify-between items-center">
+              <div className="w-1/3">
+                <Skeleton className="h-6 w-full mb-1" />
+                <Skeleton className="h-4 w-2/3" />
+              </div>
+              <Skeleton className="h-10 w-1/3" />
+            </CardFooter>
+          </Card>
+        ))}
+        {services && services.map((service) => {
           const serviceImage = PlaceHolderImages.find((img) => img.id === service.imageId);
           return (
             <Card key={service.id} className="flex flex-col overflow-hidden shadow-md hover:shadow-xl transition-shadow duration-300">
@@ -41,7 +69,7 @@ export default function ServicesPage() {
               <CardFooter className="p-6 pt-0 flex justify-between items-center">
                 <div>
                   <p className="text-xl font-bold text-primary">${service.price}</p>
-                  <p className="text-sm text-muted-foreground">{service.duration} minutes</p>
+                  <p className="text-sm text-muted-foreground">{service.durationMinutes} minutes</p>
                 </div>
                 <Button asChild>
                   <Link href={`/book?service=${service.id}`}>Book Now</Link>

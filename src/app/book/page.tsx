@@ -15,11 +15,15 @@ import {
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
-import { services, timeSlots } from '@/lib/data';
 import { Check, ArrowLeft, ArrowRight, PartyPopper } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
-import { format } from 'date-fns';
+import { format, addMinutes } from 'date-fns';
+import { useAuth, useCollection, useFirestore, useUser, useMemoFirebase, addDocumentNonBlocking } from '@/firebase';
+import { collection } from 'firebase/firestore';
+import type { Service } from '@/lib/types';
+import { timeSlots } from '@/lib/data'; // Assuming timeslots are still mock
+import { initiateAnonymousSignIn } from '@/firebase/non-blocking-login';
 
 export default function BookAppointmentPage() {
   const searchParams = useSearchParams();
@@ -28,6 +32,14 @@ export default function BookAppointmentPage() {
   const [selectedService, setSelectedService] = useState<string | undefined>(searchParams.get('service') || undefined);
   const [date, setDate] = useState<Date | undefined>(new Date());
   const [selectedTime, setSelectedTime] = useState<string | undefined>();
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+
+  const firestore = useFirestore();
+  const auth = useAuth();
+  const { user, isUserLoading } = useUser();
+  const servicesCollectionRef = useMemoFirebase(() => collection(firestore, 'services'), [firestore]);
+  const { data: services, isLoading: isLoadingServices } = useCollection<Omit<Service, 'id'>>(servicesCollectionRef);
 
   const handleNextStep = () => {
     if (step === 1 && !selectedService) {
@@ -41,15 +53,64 @@ export default function BookAppointmentPage() {
     setStep(step + 1);
   };
 
-  const handleBooking = () => {
+  const handleBooking = async () => {
+    if (!selectedService || !date || !selectedTime || !name || !email) {
+      toast({ title: 'Please fill all fields.', variant: 'destructive' });
+      return;
+    }
+
+    let currentUser = user;
+    if (!currentUser && !isUserLoading) {
+      initiateAnonymousSignIn(auth);
+      // We can't immediately get the user, so we show a pending state
+      toast({
+        title: 'Finalizing booking...',
+        description: 'Please wait a moment.',
+      });
+      // A more robust solution would wait for user state to change.
+      // For this example, we'll proceed and let Firestore rules handle security.
+      // In a real app, you might disable the button until user is available.
+      return; 
+    }
+    
+    if (!currentUser) {
+        toast({ title: 'Authentication is still initializing. Please try again in a moment.', variant: 'destructive'});
+        return;
+    }
+
+
+    const serviceDetails = services?.find(s => s.id === selectedService);
+    if (!serviceDetails) {
+        toast({ title: 'Selected service not found.', variant: 'destructive' });
+        return;
+    }
+
+    const [hours, minutes] = selectedTime.split(':').map(Number);
+    const startTime = new Date(date);
+    startTime.setHours(hours, minutes, 0, 0);
+    const endTime = addMinutes(startTime, serviceDetails.durationMinutes);
+
+    const appointmentsRef = collection(firestore, 'users', currentUser.uid, 'appointments');
+    
+    addDocumentNonBlocking(appointmentsRef, {
+        clientId: currentUser.uid, // Using user's UID as the clientID
+        serviceId: selectedService,
+        startTime: startTime.toISOString(),
+        endTime: endTime.toISOString(),
+        status: 'scheduled',
+        clientName: name,
+        clientEmail: email
+    });
+
     toast({
       title: 'Appointment Booked!',
-      description: `We're looking forward to seeing you on ${date ? format(date, 'PPP') : ''} at ${selectedTime}.`,
+      description: `We're looking forward to seeing you on ${format(date, 'PPP')} at ${selectedTime}.`,
     });
     setStep(4);
   };
 
-  const currentServiceName = services.find(s => s.id === selectedService)?.name;
+  const currentService = services?.find(s => s.id === selectedService);
+  const currentServiceName = currentService?.name;
 
   return (
     <div className="container mx-auto px-4 md:px-6 py-12">
@@ -67,7 +128,8 @@ export default function BookAppointmentPage() {
             <div className="space-y-6">
               <h3 className="text-xl font-bold">Select a Service</h3>
               <RadioGroup value={selectedService} onValueChange={setSelectedService}>
-                {services.map((service) => (
+                {isLoadingServices && <p>Loading services...</p>}
+                {services?.map((service) => (
                   <Label
                     key={service.id}
                     htmlFor={service.id}
@@ -82,7 +144,7 @@ export default function BookAppointmentPage() {
                     </div>
                     <div className="text-right">
                       <p className="font-bold text-primary">${service.price}</p>
-                      <p className="text-sm text-muted-foreground">{service.duration} min</p>
+                      <p className="text-sm text-muted-foreground">{service.durationMinutes} min</p>
                     </div>
                     <RadioGroupItem value={service.id} id={service.id} className="sr-only" />
                   </Label>
@@ -143,11 +205,11 @@ export default function BookAppointmentPage() {
               <div className="grid sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="name">Full Name</Label>
-                  <Input id="name" placeholder="Jane Doe" />
+                  <Input id="name" placeholder="Jane Doe" value={name} onChange={(e) => setName(e.target.value)} />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="email">Email Address</Label>
-                  <Input id="email" type="email" placeholder="jane@example.com" />
+                  <Input id="email" type="email" placeholder="jane@example.com" value={email} onChange={(e) => setEmail(e.target.value)} />
                 </div>
               </div>
             </div>
@@ -173,8 +235,8 @@ export default function BookAppointmentPage() {
                 Next <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             ) : (
-              <Button onClick={handleBooking}>
-                Confirm Booking <Check className="ml-2 h-4 w-4" />
+              <Button onClick={handleBooking} disabled={isUserLoading}>
+                {isUserLoading ? 'Initializing...' : 'Confirm Booking'} <Check className="ml-2 h-4 w-4" />
               </Button>
             )}
           </CardFooter>

@@ -1,17 +1,25 @@
+'use client';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { ArrowRight, Sparkles } from 'lucide-react';
-import { services } from '@/lib/data';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
-import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
+import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
+import { collection } from 'firebase/firestore';
+import type { Service } from '@/lib/types';
+import { Skeleton } from '@/components/ui/skeleton';
 
 export default function Home() {
   const heroImage = PlaceHolderImages.find((img) => img.id === 'hero');
-  const featuredServices = services.slice(0, 3);
   const promotionImage = PlaceHolderImages.find((img) => img.id === 'promo1');
+
+  const firestore = useFirestore();
+  const servicesCollectionRef = useMemoFirebase(() => collection(firestore, 'services'), [firestore]);
+  const { data: services, isLoading } = useCollection<Omit<Service, 'id'>>(servicesCollectionRef);
+
+  const featuredServices = services?.slice(0, 3) || [];
 
   return (
     <div className="flex flex-col min-h-[100dvh]">
@@ -51,6 +59,22 @@ export default function Home() {
             </p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {isLoading && Array.from({ length: 3 }).map((_, i) => (
+                <Card key={i} className="flex flex-col overflow-hidden">
+                    <CardHeader className="p-0">
+                        <Skeleton className="w-full h-48" />
+                    </CardHeader>
+                    <CardContent className="p-6 flex-grow">
+                        <Skeleton className="h-6 w-3/4 mb-2" />
+                        <Skeleton className="h-4 w-full" />
+                         <Skeleton className="h-4 w-1/2 mt-1" />
+                    </CardContent>
+                    <CardFooter className="p-6 pt-0 flex justify-between items-center">
+                        <Skeleton className="h-6 w-1/4" />
+                        <Skeleton className="h-10 w-1/3" />
+                    </CardFooter>
+                </Card>
+            ))}
             {featuredServices.map((service) => {
               const serviceImage = PlaceHolderImages.find((img) => img.id === service.imageId);
               return (
@@ -69,7 +93,7 @@ export default function Home() {
                   </CardHeader>
                   <CardContent className="p-6 flex-grow">
                     <CardTitle className="font-headline text-2xl mb-2">{service.name}</CardTitle>
-                    <CardDescription>{service.description.substring(0, 100)}...</CardDescription>
+                    <CardDescription>{service.description?.substring(0, 100)}...</CardDescription>
                   </CardContent>
                   <CardFooter className="p-6 pt-0 flex justify-between items-center">
                     <p className="text-lg font-bold text-primary">${service.price}</p>

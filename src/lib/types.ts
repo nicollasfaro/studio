@@ -3,23 +3,28 @@ export type Service = {
   name: string;
   description: string;
   price: number;
-  duration: number; // in minutes
+  durationMinutes: number;
   imageId: string;
 };
 
 export type Promotion = {
   id: string;
-  title: string;
+  name: string;
   description: string;
   imageId: string;
+  discountPercentage: number;
+  startDate: string;
+  endDate: string;
+  serviceIds: string[];
 };
 
 export type Appointment = {
   id: string;
-  serviceName: string;
-  date: Date;
-  time: string;
-  clientName: string;
+  clientId: string;
+  serviceId: string;
+  startTime: string;
+  endTime: string;
+  status: 'scheduled' | 'completed' | 'cancelled';
 };
 
 export type TimeSlot = {

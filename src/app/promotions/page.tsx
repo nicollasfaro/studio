@@ -1,13 +1,21 @@
+'use client';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
-import { promotions } from '@/lib/data';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { Sparkles } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
+import { collection } from 'firebase/firestore';
+import type { Promotion } from '@/lib/types';
+import { Skeleton } from '@/components/ui/skeleton';
 
 export default function PromotionsPage() {
+  const firestore = useFirestore();
+  const promotionsCollectionRef = useMemoFirebase(() => collection(firestore, 'promotions'), [firestore]);
+  const { data: promotions, isLoading } = useCollection<Omit<Promotion, 'id'>>(promotionsCollectionRef);
+
   return (
     <div className="container mx-auto px-4 md:px-6 py-12">
       <div className="text-center mb-12">
@@ -18,7 +26,21 @@ export default function PromotionsPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-1 gap-12">
-        {promotions.map((promo) => {
+        {isLoading && Array.from({ length: 3 }).map((_, i) => (
+          <Card key={i} className="w-full overflow-hidden shadow-lg md:flex">
+             <div className="md:w-1/3">
+                <Skeleton className="w-full h-full aspect-[4/3] md:aspect-auto" />
+             </div>
+             <div className="md:w-2/3 flex flex-col p-6">
+                <Skeleton className="h-6 w-1/4 mb-4" />
+                <Skeleton className="h-8 w-3/4 mb-4" />
+                <Skeleton className="h-4 w-full mb-2" />
+                <Skeleton className="h-4 w-5/6 mb-auto" />
+                <Skeleton className="h-12 w-1/3 mt-4" />
+             </div>
+          </Card>
+        ))}
+        {promotions && promotions.map((promo) => {
           const promoImage = PlaceHolderImages.find((img) => img.id === promo.imageId);
           return (
             <Card key={promo.id} className="w-full overflow-hidden shadow-lg hover:shadow-2xl transition-shadow duration-300 md:flex">
@@ -40,7 +62,7 @@ export default function PromotionsPage() {
                     <Sparkles className="mr-2 h-4 w-4" />
                     Limited Time Offer
                   </Badge>
-                  <CardTitle className="font-headline text-3xl">{promo.title}</CardTitle>
+                  <CardTitle className="font-headline text-3xl">{promo.name}</CardTitle>
                 </CardHeader>
                 <CardContent className="p-6 pt-0 flex-grow">
                   <CardDescription className="text-base">{promo.description}</CardDescription>
