@@ -11,9 +11,9 @@ import { Skeleton } from '@/components/ui/skeleton';
 export default function AdminDashboardPage({ isAdmin }: { isAdmin: boolean }) {
   const firestore = useFirestore();
 
-  // The collections can be fetched if the user is an admin.
-  // The layout already protects this route, so this check is an extra layer of safety.
-  const usersRef = useMemoFirebase(() => isAdmin ? collection(firestore, 'users') : null, [firestore, isAdmin]);
+  // The layout already protects this route, so checking for isAdmin here was redundant
+  // and causing a race condition where the query would be null on initial render.
+  const usersRef = useMemoFirebase(() => collection(firestore, 'users'), [firestore]);
   const servicesRef = useMemoFirebase(() => collection(firestore, 'services'), [firestore]);
   const promotionsRef = useMemoFirebase(() => collection(firestore, 'promotions'), [firestore]);
 
@@ -40,7 +40,7 @@ export default function AdminDashboardPage({ isAdmin }: { isAdmin: boolean }) {
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            {isLoading ? <Skeleton className="h-8 w-1/2"/> : <div className="text-2xl font-bold">{totalUsers}</div>}
+            {isLoadingUsers ? <Skeleton className="h-8 w-1/2"/> : <div className="text-2xl font-bold">{totalUsers}</div>}
             <p className="text-xs text-muted-foreground">Total de clientes registrados</p>
           </CardContent>
         </Card>
@@ -50,7 +50,7 @@ export default function AdminDashboardPage({ isAdmin }: { isAdmin: boolean }) {
             <Scissors className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            {isLoading ? <Skeleton className="h-8 w-1/2"/> : <div className="text-2xl font-bold">{totalServices}</div>}
+            {isLoadingServices ? <Skeleton className="h-8 w-1/2"/> : <div className="text-2xl font-bold">{totalServices}</div>}
             <p className="text-xs text-muted-foreground">Número de serviços oferecidos</p>
           </CardContent>
         </Card>
@@ -60,7 +60,7 @@ export default function AdminDashboardPage({ isAdmin }: { isAdmin: boolean }) {
             <Gift className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            {isLoading ? <Skeleton className="h-8 w-1/2"/> : <div className="text-2xl font-bold">{totalPromotions}</div>}
+            {isLoadingPromotions ? <Skeleton className="h-8 w-1/2"/> : <div className="text-2xl font-bold">{totalPromotions}</div>}
             <p className="text-xs text-muted-foreground">Número de promoções ativas</p>
           </CardContent>
         </Card>
