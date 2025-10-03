@@ -59,13 +59,11 @@ export default function RegisterPage() {
           displayName: values.name,
         });
 
-        // Create a user document in Firestore
         const userDocRef = doc(firestore, 'users', user.uid);
         setDocumentNonBlocking(userDocRef, {
             name: values.name,
             email: values.email,
             createdAt: new Date().toISOString(),
-            isAdmin: false,
         }, { merge: true });
       }
       
