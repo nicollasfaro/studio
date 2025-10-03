@@ -38,43 +38,49 @@ export default function ProfilePage() {
     }
   }, [user, isUserLoading, router]);
 
+  const isAdmin = userData?.isAdmin ?? false;
+
   // Fetch services to map serviceId to serviceName
   const servicesRef = useMemoFirebase(() => (firestore ? collection(firestore, 'services') : null), [firestore]);
   const { data: services, isLoading: isLoadingServices } = useCollection<Omit<Service, 'id'>>(servicesRef);
 
-  // This query will only run when we have a firestore instance AND a user ID.
   const upcomingAppointmentsQuery = useMemoFirebase(() => {
-    if (!firestore || !user?.uid) return null;
-    return query(
-      collection(firestore, 'appointments'),
-      where('clientId', '==', user.uid),
-      where('startTime', '>=', new Date().toISOString()),
-      orderBy('startTime', 'asc')
-    );
-  }, [firestore, user?.uid]);
-
+    if (isUserDataLoading || !firestore || !user?.uid) return null;
+    const baseQuery = collection(firestore, 'appointments');
+    if (isAdmin) {
+      return query(baseQuery, where('startTime', '>=', new Date().toISOString()), orderBy('startTime', 'asc'));
+    }
+    return query(baseQuery, where('clientId', '==', user.uid), where('startTime', '>=', new Date().toISOString()), orderBy('startTime', 'asc'));
+  }, [firestore, user?.uid, isAdmin, isUserDataLoading]);
 
   const pastAppointmentsQuery = useMemoFirebase(() => {
-    if (!firestore || !user?.uid) return null;
-    return query(
-      collection(firestore, 'appointments'),
-      where('clientId', '==', user.uid),
-      where('startTime', '<', new Date().toISOString()),
-      orderBy('startTime', 'desc')
-    );
-  }, [firestore, user?.uid]);
+    if (isUserDataLoading || !firestore || !user?.uid) return null;
+    const baseQuery = collection(firestore, 'appointments');
+    if (isAdmin) {
+      return query(baseQuery, where('startTime', '<', new Date().toISOString()), orderBy('startTime', 'desc'));
+    }
+    return query(baseQuery, where('clientId', '==', user.uid), where('startTime', '<', new Date().toISOString()), orderBy('startTime', 'desc'));
+  }, [firestore, user?.uid, isAdmin, isUserDataLoading]);
+
 
   const { data: upcomingAppointmentsData, isLoading: isLoadingUpcoming } = useCollection<Appointment>(upcomingAppointmentsQuery);
   const { data: pastAppointmentsData, isLoading: isLoadingPast } = useCollection<Appointment>(pastAppointmentsQuery);
 
   const mapAppointments = (appointments: Appointment[] | null): AppointmentWithService[] => {
     if (!appointments || !services) return [];
-    return appointments.map(apt => ({
+    let userAppointments = appointments;
+    
+    // If the user is an admin, we filter to show only their own appointments on this page.
+    if (isAdmin) {
+        userAppointments = appointments.filter(apt => apt.clientId === user?.uid);
+    }
+    
+    return userAppointments.map(apt => ({
       ...apt,
       serviceName: services.find(s => s.id === apt.serviceId)?.name || 'Serviço Desconhecido',
     }));
   };
-
+  
   const upcomingAppointments = mapAppointments(upcomingAppointmentsData);
   const pastAppointments = mapAppointments(pastAppointmentsData);
 
@@ -137,8 +143,6 @@ export default function ProfilePage() {
     );
   }
   
-  const isAdmin = userData?.isAdmin ?? false;
-
   return (
     <div className="container mx-auto px-4 md:px-6 py-12">
       <div className="grid gap-8 lg:grid-cols-3">
@@ -262,3 +266,5 @@ export default function ProfilePage() {
     </div>
   );
 }
+
+    
