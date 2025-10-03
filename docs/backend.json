@@ -1,0 +1,256 @@
+{
+  "entities": {
+    "Client": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Client",
+      "type": "object",
+      "description": "Represents a client registered in the GlamEase application.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the client entity."
+        },
+        "firstName": {
+          "type": "string",
+          "description": "The first name of the client."
+        },
+        "lastName": {
+          "type": "string",
+          "description": "The last name of the client."
+        },
+        "email": {
+          "type": "string",
+          "description": "The email address of the client.",
+          "format": "email"
+        },
+        "phone": {
+          "type": "string",
+          "description": "The phone number of the client."
+        },
+        "registrationDate": {
+          "type": "string",
+          "description": "The date and time the client registered.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "firstName",
+        "lastName",
+        "email",
+        "phone",
+        "registrationDate"
+      ]
+    },
+    "Service": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Service",
+      "type": "object",
+      "description": "Represents a service offered by GlamEase.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the service entity."
+        },
+        "name": {
+          "type": "string",
+          "description": "The name of the service."
+        },
+        "description": {
+          "type": "string",
+          "description": "A description of the service."
+        },
+        "price": {
+          "type": "number",
+          "description": "The price of the service."
+        },
+        "durationMinutes": {
+          "type": "number",
+          "description": "The duration of the service in minutes."
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "description",
+        "price",
+        "durationMinutes"
+      ]
+    },
+    "Promotion": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Promotion",
+      "type": "object",
+      "description": "Represents a promotion offered by GlamEase.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the promotion entity."
+        },
+        "name": {
+          "type": "string",
+          "description": "The name of the promotion."
+        },
+        "description": {
+          "type": "string",
+          "description": "A description of the promotion."
+        },
+        "discountPercentage": {
+          "type": "number",
+          "description": "The discount percentage offered by the promotion."
+        },
+        "startDate": {
+          "type": "string",
+          "description": "The start date of the promotion.",
+          "format": "date-time"
+        },
+        "endDate": {
+          "type": "string",
+          "description": "The end date of the promotion.",
+          "format": "date-time"
+        },
+        "serviceIds": {
+          "type": "array",
+          "description": "References to Services. (Relationship: Promotion N:N Service)",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "description",
+        "discountPercentage",
+        "startDate",
+        "endDate",
+        "serviceIds"
+      ]
+    },
+    "Appointment": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Appointment",
+      "type": "object",
+      "description": "Represents an appointment scheduled by a client.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the appointment entity."
+        },
+        "clientId": {
+          "type": "string",
+          "description": "Reference to Client. (Relationship: Client 1:N Appointment)"
+        },
+        "serviceId": {
+          "type": "string",
+          "description": "Reference to Service. (Relationship: Service 1:N Appointment)"
+        },
+        "startTime": {
+          "type": "string",
+          "description": "The start time of the appointment.",
+          "format": "date-time"
+        },
+        "endTime": {
+          "type": "string",
+          "description": "The end time of the appointment.",
+          "format": "date-time"
+        },
+        "status": {
+          "type": "string",
+          "description": "The status of the appointment (e.g., scheduled, completed, cancelled)."
+        }
+      },
+      "required": [
+        "id",
+        "clientId",
+        "serviceId",
+        "startTime",
+        "endTime",
+        "status"
+      ]
+    }
+  },
+  "auth": {
+    "providers": [
+      "password",
+      "anonymous"
+    ]
+  },
+  "firestore": {
+    "structure": [
+      {
+        "path": "/users/{userId}/clients/{clientId}",
+        "definition": {
+          "entityName": "Client",
+          "schema": {
+            "$ref": "#/backend/entities/Client"
+          },
+          "description": "Stores client data. Only the authenticated user (userId) can access their own data. Path-based ownership.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier of the user (client)."
+            },
+            {
+              "name": "clientId",
+              "description": "The unique identifier of the client document."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/services/{serviceId}",
+        "definition": {
+          "entityName": "Service",
+          "schema": {
+            "$ref": "#/backend/entities/Service"
+          },
+          "description": "Stores service data. All users can read service information.",
+          "params": [
+            {
+              "name": "serviceId",
+              "description": "The unique identifier of the service."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/promotions/{promotionId}",
+        "definition": {
+          "entityName": "Promotion",
+          "schema": {
+            "$ref": "#/backend/entities/Promotion"
+          },
+          "description": "Stores promotion data. All users can read promotion information.",
+          "params": [
+            {
+              "name": "promotionId",
+              "description": "The unique identifier of the promotion."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/users/{userId}/appointments/{appointmentId}",
+        "definition": {
+          "entityName": "Appointment",
+          "schema": {
+            "$ref": "#/backend/entities/Appointment"
+          },
+          "description": "Stores appointment data for a specific user. Only the authenticated user (userId) can access their own appointments. Path-based ownership.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier of the user (client)."
+            },
+            {
+              "name": "appointmentId",
+              "description": "The unique identifier of the appointment document."
+            }
+          ]
+        }
+      }
+    ],
+    "reasoning": "The Firestore structure is designed to support GlamEase's core features with a focus on security, scalability, and ease of debugging. It follows the principles of Authorization Independence, Structural Segregation, and Access Modeling.  \n\n*   **Clients (Private Data):** Client data is stored under `/users/{userId}/clients/{clientId}`. This ensures path-based ownership, meaning only the authenticated user can access their own client data.\n*   **Services (Public Data):** Services are stored in a single collection `/services/{serviceId}`. This allows for easy listing and retrieval of all available services.\n*   **Promotions (Public Data with Service References):** Promotions are stored in a single collection `/promotions/{promotionId}`.  Each promotion document contains an array `serviceIds` referencing the services to which the promotion applies.  This allows for easy listing and retrieval of all promotions.\n*   **Appointments (User-Owned with Service Reference):** Appointments are stored under `/users/{userId}/appointments/{appointmentId}`. This structure ensures that each user can only access their appointments.  The `serviceId` field references the service associated with the appointment.\n\n**Authorization Independence:**\n\n*   Authorization Independence is achieved by avoiding `get()` calls in the security rules.  Client data is secured via path-based rules under `/users/{userId}`.\n\n**QAPs (Rules are not Filters):**\n\n*   The structure enables secure `list` operations by segregating data based on access requirements.  Public data (services, promotions) resides in dedicated collections, allowing for simple rules that permit listing all documents. Private client data is secured through path-based ownership in `/users/{userId}/clients`. Appointments, also user-owned, follow a similar pattern in `/users/{userId}/appointments`.\n\nThis structure ensures that security rules are simple, efficient, and easy to debug."
+  }
+}
