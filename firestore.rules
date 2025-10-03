@@ -2,154 +2,140 @@
  * @fileoverview Firestore Security Rules for GlamEase.
  *
  * Core Philosophy:
- * This ruleset enforces a user-ownership model for private data and allows public read access for shared data like services and promotions.  Administrative access is not explicitly defined in the data model and will be defaulted to owner-only access for user documents in this prototype.
+ * This ruleset enforces a user-ownership model for private data and allows public read access to shared data. User documents and their subcollections (clients, appointments) are strictly controlled by the authenticated user.
  *
  * Data Structure:
- * - /users/{userId}: User profile information, accessible only by the user.
- * - /users/{userId}/clients/{clientId}: Client data owned by a specific user.
- * - /services/{serviceId}: Publicly readable service information.
- * - /promotions/{promotionId}: Publicly readable promotion information.
- * - /users/{userId}/appointments/{appointmentId}: Appointment data owned by a specific user.
+ * - /users/{userId}: Stores user profiles, accessible only to the owning user.
+ * - /users/{userId}/clients/{clientId}: Stores client data, accessible only to the owning user.
+ * - /services/{serviceId}: Stores service data, publicly readable.
+ * - /promotions/{promotionId}: Stores promotion data, publicly readable.
+ * - /users/{userId}/appointments/{appointmentId}: Stores appointment data, accessible only to the owning user.
  *
  * Key Security Decisions:
- * - Users can only access their own profile data and data nested under their user ID.
- * - Listing the /users collection is denied to all users in this prototype because the reasoning indicates it should only be available to admin users and the data model has no isAdmin field, so it is defaulted to most restrictive state.
- * - Services and promotions are publicly readable.
- * - All write operations require authentication (user must be signed in).
- *
- * Denormalization for Authorization:
- *  - User ownership is enforced via path-based rules (e.g., /users/{userId}/...). This avoids the need for 'get()' calls to verify ownership.
- *
- * Structural Segregation:
- * - Public (services, promotions) and private (clients, appointments) data are stored in separate collections to simplify security rules and improve query performance.
+ * - Users can only list their own documents under their user ID.
+ * - Clients and Appointments are secured via path-based ownership under each user.
+ * - Services and Promotions are publicly readable.
+ * - The rules do NOT enforce the schema; they focus on authorization.
  */
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
     /**
-     * @description Checks if the user is signed in.
-     */
-    function isSignedIn() {
-      return request.auth != null;
-    }
-
-    /**
-     * @description Checks if the request is made by the owner of the resource.
-     */
-    function isOwner(userId) {
-      return request.auth.uid == userId;
-    }
-
-    /**
-     * @description Checks if the user is the owner and the resource exists.
-     */
-    function isExistingOwner(userId) {
-      return isOwner(userId) && existsAfter(/databases/$(database)/documents/users/$(userId));
-    }
-
-   /**
-     * @description Denies listing of `/users` collection.
-     */
-    match /users {
-        allow get: if false;
-        allow list: if false;
-        allow create: if isSignedIn();
-        allow update: if false;
-        allow delete: if false;
-    }
-
-    /**
-     * @description Manages user profile data.
+     * @description Controls access to user profile data.
      * @path /users/{userId}
-     * @allow (create) User with matching ID can create their own document.
-     * @allow (get) User can read their own document.
-     * @allow (update) User can update their own document.
-     * @allow (delete) User can delete their own document.
-     * @deny (create) User tries to create a document with a mismatched ID.
-     * @deny (get) User tries to read another user's document.
-     * @principle Enforces document ownership for all operations.
+     * @allow (get) Authenticated user can read their own profile.
+     * @allow (create) Authenticated user can create their own profile, matching the userId to auth.uid.
+     * @allow (update) Authenticated user can update their own profile.
+     * @allow (delete) Authenticated user can delete their own profile.
+     * @deny (get) Authenticated user cannot read another user's profile.
+     * @deny (create) Non-authenticated user cannot create a user profile.
+     * @deny (update) Authenticated user cannot update another user's profile.
+     * @deny (delete) Authenticated user cannot delete another user's profile.
+     * @principle Enforces document ownership for writes.
      */
     match /users/{userId} {
-      allow get: if isOwner(userId);
+      function isOwner(userId) {
+        return request.auth.uid == userId;
+      }
+      function isSignedIn() {
+        return request.auth != null;
+      }
+      allow get: if isSignedIn() && isOwner(userId);
       allow list: if false;
-      allow create: if isSignedIn() && request.auth.uid == userId;
-      allow update: if isExistingOwner(userId);
-      allow delete: if isExistingOwner(userId);
+      allow create: if isSignedIn() && isOwner(userId) && request.resource.data.id == request.auth.uid;
+      allow update: if isSignedIn() && isOwner(userId) && resource.data.id == request.resource.data.id;
+      allow delete: if isSignedIn() && isOwner(userId) && resource != null;
     }
 
     /**
-     * @description Manages client data for a specific user.
+     * @description Controls access to client data for a specific user.
      * @path /users/{userId}/clients/{clientId}
-     * @allow (create) User can create a client document under their ID.
-     * @allow (get) User can read their own client documents.
-     * @allow (update) User can update their own client documents.
-     * @allow (delete) User can delete their own client documents.
-     * @deny (create) User tries to create a client document under another user's ID.
-     * @deny (get) User tries to read client documents from another user.
-     * @principle Enforces document ownership and validates relational integrity.
+     * @allow (get) Authenticated user can read their own client data.
+     * @allow (create) Authenticated user can create client data under their user ID.
+     * @allow (update) Authenticated user can update their own client data.
+     * @allow (delete) Authenticated user can delete their own client data.
+     * @deny (get) Authenticated user cannot read another user's client data.
+     * @deny (create) Authenticated user cannot create client data under another user's ID.
+     * @deny (update) Authenticated user cannot update another user's client data.
+     * @deny (delete) Authenticated user cannot delete another user's client data.
+     * @principle Restricts access to a user's own data tree.
      */
     match /users/{userId}/clients/{clientId} {
-      allow get: if isOwner(userId);
-      allow list: if false;
-      allow create: if isOwner(userId);
-      allow update: if isExistingOwner(userId);
-      allow delete: if isExistingOwner(userId);
+      function isOwner(userId) {
+        return request.auth.uid == userId;
+      }
+      function isSignedIn() {
+        return request.auth != null;
+      }
+      allow get: if isSignedIn() && isOwner(userId);
+      allow list: if isSignedIn() && isOwner(userId);
+      allow create: if isSignedIn() && isOwner(userId);
+      allow update: if isSignedIn() && isOwner(userId) && resource != null;
+      allow delete: if isSignedIn() && isOwner(userId) && resource != null;
     }
 
     /**
-     * @description Manages service data (publicly readable).
+     * @description Controls access to service data. All users can read service information.
      * @path /services/{serviceId}
-     * @allow (get) Any user can read service data.
-     * @allow (list) Any user can list service data.
-     * @deny (create) No user can create service data. // TODO: Add owner validation once the schema is updated with an ownership field.
-     * @deny (update) No user can update service data. // TODO: Add owner validation once the schema is updated with an ownership field.
-     * @deny (delete) No user can delete service data. // TODO: Add owner validation once the schema is updated with an ownership field.
-     * @principle Allows public read access, restricts writes.
+     * @allow (get) All users can read service data.
+     * @allow (list) All users can list service data.
+     * @deny (create) No user can create service data.
+     * @deny (update) No user can update service data.
+     * @deny (delete) No user can delete service data.
+     * @principle Allows public read access to service data.
      */
     match /services/{serviceId} {
       allow get: if true;
       allow list: if true;
-      allow create: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
-      allow update: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
-      allow delete: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
+      allow create: if false;
+      allow update: if false;
+      allow delete: if false;
     }
 
     /**
-     * @description Manages promotion data (publicly readable).
+     * @description Controls access to promotion data. All users can read promotion information.
      * @path /promotions/{promotionId}
-     * @allow (get) Any user can read promotion data.
-     * @allow (list) Any user can list promotion data.
-     * @deny (create) No user can create promotion data. // TODO: Add owner validation once the schema is updated with an ownership field.
-     * @deny (update) No user can update promotion data. // TODO: Add owner validation once the schema is updated with an ownership field.
-     * @deny (delete) No user can delete promotion data. // TODO: Add owner validation once the schema is updated with an ownership field.
-     * @principle Allows public read access, restricts writes.
+     * @allow (get) All users can read promotion data.
+     * @allow (list) All users can list promotion data.
+     * @deny (create) No user can create promotion data.
+     * @deny (update) No user can update promotion data.
+     * @deny (delete) No user can delete promotion data.
+     * @principle Allows public read access to promotion data.
      */
     match /promotions/{promotionId} {
       allow get: if true;
       allow list: if true;
-      allow create: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
-      allow update: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
-      allow delete: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
+      allow create: if false;
+      allow update: if false;
+      allow delete: if false;
     }
 
     /**
-     * @description Manages appointment data for a specific user.
+     * @description Controls access to appointment data for a specific user.
      * @path /users/{userId}/appointments/{appointmentId}
-     * @allow (create) User can create appointment documents under their ID.
-     * @allow (get) User can read their own appointment documents.
-     * @allow (update) User can update their own appointment documents.
-     * @allow (delete) User can delete their own appointment documents.
-     * @deny (create) User tries to create appointment documents under another user's ID.
-     * @deny (get) User tries to read appointment documents from another user.
-     * @principle Enforces document ownership for appointment data.
+     * @allow (get) Authenticated user can read their own appointment data.
+     * @allow (create) Authenticated user can create appointment data under their user ID.
+     * @allow (update) Authenticated user can update their own appointment data.
+     * @allow (delete) Authenticated user can delete their own appointment data.
+     * @deny (get) Authenticated user cannot read another user's appointment data.
+     * @deny (create) Authenticated user cannot create appointment data under another user's ID.
+     * @deny (update) Authenticated user cannot update another user's appointment data.
+     * @deny (delete) Authenticated user cannot delete another user's appointment data.
+     * @principle Restricts access to a user's own data tree.
      */
     match /users/{userId}/appointments/{appointmentId} {
-      allow get: if isOwner(userId);
-      allow list: if false;
-      allow create: if isOwner(userId);
-      allow update: if isExistingOwner(userId);
-      allow delete: if isExistingOwner(userId);
+      function isOwner(userId) {
+        return request.auth.uid == userId;
+      }
+      function isSignedIn() {
+        return request.auth != null;
+      }
+      allow get: if isSignedIn() && isOwner(userId);
+      allow list: if isSignedIn() && isOwner(userId);
+      allow create: if isSignedIn() && isOwner(userId);
+      allow update: if isSignedIn() && isOwner(userId) && resource != null;
+      allow delete: if isSignedIn() && isOwner(userId) && resource != null;
     }
   }
 }
