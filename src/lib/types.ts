@@ -31,3 +31,10 @@ export type TimeSlot = {
   time: string;
   available: boolean;
 };
+
+export type User = {
+    id: string;
+    name: string;
+    email: string;
+    createdAt: string;
+}
