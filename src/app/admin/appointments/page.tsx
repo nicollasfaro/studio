@@ -25,7 +25,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { MoreHorizontal, CheckCircle, XCircle } from 'lucide-react';
 import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
-import { collectionGroup, query, orderBy, doc, updateDoc } from 'firebase/firestore';
+import { collection, collectionGroup, query, orderBy, doc, updateDoc } from 'firebase/firestore';
 import type { Appointment, Service } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
@@ -42,12 +42,14 @@ export default function AdminAppointmentsPage() {
   const { toast } = useToast();
 
   const appointmentsQuery = useMemoFirebase(
-    () => query(collectionGroup(firestore, 'appointments'), orderBy('startTime', 'desc')),
+    () => firestore ? query(collectionGroup(firestore, 'appointments'), orderBy('startTime', 'desc')) : null,
     [firestore]
   );
   
+  const servicesRef = useMemoFirebase(() => firestore ? collection(firestore, 'services') : null, [firestore]);
+
   const { data: appointments, isLoading: isLoadingAppointments } = useCollection<Appointment>(appointmentsQuery);
-  const { data: services, isLoading: isLoadingServices } = useCollection<Omit<Service, 'id'>>('services');
+  const { data: services, isLoading: isLoadingServices } = useCollection<Omit<Service, 'id'>>(servicesRef);
 
   const isLoading = isLoadingAppointments || isLoadingServices;
 
@@ -61,6 +63,7 @@ export default function AdminAppointmentsPage() {
     // The path to the document is users/{userId}/appointments/{appointmentId}
     // and we can get it from the document snapshot's ref path.
     // However, our useCollection hook doesn't expose the ref. We need the client ID (user ID) to build the path.
+    if (!firestore) return;
     const appointmentRef = doc(firestore, 'users', appointment.clientId, 'appointments', appointment.id);
     try {
       await updateDoc(appointmentRef, { status: newStatus });
