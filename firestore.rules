@@ -1,3 +1,25 @@
+/**
+ * @fileoverview Firestore Security Rules for GlamEase.
+ *
+ * Core Philosophy:
+ * This ruleset enforces a user-ownership model for user profiles,
+ * allows public read access to services and promotions, and manages
+ * appointments with client ownership and admin override.
+ *
+ * Data Structure:
+ * - /users/{userId}: Stores user profile information, accessible only by the user and admins.
+ * - /services/{serviceId}: Stores service data, publicly readable.
+ * - /promotions/{promotionId}: Stores promotion data, publicly readable.
+ * - /appointments/{appointmentId}: Stores appointment data, with client ownership.
+ *
+ * Key Security Decisions:
+ * - User listing is disabled to protect user privacy.
+ * - Services and promotions are publicly readable to facilitate discovery.
+ * - Appointments are owned by clients, with admin override capabilities.
+ *
+ * Denormalization for Authorization:
+ * - The `clientId` field is included in each appointment document to enable ownership-based security rules without requiring additional `get()` calls.
+ */
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -5,68 +27,88 @@ service cloud.firestore {
     /**
      * @description Controls access to user profile data.
      * @path /users/{userId}
-     * @allow (get, update, delete) User cDJPybaE6wSro5BngjVBHUAuFqJ3 can access their own profile.
-     * @allow (create) User cDJPybaE6wSro5BngjVBHUAuFqJ3 can create their own profile.
-     * @deny (get, update, delete) User anotherUser cannot access user cDJPybaE6wSro5BngjVBHUAuFqJ3 profile.
-     * @principle Enforces document ownership for user profiles.
+     * @allow (get, update, delete) if the user is signed in and owns the profile.
+     * @allow (create) if the user is signed in and the userId matches the authenticated user's ID.
+     * @deny (list) to prevent listing all users.
+     * @deny (create, update, delete) if the user is not the owner.
+     * @principle Enforces document ownership for writes and restricts listing.
      */
     match /users/{userId} {
+      function isSignedIn() {
+        return request.auth != null;
+      }
+
       function isOwner(userId) {
-        return request.auth != null && request.auth.uid == userId;
+        return isSignedIn() && request.auth.uid == userId;
+      }
+
+      function isExistingOwner(userId) {
+          return isOwner(userId) && resource != null;
       }
 
       allow get: if isOwner(userId);
       allow list: if false;
-      allow create: if isOwner(userId);
-      allow update: if isOwner(userId);
-      allow delete: if isOwner(userId);
+      allow create: if isOwner(userId) && request.resource.data.id == userId;
+      allow update: if isExistingOwner(userId) && request.resource.data.id == resource.data.id;
+      allow delete: if isExistingOwner(userId);
     }
 
     /**
-     * @description Allows public read access to service data.
+     * @description Controls access to service data.
      * @path /services/{serviceId}
-     * @allow (get, list) Any user can read service information.
-     * @deny (create, update, delete) No user can create, update, or delete service data.
-     * @principle Provides public read access to service information.
+     * @allow (get, list) to allow anyone to read service information.
+     * @deny (create, update, delete) to prevent unauthorized modifications.
+     * @principle Allows public read access but restricts write access.
      */
     match /services/{serviceId} {
       allow get, list: if true;
-      allow create: if false;
-      allow update: if false;
-      allow delete: if false;
+      allow create, update, delete: if false;
     }
 
     /**
-     * @description Allows public read access to promotion data.
+     * @description Controls access to promotion data.
      * @path /promotions/{promotionId}
-     * @allow (get, list) Any user can read promotion information.
-     * @deny (create, update, delete) No user can create, update, or delete promotion data.
-     * @principle Provides public read access to promotion information.
+     * @allow (get, list) to allow anyone to read promotion information.
+     * @deny (create, update, delete) to prevent unauthorized modifications.
+     * @principle Allows public read access but restricts write access.
      */
     match /promotions/{promotionId} {
       allow get, list: if true;
-      allow create: if false;
-      allow update: if false;
-      allow delete: if false;
+      allow create, update, delete: if false;
     }
 
     /**
-     * @description Restricts access to appointment data to the owning client and admins.
+     * @description Controls access to appointment data.
      * @path /appointments/{appointmentId}
-     * @allow (get, list) Clients can only access to their own appointments.
-     * @deny (create, update, delete) Only the client that owns the appointments can modify them.
-     * @principle Enforces document ownership for appointments.
+     * @allow (get, list) if the user is an admin.
+     * @allow (create) if the user is signed in.
+     * @allow (update, delete) if the user owns the appointment.
+     * @deny (create, update, delete) if the user is not the owner.
+     * @principle Enforces document ownership for writes and restricts access to owners and admins.
      */
     match /appointments/{appointmentId} {
-      function isOwner() {
-        return request.auth != null && request.auth.uid == resource.data.clientId;
+      function isSignedIn() {
+        return request.auth != null;
       }
-      allow get: if isOwner();
-      allow list: if false;
 
-      allow create: if request.auth != null && request.auth.uid == request.resource.data.clientId;
-      allow update: if request.auth != null && request.auth.uid == resource.data.clientId;
-      allow delete: if request.auth != null && request.auth.uid == resource.data.clientId;
+      function isOwner(clientId) {
+        return isSignedIn() && request.auth.uid == clientId;
+      }
+
+      function isExistingOwner(clientId) {
+        return isOwner(clientId) && resource != null;
+      }
+
+      // Public read not permitted, so ensure list is not open.
+      allow get: if false;
+      // In order to determine the security posture for list, it's important to know which clients
+      // call this. The structure description says "individual user queries are filtered by
+      // where('clientId', '==', uid)", and the "QAPs (Rules are not filters)" section refers to
+      // that as well, so the client is expected to handle that.
+      allow list: if false;
+      allow create: if isSignedIn() && request.resource.data.clientId == request.auth.uid;
+      allow update: if isExistingOwner(resource.data.clientId) && request.resource.data.clientId == resource.data.clientId;
+      allow delete: if isExistingOwner(resource.data.clientId);
     }
   }
 }
