@@ -76,20 +76,16 @@ export default function Home() {
                 </Card>
             ))}
             {featuredServices.map((service) => {
-              const serviceImage = PlaceHolderImages.find((img) => img.id === service.imageId);
               return (
                 <Card key={service.id} className="flex flex-col overflow-hidden transform hover:scale-105 transition-transform duration-300 ease-in-out shadow-lg hover:shadow-2xl">
                   <CardHeader className="p-0">
-                    {serviceImage && (
-                      <Image
-                        src={serviceImage.imageUrl}
-                        alt={serviceImage.description}
-                        width={600}
-                        height={400}
-                        className="object-cover w-full h-48"
-                        data-ai-hint={serviceImage.imageHint}
-                      />
-                    )}
+                    <Image
+                      src={service.imageUrl}
+                      alt={service.name}
+                      width={600}
+                      height={400}
+                      className="object-cover w-full h-48"
+                    />
                   </CardHeader>
                   <CardContent className="p-6 flex-grow">
                     <CardTitle className="font-headline text-2xl mb-2">{service.name}</CardTitle>
@@ -152,3 +148,5 @@ export default function Home() {
     </div>
   );
 }
+
+    

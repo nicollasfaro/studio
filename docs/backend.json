@@ -98,6 +98,10 @@
         "durationMinutes": {
           "type": "number",
           "description": "The duration of the service in minutes."
+        },
+        "imageUrl": {
+          "type": "string",
+          "description": "URL of the service image."
         }
       },
       "required": [
@@ -105,7 +109,8 @@
         "name",
         "description",
         "price",
-        "durationMinutes"
+        "durationMinutes",
+        "imageUrl"
       ]
     },
     "Promotion": {

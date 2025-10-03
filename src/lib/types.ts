@@ -5,7 +5,7 @@ export type Service = {
   description: string;
   price: number;
   durationMinutes: number;
-  imageId: string;
+  imageUrl: string;
 };
 
 export type Promotion = {
@@ -35,7 +35,7 @@ export type TimeSlot = {
 
 export type User = {
     id: string;
-    name: string;
+    name:string;
     email: string;
     createdAt: string;
     isAdmin?: boolean;

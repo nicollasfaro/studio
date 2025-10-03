@@ -3,7 +3,6 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
-import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
 import { collection } from 'firebase/firestore';
 import type { Service } from '@/lib/types';
@@ -45,22 +44,18 @@ export default function ServicesPage() {
           </Card>
         ))}
         {services && services.map((service) => {
-          const serviceImage = PlaceHolderImages.find((img) => img.id === service.imageId);
           return (
             <Card key={service.id} className="flex flex-col overflow-hidden shadow-md hover:shadow-xl transition-shadow duration-300">
               <CardHeader className="p-0">
-                {serviceImage && (
                   <div className="aspect-w-16 aspect-h-9">
                     <Image
-                      src={serviceImage.imageUrl}
-                      alt={serviceImage.description}
+                      src={service.imageUrl}
+                      alt={service.name}
                       width={600}
                       height={400}
                       className="object-cover w-full h-full"
-                      data-ai-hint={serviceImage.imageHint}
                     />
                   </div>
-                )}
               </CardHeader>
               <CardContent className="p-6 flex-grow">
                 <CardTitle className="font-headline text-2xl mb-2">{service.name}</CardTitle>
@@ -82,3 +77,5 @@ export default function ServicesPage() {
     </div>
   );
 }
+
+    

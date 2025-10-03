@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
@@ -28,22 +29,23 @@ import {
   TableCell,
 } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
-import { PlaceHolderImages } from '@/lib/placeholder-images';
+import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 const serviceFormSchema = z.object({
   name: z.string().min(3, { message: 'O nome do serviço deve ter pelo menos 3 caracteres.' }),
   description: z.string().min(10, { message: 'A descrição deve ter pelo menos 10 caracteres.' }),
   price: z.coerce.number().positive({ message: 'O preço deve ser um número positivo.' }),
   durationMinutes: z.coerce.number().int().positive({ message: 'A duração deve ser um número inteiro positivo.' }),
-  imageId: z.string().refine(val => PlaceHolderImages.some(img => img.id === val), { message: 'ID da imagem inválido.' }),
 });
 
 export default function AdminServicesPage() {
   const { toast } = useToast();
   const firestore = useFirestore();
+  const storage = getStorage();
   const servicesCollectionRef = useMemoFirebase(() => collection(firestore, 'services'), [firestore]);
   
   const { data: services, isLoading } = useCollection<Omit<Service, 'id'>>(servicesCollectionRef);
+  const [imageFile, setImageFile] = useState<File | null>(null);
 
   const form = useForm<z.infer<typeof serviceFormSchema>>({
     resolver: zodResolver(serviceFormSchema),
@@ -52,24 +54,50 @@ export default function AdminServicesPage() {
       description: '',
       price: 0,
       durationMinutes: 30,
-      imageId: '',
     },
   });
 
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setImageFile(e.target.files[0]);
+    }
+  };
+
   const onSubmit = async (values: z.infer<typeof serviceFormSchema>) => {
+    if (!imageFile) {
+      toast({
+        variant: 'destructive',
+        title: 'Imagem em falta',
+        description: 'Por favor, carregue uma imagem para o serviço.',
+      });
+      return;
+    }
+
     try {
-      await addDocumentNonBlocking(servicesCollectionRef, values);
+      // 1. Upload image to Firebase Storage
+      const imageRef = ref(storage, `services/${Date.now()}_${imageFile.name}`);
+      const snapshot = await uploadBytes(imageRef, imageFile);
+      const imageUrl = await getDownloadURL(snapshot.ref);
+
+      // 2. Add service data with image URL to Firestore
+      await addDocumentNonBlocking(servicesCollectionRef, { ...values, imageUrl });
+      
       toast({
         title: 'Serviço Adicionado!',
         description: `O serviço "${values.name}" foi criado com sucesso.`,
       });
       form.reset();
+      setImageFile(null);
+      // Clear file input
+      const fileInput = document.getElementById('image-upload') as HTMLInputElement;
+      if (fileInput) fileInput.value = '';
+
     } catch (error) {
       console.error("Erro ao adicionar serviço:", error);
       toast({
         variant: 'destructive',
         title: 'Erro ao salvar',
-        description: 'Não foi possível adicionar o serviço. Verifique suas permissões.',
+        description: 'Não foi possível adicionar o serviço. Verifique suas permissões e a configuração de armazenamento.',
       });
     }
   };
@@ -138,19 +166,13 @@ export default function AdminServicesPage() {
                     )}
                     />
                  </div>
-                 <FormField
-                  control={form.control}
-                  name="imageId"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Imagem do Serviço</FormLabel>
-                      <FormControl>
-                        <Input type="file" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                 <FormItem>
+                    <FormLabel>Imagem do Serviço</FormLabel>
+                    <FormControl>
+                        <Input id="image-upload" type="file" accept="image/*" onChange={handleImageChange} />
+                    </FormControl>
+                    <FormMessage />
+                </FormItem>
                 <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
                   {form.formState.isSubmitting ? 'Salvando...' : 'Salvar Serviço'}
                 </Button>
@@ -207,3 +229,5 @@ export default function AdminServicesPage() {
     </div>
   );
 }
+
+    
