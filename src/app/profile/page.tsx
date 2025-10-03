@@ -41,7 +41,7 @@ export default function ProfilePage() {
 
   // Secure queries that only fetch when the user's UID is available.
   const upcomingAppointmentsQuery = useMemoFirebase(() => {
-    if (!firestore || !user?.uid) return null;
+    if (!firestore || !user?.uid) return null; // CRITICAL FIX: Ensure user.uid is available
     return query(
       collection(firestore, 'appointments'),
       where('clientId', '==', user.uid),
@@ -51,7 +51,7 @@ export default function ProfilePage() {
   }, [firestore, user?.uid]);
 
   const pastAppointmentsQuery = useMemoFirebase(() => {
-    if (!firestore || !user?.uid) return null;
+    if (!firestore || !user?.uid) return null; // CRITICAL FIX: Ensure user.uid is available
     return query(
       collection(firestore, 'appointments'),
       where('clientId', '==', user.uid),
