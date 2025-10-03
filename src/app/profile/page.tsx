@@ -10,6 +10,7 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth, useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
+import { useUserData } from '@/hooks/use-user-data';
 import { collection, query, where, orderBy } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import { format } from 'date-fns';
@@ -24,9 +25,12 @@ interface AppointmentWithService extends Appointment {
 
 export default function ProfilePage() {
   const { user, isUserLoading } = useUser();
+  const { userData, isLoading: isUserDataLoading } = useUserData();
   const auth = useAuth();
   const firestore = useFirestore();
   const router = useRouter();
+
+  const isAdmin = userData?.isAdmin ?? false;
 
   // Redirect if not logged in
   useEffect(() => {
@@ -39,28 +43,27 @@ export default function ProfilePage() {
   const servicesRef = useMemoFirebase(() => (firestore ? collection(firestore, 'services') : null), [firestore]);
   const { data: services, isLoading: isLoadingServices } = useCollection<Omit<Service, 'id'>>(servicesRef);
 
-  // Fetch user's appointments
-  const appointmentsRef = useMemoFirebase(() => (firestore ? collection(firestore, 'appointments') : null), [firestore]);
-  
   const upcomingAppointmentsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
-    return query(
-      collection(firestore, 'appointments'),
-      where('clientId', '==', user.uid),
-      where('startTime', '>=', new Date().toISOString()),
-      orderBy('startTime', 'asc')
-    );
-  }, [firestore, user]);
+    const baseQuery = collection(firestore, 'appointments');
+    if (isAdmin) {
+      // Admins see all upcoming appointments
+      return query(baseQuery, where('startTime', '>=', new Date().toISOString()), orderBy('startTime', 'asc'));
+    }
+    // Regular users only see their own appointments
+    return query(baseQuery, where('clientId', '==', user.uid), where('startTime', '>=', new Date().toISOString()), orderBy('startTime', 'asc'));
+  }, [firestore, user, isAdmin]);
 
   const pastAppointmentsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
-    return query(
-      collection(firestore, 'appointments'),
-      where('clientId', '==', user.uid),
-      where('startTime', '<', new Date().toISOString()),
-      orderBy('startTime', 'desc')
-    );
-  }, [firestore, user]);
+    const baseQuery = collection(firestore, 'appointments');
+    if (isAdmin) {
+      // Admins see all past appointments
+      return query(baseQuery, where('startTime', '<', new Date().toISOString()), orderBy('startTime', 'desc'));
+    }
+    // Regular users only see their own appointments
+    return query(baseQuery, where('clientId', '==', user.uid), where('startTime', '<', new Date().toISOString()), orderBy('startTime', 'desc'));
+  }, [firestore, user, isAdmin]);
 
   const { data: upcomingAppointmentsData, isLoading: isLoadingUpcoming } = useCollection<Appointment>(upcomingAppointmentsQuery);
   const { data: pastAppointmentsData, isLoading: isLoadingPast } = useCollection<Appointment>(pastAppointmentsQuery);
@@ -85,7 +88,7 @@ export default function ProfilePage() {
     }
   };
 
-  if (isUserLoading || !user) {
+  if (isUserLoading || isUserDataLoading || !user) {
     return (
       <div className="container mx-auto px-4 md:px-6 py-12">
         <div className="grid gap-8 lg:grid-cols-3">
@@ -166,6 +169,7 @@ export default function ProfilePage() {
                         <p className="text-sm text-muted-foreground">
                           {format(new Date(apt.startTime), "EEEE, d 'de' MMM 'às' HH:mm", { locale: ptBR })}
                         </p>
+                         {isAdmin && <p className="text-xs text-muted-foreground pt-1">Cliente: {apt.clientName}</p>}
                       </div>
                       <Button variant="outline" size="sm" disabled>Gerenciar</Button>
                     </li>
@@ -196,6 +200,7 @@ export default function ProfilePage() {
                         <p className="text-sm text-muted-foreground">
                           {format(new Date(apt.startTime), "EEEE, d 'de' MMM 'às' HH:mm", { locale: ptBR })}
                         </p>
+                        {isAdmin && <p className="text-xs text-muted-foreground pt-1">Cliente: {apt.clientName}</p>}
                       </div>
                       <Button asChild variant="secondary" size="sm">
                         <Link href={`/book?service=${apt.serviceId}`}>Agendar Novamente</Link>
