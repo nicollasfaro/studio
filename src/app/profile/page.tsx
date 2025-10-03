@@ -44,11 +44,11 @@ export default function ProfilePage() {
   const isAdmin = userData?.isAdmin ?? false;
 
   const appointmentsQuery = useMemoFirebase(() => {
-    // Wait until we know the user's admin status and have a uid
+    // CRITICAL: Wait until we know the user's admin status and have a uid
     if (isUserDataLoading || !user?.uid) return null;
 
     if (isAdmin) {
-      // Admin gets all appointments
+      // Admin gets all appointments (to be filtered later for their own profile view)
       return query(
         collection(firestore, 'appointments'),
         orderBy('startTime', 'desc')
@@ -70,37 +70,29 @@ export default function ProfilePage() {
     const now = new Date().toISOString();
     return allAppointmentsData
       .filter(apt => {
-        // Admin on their profile page sees only their own upcoming appointments
-        if (isAdmin) {
-          return apt.clientId === user?.uid && apt.startTime >= now;
-        }
-        // User sees their upcoming appointments
-        return apt.startTime >= now;
+        // On profile page, EVERYONE (admin or not) should only see their OWN appointments.
+        return apt.clientId === user?.uid && apt.startTime >= now;
       })
       .map(apt => ({
         ...apt,
         serviceName: services.find(s => s.id === apt.serviceId)?.name || 'Serviço Desconhecido',
       }))
       .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
-  }, [allAppointmentsData, services, isAdmin, user?.uid]);
+  }, [allAppointmentsData, services, user?.uid]);
   
   const pastAppointments = useMemo(() => {
      if (!allAppointmentsData || !services) return [];
     const now = new Date().toISOString();
     return allAppointmentsData
       .filter(apt => {
-        // Admin on their profile page sees only their own past appointments
-        if (isAdmin) {
-          return apt.clientId === user?.uid && apt.startTime < now;
-        }
-        // User sees their past appointments
-        return apt.startTime < now;
+         // On profile page, EVERYONE (admin or not) should only see their OWN appointments.
+        return apt.clientId === user?.uid && apt.startTime < now;
       })
       .map(apt => ({
         ...apt,
         serviceName: services.find(s => s.id === apt.serviceId)?.name || 'Serviço Desconhecido',
       }));
-  }, [allAppointmentsData, services, isAdmin, user?.uid]);
+  }, [allAppointmentsData, services, user?.uid]);
 
 
   const handleLogout = async () => {
