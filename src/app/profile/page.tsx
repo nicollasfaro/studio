@@ -11,7 +11,6 @@ import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { useAuth, useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { useUserData } from '@/hooks/use-user-data';
 import { collection, query, where, orderBy } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import { format } from 'date-fns';
@@ -26,12 +25,10 @@ interface AppointmentWithService extends Appointment {
 
 export default function ProfilePage() {
   const { user, isUserLoading } = useUser();
-  const { userData, isLoading: isUserDataLoading } = useUserData();
   const auth = useAuth();
   const firestore = useFirestore();
   const router = useRouter();
 
-  // Redirect if not logged in
   useEffect(() => {
     if (!isUserLoading && !user) {
       router.push('/login');
@@ -45,17 +42,27 @@ export default function ProfilePage() {
   // Secure queries that only fetch when the user's UID is available.
   const upcomingAppointmentsQuery = useMemoFirebase(() => {
     if (!firestore || !user?.uid) return null;
-    return query(collection(firestore, 'appointments'), where('clientId', '==', user.uid), where('startTime', '>=', new Date().toISOString()), orderBy('startTime', 'asc'));
+    return query(
+      collection(firestore, 'appointments'),
+      where('clientId', '==', user.uid),
+      where('startTime', '>=', new Date().toISOString()),
+      orderBy('startTime', 'asc')
+    );
   }, [firestore, user?.uid]);
 
   const pastAppointmentsQuery = useMemoFirebase(() => {
     if (!firestore || !user?.uid) return null;
-    return query(collection(firestore, 'appointments'), where('clientId', '==', user.uid), where('startTime', '<', new Date().toISOString()), orderBy('startTime', 'desc'));
+    return query(
+      collection(firestore, 'appointments'),
+      where('clientId', '==', user.uid),
+      where('startTime', '<', new Date().toISOString()),
+      orderBy('startTime', 'desc')
+    );
   }, [firestore, user?.uid]);
 
   const { data: upcomingAppointmentsData, isLoading: isLoadingUpcoming } = useCollection<Appointment>(upcomingAppointmentsQuery);
   const { data: pastAppointmentsData, isLoading: isLoadingPast } = useCollection<Appointment>(pastAppointmentsQuery);
-
+  
   const mapAppointments = (appointments: Appointment[] | null): AppointmentWithService[] => {
     if (!appointments || !services) return [];
     return appointments.map(apt => ({
@@ -91,7 +98,7 @@ export default function ProfilePage() {
     }
   };
 
-  const isLoading = isUserLoading || isUserDataLoading;
+  const isLoading = isUserLoading;
 
   if (isLoading || !user) {
     return (
