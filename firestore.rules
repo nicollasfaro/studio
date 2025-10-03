@@ -1,34 +1,67 @@
 /**
- * @file Firestore Security Rules for GlamEase.
+ * @file Firestore Security Rules for GlamEase
  *
  * @core_philosophy This ruleset enforces a strict user-ownership model for client and appointment data,
- *                  while allowing public read access to service and promotion information.
- *                  All data is either stored under a user's specific path (/users/{userId}/...)
- *                  or in top-level collections for public data (/services/{serviceId}, /promotions/{promotionId}).
- * @data_structure - /users/{userId}/clients/{clientId}: Stores client profiles, accessible only to the owning user.
- *                 - /services/{serviceId}: Stores service information, publicly readable.
- *                 - /promotions/{promotionId}: Stores promotion details, publicly readable.
- *                 - /users/{userId}/appointments/{appointmentId}: Stores appointment schedules, accessible only to the owning user.
- * @key_security_decisions - Users cannot list all user documents. Only granular access to user-owned data is allowed.
- *                         - Public collections (services, promotions) are readable by all.
- *                         - All write operations require authentication.
- * @denormalization_for_authorization None needed: The path-based ownership model avoids the need for data denormalization.
- * @structural_segregation Private client and appointment data is segregated under /users/{userId},
- *                        while public service and promotion data resides in top-level collections.
+ * ensuring that only authenticated users can access their own information. Service and promotion data
+ * are treated as publicly readable.
+ *
+ * @data_structure
+ * - /users/{userId}/clients/{clientId}: Stores client data, accessible only by the owning user.
+ * - /services/{serviceId}: Stores service data, publicly readable.
+ * - /promotions/{promotionId}: Stores promotion data, publicly readable.
+ * - /users/{userId}/appointments/{appointmentId}: Stores appointment data, accessible only by the owning user.
+ *
+ * @key_security_decisions
+ * - User listing is explicitly denied to protect user privacy.
+ * - Public read access is granted to the /services and /promotions collections to allow all users to view available services and promotions.
+ * - All write operations require authentication.
+ * - All potentially destructive operations (update, delete) include a resource existence check.
+ *
+ * @denormalization_for_authorization N/A (Path-based ownership is used)
+ * @structural_segregation Private user data (clients, appointments) is stored under /users/{userId},
+ * while public data (services, promotions) is stored in top-level collections.
  */
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
     /**
-     * @description Enforces that only the authenticated user can access their own client data.
+     * @description Checks if the user is signed in.
+     * @return {boolean} True if the user is signed in, false otherwise.
+     */
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    /**
+     * @description Checks if the user ID matches the requested user ID.
+     * @param {string} userId The user ID to check against.
+     * @return {boolean} True if the user ID matches the request, false otherwise.
+     */
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    /**
+     * @description Checks if the user is the owner and the resource exists.
+     * @param {string} userId The user ID to check against.
+     * @return {boolean} True if the user ID matches the request and the resource exists, false otherwise.
+     */
+    function isExistingOwner(userId) {
+      return isOwner(userId) && resource != null;
+    }
+
+    /**
+     * @description
+     * Rules for the /users/{userId}/clients/{clientId} collection.
+     * This collection stores client data and enforces strict user-ownership.
+     * Only the authenticated user (userId) can access their own client data.
      * @path /users/{userId}/clients/{clientId}
-     * @allow (create) - Authenticated user 'OpjV2mjea2VdhbQ62gN1afDFvv02' can create a client document with clientId = 'client1' under /users/OpjV2mjea2VdhbQ62gN1afDFvv02/clients/client1
-     * @allow (get) - Authenticated user 'OpjV2mjea2VdhbQ62gN1afDFvv02' can read client document with clientId = 'client1' under /users/OpjV2mjea2VdhbQ62gN1afDFvv02/clients/client1
-     * @allow (update) - Authenticated user 'OpjV2mjea2VdhbQ62gN1afDFvv02' can update client document with clientId = 'client1' under /users/OpjV2mjea2VdhbQ62gN1afDFvv02/clients/client1
-     * @allow (delete) - Authenticated user 'OpjV2mjea2VdhbQ62gN1afDFvv02' can delete client document with clientId = 'client1' under /users/OpjV2mjea2VdhbQ62gN1afDFvv02/clients/client1
-     * @deny (create) - Authenticated user 'OpjV2mjea2VdhbQ62gN1afDFvv02' cannot create a client document under /users/otherUserId/clients/client1 because userId does not match.
-     * @principle Enforces document ownership for writes and restricts access to a user's own data.
+     * @allow (create) - An authenticated user with ID 'user123' can create a client document with clientId 'client456' under /users/user123/clients/client456 if request.resource.data.id == 'user123'.
+     * @allow (get, list) - An authenticated user with ID 'user123' can read their own client documents under /users/user123/clients/{clientId}.
+     * @allow (update, delete) - An authenticated user with ID 'user123' can update or delete their own client document with clientId 'client456' under /users/user123/clients/client456.
+     * @deny (create, update, delete) - An unauthenticated user cannot create, update, or delete client documents. An authenticated user with ID 'user456' cannot access client documents under /users/user123/clients/{clientId}.
+     * @principle Enforces document ownership for writes and restricts access to a user's own data tree.
      */
     match /users/{userId}/clients/{clientId} {
       allow get: if isOwner(userId);
@@ -39,48 +72,48 @@ service cloud.firestore {
     }
 
     /**
-     * @description Allows anyone to read service information.
+     * @description
+     * Rules for the /services/{serviceId} collection.
+     * This collection stores service data, which is publicly readable.
      * @path /services/{serviceId}
-     * @allow (get) - Any user can read service information with serviceId = 'service1' under /services/service1
-     * @allow (list) - Any user can list all services.
-     * @deny (create) - No one can create services without specific authorization (e.g., admin role).
-     * @deny (update) - No one can update services without specific authorization.
-     * @deny (delete) - No one can delete services without specific authorization.
-     * @principle Grants public read access while restricting write access to authorized users.
+     * @allow (get, list) - Any user (authenticated or unauthenticated) can read service documents.
+     * @deny (create, update, delete) - Only authenticated users can create, update, or delete service documents.
+     * @principle Allows public read access for shared data, while restricting write access.
      */
     match /services/{serviceId} {
       allow get, list: if true;
-      allow create: if false; // TODO: Add admin role validation for service creation.
-      allow update: if false; // TODO: Add admin role validation for service updates.
-      allow delete: if false; // TODO: Add admin role validation for service deletion.
+      allow create: if isSignedIn();
+      allow update: if isSignedIn() && resource != null;
+      allow delete: if isSignedIn() && resource != null;
     }
 
     /**
-     * @description Allows anyone to read promotion information.
+     * @description
+     * Rules for the /promotions/{promotionId} collection.
+     * This collection stores promotion data, which is publicly readable.
      * @path /promotions/{promotionId}
-     * @allow (get) - Any user can read promotion information with promotionId = 'promotion1' under /promotions/promotion1
-     * @allow (list) - Any user can list all promotions.
-     * @deny (create) - No one can create promotions without specific authorization (e.g., admin role).
-     * @deny (update) - No one can update promotions without specific authorization.
-     * @deny (delete) - No one can delete promotions without specific authorization.
-     * @principle Grants public read access while restricting write access to authorized users.
+     * @allow (get, list) - Any user (authenticated or unauthenticated) can read promotion documents.
+     * @deny (create, update, delete) - Only authenticated users can create, update, or delete promotion documents.
+     * @principle Allows public read access for shared data, while restricting write access.
      */
     match /promotions/{promotionId} {
       allow get, list: if true;
-      allow create: if false; // TODO: Add admin role validation for promotion creation.
-      allow update: if false; // TODO: Add admin role validation for promotion updates.
-      allow delete: if false; // TODO: Add admin role validation for promotion deletion.
+      allow create: if isSignedIn();
+      allow update: if isSignedIn() && resource != null;
+      allow delete: if isSignedIn() && resource != null;
     }
 
     /**
-     * @description Enforces that only the authenticated user can access their own appointment data.
+     * @description
+     * Rules for the /users/{userId}/appointments/{appointmentId} collection.
+     * This collection stores appointment data and enforces strict user-ownership.
+     * Only the authenticated user (userId) can access their own appointment data.
      * @path /users/{userId}/appointments/{appointmentId}
-     * @allow (create) - Authenticated user 'OpjV2mjea2VdhbQ62gN1afDFvv02' can create an appointment document with appointmentId = 'appt1' under /users/OpjV2mjea2VdhbQ62gN1afDFvv02/appointments/appt1
-     * @allow (get) - Authenticated user 'OpjV2mjea2VdhbQ62gN1afDFvv02' can read appointment document with appointmentId = 'appt1' under /users/OpjV2mjea2VdhbQ62gN1afDFvv02/appointments/appt1
-     * @allow (update) - Authenticated user 'OpjV2mjea2VdhbQ62gN1afDFvv02' can update appointment document with appointmentId = 'appt1' under /users/OpjV2mjea2VdhbQ62gN1afDFvv02/appointments/appt1
-     * @allow (delete) - Authenticated user 'OpjV2mjea2VdhbQ62gN1afDFvv02' can delete appointment document with appointmentId = 'appt1' under /users/OpjV2mjea2VdhbQ62gN1afDFvv02/appointments/appt1
-     * @deny (create) - Authenticated user 'OpjV2mjea2VdhbQ62gN1afDFvv02' cannot create an appointment document under /users/otherUserId/appointments/appt1 because userId does not match.
-     * @principle Enforces document ownership for writes and restricts access to a user's own data.
+     * @allow (create) - An authenticated user with ID 'user123' can create an appointment document with appointmentId 'appt456' under /users/user123/appointments/appt456.
+     * @allow (get, list) - An authenticated user with ID 'user123' can read their own appointment documents under /users/user123/appointments/{appointmentId}.
+     * @allow (update, delete) - An authenticated user with ID 'user123' can update or delete their own appointment document with appointmentId 'appt456' under /users/user123/appointments/appt456.
+     * @deny (create, update, delete) - An unauthenticated user cannot create, update, or delete appointment documents. An authenticated user with ID 'user456' cannot access appointment documents under /users/user123/appointments/{appointmentId}.
+     * @principle Enforces document ownership for writes and restricts access to a user's own data tree.
      */
     match /users/{userId}/appointments/{appointmentId} {
       allow get: if isOwner(userId);
@@ -89,29 +122,16 @@ service cloud.firestore {
       allow update: if isExistingOwner(userId) && request.resource.data.clientId == resource.data.clientId;
       allow delete: if isExistingOwner(userId);
     }
-
+    
      /**
-      * @description  Denies listing of all users.  This prevents unauthorized access to user IDs.
+      * @description Prevents listing of all users.
+      * Listing users is a privacy concern.
       * @path /users
-      * @deny list: Listing all users is prohibited.
-      * @principle Prevents unauthorized enumeration of user IDs.
+      * @deny (list) - Any attempt to list all user documents will be denied.
+      * @principle Protects user privacy by disallowing listing of user documents.
       */
     match /users {
         allow list: if false;
     }
-
-  }
-
-  // Helper functions
-  function isSignedIn() {
-    return request.auth != null;
-  }
-
-  function isOwner(userId) {
-    return isSignedIn() && request.auth.uid == userId;
-  }
-
-  function isExistingOwner(userId) {
-    return isOwner(userId) && resource != null;
   }
 }
