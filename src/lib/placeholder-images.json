@@ -1,3 +1,64 @@
 {
-  "placeholderImages": []
+  "placeholderImages": [
+    {
+      "id": "hero",
+      "description": "A stylish and modern beauty salon interior",
+      "imageUrl": "https://images.unsplash.com/photo-1616394584738-fc6e612e71b9?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwxfHxiZWF1dHklMjBzYWxvbnxlbnwwfHx8fDE3NTk0NjQ2NjR8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "beauty salon"
+    },
+    {
+      "id": "haircut",
+      "description": "A woman getting a stylish haircut",
+      "imageUrl": "https://images.unsplash.com/photo-1734461361249-365c9d4a1b3a?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw2fHxoYWlyY3V0JTIwc3R5bGV8ZW58MHx8fHwxNzU5NDU2OTM4fDA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "haircut style"
+    },
+    {
+      "id": "manicure",
+      "description": "Close-up of a perfect manicure with painted nails",
+      "imageUrl": "https://images.unsplash.com/photo-1604654894610-df63bc536371?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw2fHxtYW5pY3VyZSUyMG5haWxzfGVufDB8fHx8MTc1OTUwMjY2M3ww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "manicure nails"
+    },
+    {
+      "id": "facial",
+      "description": "A woman relaxing while receiving a facial treatment",
+      "imageUrl": "https://images.unsplash.com/photo-1643684460412-76908d8e5a25?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw2fHxmYWNpYWwlMjB0cmVhdG1lbnR8ZW58MHx8fHwxNzU5NDQyODk2fDA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "facial treatment"
+    },
+    {
+      "id": "massage",
+      "description": "A serene spa setting with massage oils and towels",
+      "imageUrl": "https://images.unsplash.com/photo-1620733723572-11c53f73a416?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwzfHxzcGElMjBtYXNzYWdlfGVufDB8fHx8MTc1OTUwMzM0M3ww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "spa massage"
+    },
+    {
+      "id": "pedicure",
+      "description": "A person receiving a relaxing pedicure",
+      "imageUrl": "https://images.unsplash.com/photo-1521193089946-7aa29d1fe776?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw5fHxwZWRpY3VyZSUyMHNwYXxlbnwwfHx8fDE3NTk1MDkwODB8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "pedicure spa"
+    },
+    {
+      "id": "makeup",
+      "description": "Professional makeup artist applying makeup to a client",
+      "imageUrl": "https://images.unsplash.com/photo-1636023730877-233b9237d4ec?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwzfHxtYWtldXAlMjBhcnRpc3R8ZW58MHx8fHwxNzU5NDg1MDgyfDA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "makeup artist"
+    },
+    {
+      "id": "promo1",
+      "description": "A beautiful composition of beauty products for a promotion",
+      "imageUrl": "https://images.unsplash.com/photo-1598528738936-c50861cc75a9?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwxfHxiZWF1dHklMjBwcm9kdWN0c3xlbnwwfHx8fDE3NTk0MDk2NjB8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "beauty products"
+    },
+    {
+      "id": "promo2",
+      "description": "Two friends enjoying a spa day together",
+      "imageUrl": "https://images.unsplash.com/photo-1598461946773-aec0e3eda83f?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwxfHxmcmllbmRzJTIwc3BhfGVufDB8fHx8MTc1OTUyMTM4Nnww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "friends spa"
+    },
+    {
+      "id": "profile_avatar",
+      "description": "Avatar for a user profile",
+      "imageUrl": "https://images.unsplash.com/photo-1557053910-d9eadeed1c58?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwxfHx3b21hbiUyMHBvcnRyYWl0fGVufDB8fHx8MTc1OTUyMDY3NXww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "woman portrait"
+    }
+  ]
 }
