@@ -46,10 +46,9 @@ export default function ProfilePage() {
     // Wait until we have the firestore instance and the user's ID
     if (!firestore || !user?.uid) return null;
 
-    const baseQuery = collection(firestore, 'appointments');
     // Always fetch appointments for the currently logged-in user for this page.
     return query(
-        baseQuery,
+        collection(firestore, 'appointments'),
         where('clientId', '==', user.uid),
         where('startTime', '>=', new Date().toISOString()),
         orderBy('startTime', 'asc')
@@ -61,10 +60,9 @@ export default function ProfilePage() {
     // Wait until we have the firestore instance and the user's ID
     if (!firestore || !user?.uid) return null;
 
-    const baseQuery = collection(firestore, 'appointments');
-     // Always fetch appointments for the currently logged-in user for this page.
+    // Always fetch appointments for the currently logged-in user for this page.
     return query(
-        baseQuery,
+        collection(firestore, 'appointments'),
         where('clientId', '==', user.uid),
         where('startTime', '<', new Date().toISOString()),
         orderBy('startTime', 'desc')
