@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { Calendar } from '@/components/ui/calendar';
 import { Button } from '@/components/ui/button';
 import {
@@ -25,9 +26,20 @@ import type { Service } from '@/lib/types';
 import { timeSlots } from '@/lib/data';
 import { initiateAnonymousSignIn } from '@/firebase/non-blocking-login';
 import { ptBR } from 'date-fns/locale';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
 export default function BookAppointmentPage() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const { toast } = useToast();
   const [step, setStep] = useState(1);
   const [selectedService, setSelectedService] = useState<string | undefined>(searchParams.get('service') || undefined);
@@ -35,9 +47,9 @@ export default function BookAppointmentPage() {
   const [selectedTime, setSelectedTime] = useState<string | undefined>();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [showAuthAlert, setShowAuthAlert] = useState(false);
 
   const firestore = useFirestore();
-  const auth = useAuth();
   const { user, isUserLoading } = useUser();
   const servicesCollectionRef = useMemoFirebase(() => collection(firestore, 'services'), [firestore]);
   const { data: services, isLoading: isLoadingServices } = useCollection<Omit<Service, 'id'>>(servicesCollectionRef);
@@ -60,21 +72,15 @@ export default function BookAppointmentPage() {
       return;
     }
 
-    let currentUser = user;
-    if (!currentUser && !isUserLoading) {
-      initiateAnonymousSignIn(auth);
-      toast({
-        title: 'Finalizando agendamento...',
-        description: 'Por favor, aguarde um momento.',
-      });
-      return; 
-    }
-    
-    if (!currentUser) {
-        toast({ title: 'A autenticação ainda está inicializando. Por favor, tente novamente em um momento.', variant: 'destructive'});
-        return;
+    if (isUserLoading) {
+      toast({ title: 'Aguarde um momento...', description: 'Verificando sua autenticação.' });
+      return;
     }
 
+    if (!user) {
+      setShowAuthAlert(true);
+      return;
+    }
 
     const serviceDetails = services?.find(s => s.id === selectedService);
     if (!serviceDetails) {
@@ -87,10 +93,10 @@ export default function BookAppointmentPage() {
     startTime.setHours(hours, minutes, 0, 0);
     const endTime = new Date(startTime.getTime() + serviceDetails.durationMinutes * 60000);
 
-    const appointmentsRef = collection(firestore, 'users', currentUser.uid, 'appointments');
+    const appointmentsRef = collection(firestore, 'users', user.uid, 'appointments');
     
     addDocumentNonBlocking(appointmentsRef, {
-        clientId: currentUser.uid,
+        clientId: user.uid,
         serviceId: selectedService,
         startTime: startTime.toISOString(),
         endTime: endTime.toISOString(),
@@ -234,12 +240,33 @@ export default function BookAppointmentPage() {
               </Button>
             ) : (
               <Button onClick={handleBooking} disabled={isUserLoading}>
-                {isUserLoading ? 'Inicializando...' : 'Confirmar Agendamento'} <Check className="ml-2 h-4 w-4" />
+                {isUserLoading ? 'Verificando...' : 'Confirmar Agendamento'} <Check className="ml-2 h-4 w-4" />
               </Button>
             )}
           </CardFooter>
         )}
       </Card>
+      <AlertDialog open={showAuthAlert} onOpenChange={setShowAuthAlert}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Ação Necessária</AlertDialogTitle>
+            <AlertDialogDescription>
+              Para fazer um agendamento, você precisa estar logado. Por favor, faça login ou registre-se para continuar.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction asChild>
+                <Link href="/register">Registrar</Link>
+            </AlertDialogAction>
+            <AlertDialogAction asChild>
+                <Link href="/login">Login</Link>
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
+
+    
