@@ -143,9 +143,9 @@ export default function AdminServicesPage() {
                   name="imageId"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>ID da Imagem</FormLabel>
+                      <FormLabel>Imagem do Serviço</FormLabel>
                       <FormControl>
-                        <Input placeholder="ex: haircut, manicure" {...field} />
+                        <Input type="file" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
