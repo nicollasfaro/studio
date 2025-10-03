@@ -1,137 +1,122 @@
 /**
- * @file Firestore Security Rules for GlamEase
+ * @fileoverview Firestore Security Rules for GlamEase.
  *
- * @core_philosophy This ruleset enforces a strict user-ownership model for client and appointment data,
- * ensuring that only authenticated users can access their own information. Service and promotion data
- * are treated as publicly readable.
+ * Core Philosophy:
+ * This ruleset enforces a strict user-ownership model for client and appointment data,
+ * while allowing public read access to service and promotion information.
  *
- * @data_structure
- * - /users/{userId}/clients/{clientId}: Stores client data, accessible only by the owning user.
- * - /services/{serviceId}: Stores service data, publicly readable.
- * - /promotions/{promotionId}: Stores promotion data, publicly readable.
- * - /users/{userId}/appointments/{appointmentId}: Stores appointment data, accessible only by the owning user.
+ * Data Structure:
+ * - /users/{userId}/clients/{clientId}:  Client data, owned by the user with ID userId.
+ * - /services/{serviceId}: Public service data.
+ * - /promotions/{promotionId}: Public promotion data.
+ * - /users/{userId}/appointments/{appointmentId}: Appointment data, owned by the user with ID userId.
  *
- * @key_security_decisions
- * - User listing is explicitly denied to protect user privacy.
- * - Public read access is granted to the /services and /promotions collections to allow all users to view available services and promotions.
- * - All write operations require authentication.
- * - All potentially destructive operations (update, delete) include a resource existence check.
- *
- * @denormalization_for_authorization N/A (Path-based ownership is used)
- * @structural_segregation Private user data (clients, appointments) is stored under /users/{userId},
- * while public data (services, promotions) is stored in top-level collections.
+ * Key Security Decisions:
+ * - User listing is disallowed to protect privacy.
+ * - Public read access is granted for services and promotions to facilitate discovery.
+ * - All write operations are strictly controlled based on ownership or the absence of a defined ownership field.
  */
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
     /**
-     * @description Checks if the user is signed in.
-     * @return {boolean} True if the user is signed in, false otherwise.
+     * @description Checks if the request is made by a signed-in user.
      */
     function isSignedIn() {
       return request.auth != null;
     }
 
     /**
-     * @description Checks if the user ID matches the requested user ID.
-     * @param {string} userId The user ID to check against.
-     * @return {boolean} True if the user ID matches the request, false otherwise.
+     * @description Checks if the authenticated user ID matches the provided user ID.
      */
     function isOwner(userId) {
       return isSignedIn() && request.auth.uid == userId;
     }
 
     /**
-     * @description Checks if the user is the owner and the resource exists.
-     * @param {string} userId The user ID to check against.
-     * @return {boolean} True if the user ID matches the request and the resource exists, false otherwise.
+     * @description Checks if the authenticated user is the owner of the existing document.
      */
     function isExistingOwner(userId) {
       return isOwner(userId) && resource != null;
     }
-
+    
     /**
-     * @description
-     * Rules for the /users/{userId}/clients/{clientId} collection.
-     * This collection stores client data and enforces strict user-ownership.
-     * Only the authenticated user (userId) can access their own client data.
+     * @description Rule set for documents under /users/{userId}/clients/{clientId}.
      * @path /users/{userId}/clients/{clientId}
-     * @allow (create) - An authenticated user with ID 'user123' can create a client document with clientId 'client456' under /users/user123/clients/client456 if request.resource.data.id == 'user123'.
-     * @allow (get, list) - An authenticated user with ID 'user123' can read their own client documents under /users/user123/clients/{clientId}.
-     * @allow (update, delete) - An authenticated user with ID 'user123' can update or delete their own client document with clientId 'client456' under /users/user123/clients/client456.
-     * @deny (create, update, delete) - An unauthenticated user cannot create, update, or delete client documents. An authenticated user with ID 'user456' cannot access client documents under /users/user123/clients/{clientId}.
-     * @principle Enforces document ownership for writes and restricts access to a user's own data tree.
+     * @allow (get) User 'OpjV2mjea2VdhbQ62gN1afDFvv02' can read their own client data.
+     * @allow (create) User 'OpjV2mjea2VdhbQ62gN1afDFvv02' can create a client document with clientId = 'testClientId'.
+     * @allow (update) User 'OpjV2mjea2VdhbQ62gN1afDFvv02' can update their own client data (clientId = 'testClientId').
+     * @allow (delete) User 'OpjV2mjea2VdhbQ62gN1afDFvv02' can delete their own client data (clientId = 'testClientId').
+     * @deny (get) User 'anotherUserId' cannot read client data belonging to 'OpjV2mjea2VdhbQ62gN1afDFvv02'.
+     * @deny (create) User 'anotherUserId' cannot create client data under '/users/OpjV2mjea2VdhbQ62gN1afDFvv02/clients/testClientId'.
+     * @deny (update) User 'anotherUserId' cannot update client data belonging to 'OpjV2mjea2VdhbQ62gN1afDFvv02'.
+     * @deny (delete) User 'anotherUserId' cannot delete client data belonging to 'OpjV2mjea2VdhbQ62gN1afDFvv02'.
+     * @principle Enforces document ownership for all operations.
      */
     match /users/{userId}/clients/{clientId} {
       allow get: if isOwner(userId);
-      allow list: if isOwner(userId);
-      allow create: if isOwner(userId) && request.resource.data.id == userId;
-      allow update: if isExistingOwner(userId) && request.resource.data.id == resource.data.id;
-      allow delete: if isExistingOwner(userId);
+      allow list: if false;
+      allow create: if isOwner(userId);
+      allow update: if isOwner(userId);
+      allow delete: if isOwner(userId);
     }
 
     /**
-     * @description
-     * Rules for the /services/{serviceId} collection.
-     * This collection stores service data, which is publicly readable.
+     * @description Rule set for documents under /services/{serviceId}.
      * @path /services/{serviceId}
-     * @allow (get, list) - Any user (authenticated or unauthenticated) can read service documents.
-     * @deny (create, update, delete) - Only authenticated users can create, update, or delete service documents.
-     * @principle Allows public read access for shared data, while restricting write access.
+     * @allow (get) Any user can read service data.
+     * @allow (list) Any user can list service data.
+     * @deny (create) No user can create service data through client side.
+     * @deny (update) No user can update service data through client side.
+     * @deny (delete) No user can delete service data through client side.
+     * @principle Allows public read access to service information, but restricts all write access.
      */
     match /services/{serviceId} {
-      allow get, list: if true;
-      allow create: if isSignedIn();
-      allow update: if isSignedIn() && resource != null;
-      allow delete: if isSignedIn() && resource != null;
+      allow get: if true;
+      allow list: if true;
+      allow create: if false;
+      allow update: if false;
+      allow delete: if false;
     }
 
     /**
-     * @description
-     * Rules for the /promotions/{promotionId} collection.
-     * This collection stores promotion data, which is publicly readable.
+     * @description Rule set for documents under /promotions/{promotionId}.
      * @path /promotions/{promotionId}
-     * @allow (get, list) - Any user (authenticated or unauthenticated) can read promotion documents.
-     * @deny (create, update, delete) - Only authenticated users can create, update, or delete promotion documents.
-     * @principle Allows public read access for shared data, while restricting write access.
+     * @allow (get) Any user can read promotion data.
+     * @allow (list) Any user can list promotion data.
+     * @deny (create) No user can create promotion data through client side.
+     * @deny (update) No user can update promotion data through client side.
+     * @deny (delete) No user can delete promotion data through client side.
+     * @principle Allows public read access to promotion information, but restricts all write access.
      */
     match /promotions/{promotionId} {
-      allow get, list: if true;
-      allow create: if isSignedIn();
-      allow update: if isSignedIn() && resource != null;
-      allow delete: if isSignedIn() && resource != null;
+      allow get: if true;
+      allow list: if true;
+      allow create: if false;
+      allow update: if false;
+      allow delete: if false;
     }
 
     /**
-     * @description
-     * Rules for the /users/{userId}/appointments/{appointmentId} collection.
-     * This collection stores appointment data and enforces strict user-ownership.
-     * Only the authenticated user (userId) can access their own appointment data.
+     * @description Rule set for documents under /users/{userId}/appointments/{appointmentId}.
      * @path /users/{userId}/appointments/{appointmentId}
-     * @allow (create) - An authenticated user with ID 'user123' can create an appointment document with appointmentId 'appt456' under /users/user123/appointments/appt456.
-     * @allow (get, list) - An authenticated user with ID 'user123' can read their own appointment documents under /users/user123/appointments/{appointmentId}.
-     * @allow (update, delete) - An authenticated user with ID 'user123' can update or delete their own appointment document with appointmentId 'appt456' under /users/user123/appointments/appt456.
-     * @deny (create, update, delete) - An unauthenticated user cannot create, update, or delete appointment documents. An authenticated user with ID 'user456' cannot access appointment documents under /users/user123/appointments/{appointmentId}.
-     * @principle Enforces document ownership for writes and restricts access to a user's own data tree.
+     * @allow (get) User 'OpjV2mjea2VdhbQ62gN1afDFvv02' can read their own appointment data.
+     * @allow (create) User 'OpjV2mjea2VdhbQ62gN1afDFvv02' can create an appointment document with appointmentId = 'testAppointmentId'.
+     * @allow (update) User 'OpjV2mjea2VdhbQ62gN1afDFvv02' can update their own appointment data (appointmentId = 'testAppointmentId').
+     * @allow (delete) User 'OpjV2mjea2VdhbQ62gN1afDFvv02' can delete their own appointment data (appointmentId = 'testAppointmentId').
+     * @deny (get) User 'anotherUserId' cannot read appointment data belonging to 'OpjV2mjea2VdhbQ62gN1afDFvv02'.
+     * @deny (create) User 'anotherUserId' cannot create appointment data under '/users/OpjV2mjea2VdhbQ62gN1afDFvv02/appointments/testAppointmentId'.
+     * @deny (update) User 'anotherUserId' cannot update appointment data belonging to 'OpjV2mjea2VdhbQ62gN1afDFvv02'.
+     * @deny (delete) User 'anotherUserId' cannot delete appointment data belonging to 'OpjV2mjea2VdhbQ62gN1afDFvv02'.
+     * @principle Enforces document ownership for all operations.
      */
     match /users/{userId}/appointments/{appointmentId} {
       allow get: if isOwner(userId);
-      allow list: if isOwner(userId);
-      allow create: if isOwner(userId) && request.resource.data.clientId == userId;
-      allow update: if isExistingOwner(userId) && request.resource.data.clientId == resource.data.clientId;
-      allow delete: if isExistingOwner(userId);
-    }
-    
-     /**
-      * @description Prevents listing of all users.
-      * Listing users is a privacy concern.
-      * @path /users
-      * @deny (list) - Any attempt to list all user documents will be denied.
-      * @principle Protects user privacy by disallowing listing of user documents.
-      */
-    match /users {
-        allow list: if false;
+      allow list: if false;
+      allow create: if isOwner(userId);
+      allow update: if isOwner(userId);
+      allow delete: if isOwner(userId);
     }
   }
 }
