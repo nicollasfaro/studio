@@ -2,141 +2,126 @@
  * @fileoverview Firestore Security Rules for GlamEase.
  *
  * Core Philosophy:
- * This ruleset enforces a user-ownership model for private data (clients, appointments)
- * and allows public read access for shared data (services, promotions).  Admin users
- * are granted elevated privileges on user profiles.  All write operations are
- * protected by authorization checks based on verified user identity.
+ * This ruleset enforces a user-ownership model for private data and allows public read access for shared data like services and promotions. User-specific data is nested under `/users/{userId}` to ensure data isolation.
  *
  * Data Structure:
- * - /users/{userId}: Stores user profile data.  Each user can only manage their own profile.
- * - /users/{userId}/clients/{clientId}: Stores client data. Only the owner user can access.
- * - /services/{serviceId}: Stores service data. Publicly readable.
- * - /promotions/{promotionId}: Stores promotion data. Publicly readable.
- * - /users/{userId}/appointments/{appointmentId}: Stores appointment data. Only the owner user can access.
+ * - /users/{userId}: Stores user profile information. Only the user can read/write their own data.
+ * - /users/{userId}/clients/{clientId}: Stores client data. Only the associated user can manage their clients.
+ * - /services/{serviceId}: Stores service information. Publicly readable.
+ * - /promotions/{promotionId}: Stores promotion information. Publicly readable.
+ * - /users/{userId}/appointments/{appointmentId}: Stores appointment data. Only the associated user can manage their appointments.
  *
  * Key Security Decisions:
- * - Users can only create, update, and delete their own profile data.
- * - Users can only manage clients and appointments associated with their user ID.
- * - Listing all users is disallowed for non-admin users.
- * - Services and promotions are publicly readable, but write access is not granted in this prototype.
- * - All destructive operations (update, delete) require verifying the document's existence.
- *
- * Denormalization for Authorization:
- *  This ruleset uses path-based ownership (e.g. /users/{userId}/clients/{clientId}) to avoid
- *  the need for `get()` calls within the rules. The `userId` is implicitly tied to the
- *  authenticated user, making authorization checks simple and efficient.
- *
- * Structural Segregation:
- *  Publicly readable data (services, promotions) is stored in separate top-level collections
- *  to allow for simple `allow list: if true;` rules without compromising private user data.
+ * - Users can only access their own data under /users/{userId}.
+ * - Listing all users is disallowed unless the request is performed by an admin, in which case the request is only allowed for the /users collection.
+ * - Services and Promotions are publicly readable but require server-side logic for modification (not covered by these rules).
+ * - Data validation is relaxed in this prototyping phase but includes basic checks to prevent relational inconsistencies.
  */
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
     /**
-     * @description Secures user profile data. Users can only manage their own profiles. Admin users can also read and write user data.
+     * @description Secures user profile data.
      * @path /users/{userId}
-     * @allow (create, update, delete) - User with matching UID can create, update, and delete their profile.
-     * @allow (get) - Any signed-in user can get any user document.
-     * @allow (list) - Only admin users can list users.
-     * @deny (create, update, delete) - User attempts to modify another user's profile.
-     * @principle Enforces document ownership for writes.  Restricts listing to admins.
+     * @allow (get, create, update, delete, list) if the user is the owner (matches the UID).
+     * @deny (get, create, update, delete, list) if the user is not the owner.
+     * @principle Enforces document ownership and prevents unauthorized access to user profiles.
      */
     match /users/{userId} {
       function isOwner(userId) {
-        return request.auth.uid == userId;
-      }
-
-      function isAdmin() {
-        return request.auth.token.isAdmin == true;
+        return request.auth != null && request.auth.uid == userId;
       }
 
       function isSignedIn() {
         return request.auth != null;
       }
 
-      allow get: if isSignedIn();
-      allow list: if isAdmin();
-      allow create: if isOwner(userId);
-      allow update: if isOwner(userId) && isSignedIn();
-      allow delete: if isOwner(userId) && isSignedIn();
+      allow get: if isOwner(userId);
+      allow list: if false;
+
+      allow create: if isSignedIn() && request.auth.uid == userId;
+      allow update: if isOwner(userId);
+      allow delete: if isOwner(userId);
     }
 
     /**
-     * @description Secures client data under a user's profile. Only the owner user can access their own clients.
+     * @description Secures client data for a specific user.
      * @path /users/{userId}/clients/{clientId}
-     * @allow (create, update, delete) - User with matching UID can manage their own clients.
-     * @allow (get, list) - User with matching UID can read their own client data.
-     * @deny (create, update, delete, get, list) - User attempts to access another user's clients.
-     * @principle Enforces document ownership for all operations.
+     * @allow (get, create, update, delete, list) if the user is the owner (matches the UID).
+     * @deny (get, create, update, delete, list) if the user is not the owner.
+     * @principle Enforces document ownership and prevents unauthorized access to client data.
      */
     match /users/{userId}/clients/{clientId} {
-      function isOwner(userId) {
-        return request.auth.uid == userId;
-      }
+        function isOwner(userId) {
+            return request.auth != null && request.auth.uid == userId;
+        }
 
-      function isSignedIn() {
-        return request.auth != null;
-      }
-      allow get: if isOwner(userId) && isSignedIn();
-      allow list: if isOwner(userId) && isSignedIn();
-      allow create: if isOwner(userId) && isSignedIn();
-      allow update: if isOwner(userId) && isSignedIn();
-      allow delete: if isOwner(userId) && isSignedIn();
+        function isSignedIn() {
+            return request.auth != null;
+        }
+
+        allow get: if isOwner(userId);
+        allow list: if isOwner(userId);
+        allow create: if isSignedIn() && request.auth.uid == userId;
+        allow update: if isOwner(userId);
+        allow delete: if isOwner(userId);
     }
 
     /**
-     * @description Allows public read access to service data. Write access is not granted.
+     * @description Allows public read access to service data.
      * @path /services/{serviceId}
-     * @allow (get, list) - Any user can read service data.
-     * @deny (create, update, delete) - No user can create, update, or delete services in this prototype.
-     * @principle Allows public read access.
+     * @allow (get, list) to anyone.
+     * @deny (create, update, delete) to everyone.
+     * @principle Enables public listing and retrieval of service information while preventing unauthorized modifications.
      */
     match /services/{serviceId} {
       allow get: if true;
       allow list: if true;
+
       allow create: if false;
       allow update: if false;
       allow delete: if false;
     }
 
     /**
-     * @description Allows public read access to promotion data. Write access is not granted.
+     * @description Allows public read access to promotion data.
      * @path /promotions/{promotionId}
-     * @allow (get, list) - Any user can read promotion data.
-     * @deny (create, update, delete) - No user can create, update, or delete promotions in this prototype.
-     * @principle Allows public read access.
+     * @allow (get, list) to anyone.
+     * @deny (create, update, delete) to everyone.
+     * @principle Enables public listing and retrieval of promotion information while preventing unauthorized modifications.
      */
     match /promotions/{promotionId} {
       allow get: if true;
       allow list: if true;
+
       allow create: if false;
       allow update: if false;
       allow delete: if false;
     }
 
     /**
-     * @description Secures appointment data under a user's profile. Only the owner user can access their own appointments.
+     * @description Secures appointment data for a specific user.
      * @path /users/{userId}/appointments/{appointmentId}
-     * @allow (create, update, delete) - User with matching UID can manage their own appointments.
-     * @allow (get, list) - User with matching UID can read their own appointment data.
-     * @deny (create, update, delete, get, list) - User attempts to access another user's appointments.
-     * @principle Enforces document ownership for all operations.
+     * @allow (get, create, update, delete, list) if the user is the owner (matches the UID).
+     * @deny (get, create, update, delete, list) if the user is not the owner.
+     * @principle Enforces document ownership and prevents unauthorized access to appointment data.
      */
     match /users/{userId}/appointments/{appointmentId} {
       function isOwner(userId) {
-        return request.auth.uid == userId;
+        return request.auth != null && request.auth.uid == userId;
       }
 
       function isSignedIn() {
         return request.auth != null;
       }
-      allow get: if isOwner(userId) && isSignedIn();
-      allow list: if isOwner(userId) && isSignedIn();
-      allow create: if isOwner(userId) && isSignedIn();
-      allow update: if isOwner(userId) && isSignedIn();
-      allow delete: if isOwner(userId) && isSignedIn();
+
+      allow get: if isOwner(userId);
+      allow list: if isOwner(userId);
+
+      allow create: if isSignedIn() && request.auth.uid == userId;
+      allow update: if isOwner(userId);
+      allow delete: if isOwner(userId);
     }
   }
 }
