@@ -17,9 +17,9 @@ export default function ServicesPage() {
   return (
     <div className="container mx-auto px-4 md:px-6 py-12">
       <div className="text-center mb-12">
-        <h1 className="text-4xl md:text-5xl font-headline tracking-tight">Our Services</h1>
+        <h1 className="text-4xl md:text-5xl font-headline tracking-tight">Nossos Serviços</h1>
         <p className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
-          We offer a wide range of beauty and wellness treatments to help you look and feel your best.
+          Oferecemos uma ampla gama de tratamentos de beleza e bem-estar para ajudar você a se sentir e parecer o seu melhor.
         </p>
       </div>
 
@@ -69,10 +69,10 @@ export default function ServicesPage() {
               <CardFooter className="p-6 pt-0 flex justify-between items-center">
                 <div>
                   <p className="text-xl font-bold text-primary">${service.price}</p>
-                  <p className="text-sm text-muted-foreground">{service.durationMinutes} minutes</p>
+                  <p className="text-sm text-muted-foreground">{service.durationMinutes} minutos</p>
                 </div>
                 <Button asChild>
-                  <Link href={`/book?service=${service.id}`}>Book Now</Link>
+                  <Link href={`/book?service=${service.id}`}>Agendar Agora</Link>
                 </Button>
               </CardFooter>
             </Card>

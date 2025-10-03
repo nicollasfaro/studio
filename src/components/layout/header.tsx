@@ -32,10 +32,10 @@ import { useUser, useAuth } from '@/firebase';
 import { useToast } from '@/hooks/use-toast';
 
 const navLinks = [
-  { href: '/', label: 'Home', icon: Home },
-  { href: '/services', label: 'Services', icon: Scissors },
-  { href: '/promotions', label: 'Promotions', icon: Gift },
-  { href: '/book', label: 'Book Now', icon: Calendar },
+  { href: '/', label: 'Início', icon: Home },
+  { href: '/services', label: 'Serviços', icon: Scissors },
+  { href: '/promotions', label: 'Promoções', icon: Gift },
+  { href: '/book', label: 'Agendar', icon: Calendar },
 ];
 
 export function Header() {
@@ -53,7 +53,7 @@ export function Header() {
       });
       router.push('/');
     } catch (error) {
-      console.error('Error signing out: ', error);
+      console.error('Erro ao fazer logout: ', error);
       toast({
         variant: 'destructive',
         title: 'Erro ao fazer logout',
@@ -70,7 +70,7 @@ export function Header() {
             <SheetTrigger asChild>
               <Button variant="ghost" size="icon" className="md:hidden text-primary-foreground hover:bg-primary/80 hover:text-primary-foreground">
                 <Menu className="h-6 w-6" />
-                <span className="sr-only">Toggle navigation menu</span>
+                <span className="sr-only">Alternar menu de navegação</span>
               </Button>
             </SheetTrigger>
             <SheetContent side="left" className="bg-background">
@@ -120,7 +120,7 @@ export function Header() {
           </DropdownMenuTrigger>
           <DropdownMenuContent className="w-56" align="end">
             <DropdownMenuLabel>
-              {user ? user.displayName || 'My Account' : 'Guest'}
+              {user ? user.displayName || 'Minha Conta' : 'Convidado'}
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             {isUserLoading ? (

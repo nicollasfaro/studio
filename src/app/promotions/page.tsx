@@ -19,9 +19,9 @@ export default function PromotionsPage() {
   return (
     <div className="container mx-auto px-4 md:px-6 py-12">
       <div className="text-center mb-12">
-        <h1 className="text-4xl md:text-5xl font-headline tracking-tight">Special Promotions</h1>
+        <h1 className="text-4xl md:text-5xl font-headline tracking-tight">Promoções Especiais</h1>
         <p className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
-          Enjoy our exclusive offers and get the pampering you deserve for less.
+          Aproveite nossas ofertas exclusivas e receba o mimo que você merece por menos.
         </p>
       </div>
 
@@ -60,7 +60,7 @@ export default function PromotionsPage() {
                 <CardHeader className="p-6">
                   <Badge variant="default" className="w-fit bg-accent text-accent-foreground mb-2">
                     <Sparkles className="mr-2 h-4 w-4" />
-                    Limited Time Offer
+                    Oferta por tempo limitado
                   </Badge>
                   <CardTitle className="font-headline text-3xl">{promo.name}</CardTitle>
                 </CardHeader>
@@ -69,7 +69,7 @@ export default function PromotionsPage() {
                 </CardContent>
                 <CardFooter className="p-6 pt-0">
                   <Button asChild size="lg">
-                    <Link href="/book">Book This Offer</Link>
+                    <Link href="/book">Agendar esta Oferta</Link>
                   </Button>
                 </CardFooter>
               </div>

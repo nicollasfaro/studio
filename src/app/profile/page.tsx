@@ -12,6 +12,7 @@ import { useAuth, useUser, useFirestore, useCollection, useMemoFirebase } from '
 import { collection, query, where, orderBy } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import { User, Edit, LogOut, Calendar, Bell } from 'lucide-react';
 import type { Appointment, Service } from '@/lib/types';
 import Link from 'next/link';
@@ -61,7 +62,7 @@ export default function ProfilePage() {
     if (!appointments || !services) return [];
     return appointments.map(apt => ({
       ...apt,
-      serviceName: services.find(s => s.id === apt.serviceId)?.name || 'Unknown Service',
+      serviceName: services.find(s => s.id === apt.serviceId)?.name || 'Serviço Desconhecido',
     }));
   };
 
@@ -73,7 +74,7 @@ export default function ProfilePage() {
       await signOut(auth);
       router.push('/login');
     } catch (error) {
-      console.error('Error signing out: ', error);
+      console.error('Erro ao sair: ', error);
     }
   };
 
@@ -117,7 +118,7 @@ export default function ProfilePage() {
           <Card className="shadow-lg">
             <CardHeader className="items-center text-center p-6">
               <Avatar className="w-24 h-24 mb-4">
-                {user.photoURL && <AvatarImage src={user.photoURL} alt={user.displayName || 'User'} />}
+                {user.photoURL && <AvatarImage src={user.photoURL} alt={user.displayName || 'Usuário'} />}
                 <AvatarFallback>
                   <User className="w-12 h-12" />
                 </AvatarFallback>
@@ -156,7 +157,7 @@ export default function ProfilePage() {
                       <div>
                         <p className="font-semibold">{apt.serviceName}</p>
                         <p className="text-sm text-muted-foreground">
-                          {format(new Date(apt.startTime), "EEEE, MMM d 'at' HH:mm")}
+                          {format(new Date(apt.startTime), "EEEE, d 'de' MMM 'às' HH:mm", { locale: ptBR })}
                         </p>
                       </div>
                       <Button variant="outline" size="sm" disabled>Gerenciar</Button>
@@ -186,7 +187,7 @@ export default function ProfilePage() {
                       <div>
                         <p className="font-semibold">{apt.serviceName}</p>
                         <p className="text-sm text-muted-foreground">
-                          {format(new Date(apt.startTime), "EEEE, MMM d 'at' HH:mm")}
+                          {format(new Date(apt.startTime), "EEEE, d 'de' MMM 'às' HH:mm", { locale: ptBR })}
                         </p>
                       </div>
                       <Button asChild variant="secondary" size="sm">
