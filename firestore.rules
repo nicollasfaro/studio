@@ -1,114 +1,124 @@
 /**
- * @fileoverview Firestore Security Rules for GlamEase.
+ * @fileOverview Firestore Security Rules for GlamEase.
  *
  * Core Philosophy:
- * This ruleset enforces a user-ownership model for user profiles,
- * allows public read access to services and promotions, and manages
- * appointments with client ownership and admin override.
+ * This ruleset enforces a combination of user-ownership and public-read with owner-write patterns, with administrative overrides where appropriate.  It prioritizes security by default, restricting access unless explicitly granted.
  *
  * Data Structure:
- * - /users/{userId}: Stores user profile information, accessible only by the user and admins.
- * - /services/{serviceId}: Stores service data, publicly readable.
- * - /promotions/{promotionId}: Stores promotion data, publicly readable.
- * - /appointments/{appointmentId}: Stores appointment data, with client ownership.
+ * - /users/{userId}: User profile information, accessible only to the user and admins.
+ * - /services/{serviceId}: Publicly readable service information.
+ * - /promotions/{promotionId}: Publicly readable promotion information.
+ * - /appointments/{appointmentId}: Appointments, with access controlled by user ownership (clientId) or admin status.
  *
  * Key Security Decisions:
- * - User listing is disabled to protect user privacy.
- * - Services and promotions are publicly readable to facilitate discovery.
- * - Appointments are owned by clients, with admin override capabilities.
+ * - Users can only access their own user document.
+ * - Listing user documents is disallowed.
+ * - Services and Promotions are publicly readable.
+ * - Appointments are accessible to their owners and admins.
+ * - Data validation is minimized for prototyping, focusing on authorization and relational integrity.
  *
  * Denormalization for Authorization:
- * - The `clientId` field is included in each appointment document to enable ownership-based security rules without requiring additional `get()` calls.
+ * - Appointments store the clientId directly, enabling rules to enforce ownership without additional reads.
+ *
+ * Structural Segregation:
+ * - Publicly readable data (Services, Promotions) are stored in top-level collections to avoid the need for complex filtering in rules.
  */
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
     /**
-     * @description Controls access to user profile data.
+     * @description Secures user profile information. Only the user and admins can read/write their own data.
      * @path /users/{userId}
-     * @allow (get, update, delete) if the user is signed in and owns the profile.
-     * @allow (create) if the user is signed in and the userId matches the authenticated user's ID.
-     * @deny (list) to prevent listing all users.
-     * @deny (create, update, delete) if the user is not the owner.
-     * @principle Enforces document ownership for writes and restricts listing.
+     * @allow (read, write) User with matching UID (giGWF3P9E6he2DctYPXrY9Tkqpi1).
+     * @deny (read, write) User with mismatched UID (not giGWF3P9E6he2DctYPXrY9Tkqpi1).
+     * @principle Enforces document ownership for writes and restricts access to a user's own data tree.
      */
     match /users/{userId} {
-      function isSignedIn() {
-        return request.auth != null;
-      }
-
+      //function
       function isOwner(userId) {
-        return isSignedIn() && request.auth.uid == userId;
+        return request.auth != null && request.auth.uid == userId;
       }
 
-      function isExistingOwner(userId) {
-          return isOwner(userId) && resource != null;
+      function isAdmin() {
+        return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
       }
 
-      allow get: if isOwner(userId);
+      //READS
+      allow get: if isSignedIn() && (isOwner(userId) || isAdmin());
       allow list: if false;
-      allow create: if isOwner(userId) && request.resource.data.id == userId;
-      allow update: if isExistingOwner(userId) && request.resource.data.id == resource.data.id;
-      allow delete: if isExistingOwner(userId);
+
+      //WRITES
+      allow create: if isSignedIn() && isOwner(userId) && request.resource.data.id == userId;
+      allow update: if isSignedIn() && (isOwner(userId) || isAdmin()) && resource.data.id == userId;
+      allow delete: if isSignedIn() && (isOwner(userId) || isAdmin()) && resource.data.id == userId;
     }
 
     /**
-     * @description Controls access to service data.
+     * @description Allows any user to read service information.
      * @path /services/{serviceId}
-     * @allow (get, list) to allow anyone to read service information.
-     * @deny (create, update, delete) to prevent unauthorized modifications.
-     * @principle Allows public read access but restricts write access.
+     * @allow (get, list) Any user (giGWF3P9E6he2DctYPXrY9Tkqpi1).
+     * @deny (create, update, delete) Any user (giGWF3P9E6he2DctYPXrY9Tkqpi1).
+     * @principle Allows public read access while restricting write access.
      */
     match /services/{serviceId} {
+      //READS
       allow get, list: if true;
+
+      //WRITES
       allow create, update, delete: if false;
     }
 
     /**
-     * @description Controls access to promotion data.
+     * @description Allows any user to read promotion information.
      * @path /promotions/{promotionId}
-     * @allow (get, list) to allow anyone to read promotion information.
-     * @deny (create, update, delete) to prevent unauthorized modifications.
-     * @principle Allows public read access but restricts write access.
+     * @allow (get, list) Any user (giGWF3P9E6he2DctYPXrY9Tkqpi1).
+     * @deny (create, update, delete) Any user (giGWF3P9E6he2DctYPXrY9Tkqpi1).
+     * @principle Allows public read access while restricting write access.
      */
     match /promotions/{promotionId} {
+      //READS
       allow get, list: if true;
+
+      //WRITES
       allow create, update, delete: if false;
     }
 
     /**
-     * @description Controls access to appointment data.
+     * @description Controls access to appointment data. Clients own their appointments, and admins can manage all appointments.
      * @path /appointments/{appointmentId}
-     * @allow (get, list) if the user is an admin.
-     * @allow (create) if the user is signed in.
-     * @allow (update, delete) if the user owns the appointment.
-     * @deny (create, update, delete) if the user is not the owner.
-     * @principle Enforces document ownership for writes and restricts access to owners and admins.
+     * @allow (get, list) Owner of the appointment (clientId) or Admin user.
+     * @allow (create) Owner of the appointment, ensures clientID is set correctly.
+     * @allow (update, delete) Owner of the appointment, must exist and clientID match.
+     * @deny (read, write) Non-owner, non-admin user.
+     * @principle Enforces document ownership and administrative override.
      */
     match /appointments/{appointmentId} {
-      function isSignedIn() {
-        return request.auth != null;
+      function isOwner(clientId) {
+        return request.auth != null && request.auth.uid == clientId;
       }
 
-      function isOwner(clientId) {
-        return isSignedIn() && request.auth.uid == clientId;
+      function isAdmin() {
+        return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
       }
 
       function isExistingOwner(clientId) {
         return isOwner(clientId) && resource != null;
       }
 
-      // Public read not permitted, so ensure list is not open.
-      allow get: if false;
-      // In order to determine the security posture for list, it's important to know which clients
-      // call this. The structure description says "individual user queries are filtered by
-      // where('clientId', '==', uid)", and the "QAPs (Rules are not filters)" section refers to
-      // that as well, so the client is expected to handle that.
-      allow list: if false;
-      allow create: if isSignedIn() && request.resource.data.clientId == request.auth.uid;
-      allow update: if isExistingOwner(resource.data.clientId) && request.resource.data.clientId == resource.data.clientId;
-      allow delete: if isExistingOwner(resource.data.clientId);
+      //READS
+      allow get: if isSignedIn() && (isOwner(resource.data.clientId) || isAdmin());
+      allow list: if isSignedIn() && isAdmin(); //The error log indicates a user tried to list this. This is not a function for non-admin users.
+
+      //WRITES
+      allow create: if isSignedIn() && isOwner(request.resource.data.clientId);
+      allow update: if isSignedIn() && (isExistingOwner(resource.data.clientId) || isAdmin());
+      allow delete: if isSignedIn() && (isExistingOwner(resource.data.clientId) || isAdmin());
+    }
+
+    //Reusable function
+    function isSignedIn() {
+      return request.auth != null;
     }
   }
 }
