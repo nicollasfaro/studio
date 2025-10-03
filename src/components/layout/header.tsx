@@ -16,7 +16,6 @@ import {
   Shield,
 } from 'lucide-react';
 import { signOut } from 'firebase/auth';
-import { doc } from 'firebase/firestore';
 
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
@@ -31,9 +30,9 @@ import {
 import { Logo } from '@/components/logo';
 import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
-import { useUser, useAuth, useFirestore, useDoc, useMemoFirebase } from '@/firebase';
+import { useUser, useAuth } from '@/firebase';
 import { useToast } from '@/hooks/use-toast';
-import type { User as AppUser } from '@/lib/types';
+import { useUserData } from '@/hooks/use-user-data';
 
 
 const navLinks = [
@@ -45,18 +44,11 @@ const navLinks = [
 
 export function Header() {
   const pathname = usePathname();
-  const { user, isUserLoading } = useUser();
+  const { user } = useUser();
   const auth = useAuth();
-  const firestore = useFirestore();
   const router = useRouter();
   const { toast } = useToast();
-
-  const userDocRef = useMemoFirebase(() => {
-    if (!user) return null;
-    return doc(firestore, 'users', user.uid);
-  }, [user, firestore]);
-
-  const { data: userData, isLoading: isUserDataLoading } = useDoc<AppUser>(userDocRef);
+  const { userData, isLoading: isUserDataLoading } = useUserData();
   const isAdmin = userData?.isAdmin ?? false;
 
 
@@ -77,7 +69,7 @@ export function Header() {
     }
   };
 
-  const isLoading = isUserLoading || isUserDataLoading;
+  const isLoading = isUserDataLoading;
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-primary/20 bg-primary shadow-sm">

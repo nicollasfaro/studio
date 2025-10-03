@@ -3,34 +3,22 @@
 
 import React from 'react';
 import { useRouter } from 'next/navigation';
-import { useUser, useFirestore, useDoc, useMemoFirebase } from '@/firebase';
-import { doc } from 'firebase/firestore';
-import type { User as AppUser } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SidebarProvider, Sidebar, SidebarTrigger, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarContent, SidebarHeader, SidebarInset } from '@/components/ui/sidebar';
 import { Logo } from '@/components/logo';
 import { LayoutDashboard, Users, Calendar, Scissors, Gift } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useUserData } from '@/hooks/use-user-data';
 
 export default function AdminLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const { user, isUserLoading } = useUser();
-  const firestore = useFirestore();
   const router = useRouter();
-
-  const userDocRef = useMemoFirebase(() => {
-    if (!user) return null;
-    return doc(firestore, 'users', user.uid);
-  }, [user, firestore]);
-
-  const { data: userData, isLoading: isUserDataLoading } = useDoc<AppUser>(userDocRef);
+  const { userData, isLoading } = useUserData();
 
   const isAdmin = userData?.isAdmin ?? false;
-  const isLoading = isUserLoading || (user && isUserDataLoading);
-  console.log(isAdmin);
 
   if (isLoading) {
     return (
