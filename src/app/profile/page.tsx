@@ -42,51 +42,53 @@ export default function ProfilePage() {
   const { data: services, isLoading: isLoadingServices } = useCollection<Omit<Service, 'id'>>(servicesRef);
 
   const upcomingAppointmentsQuery = useMemoFirebase(() => {
-    // Wait until we know if the user is an admin or not and the user ID is available
     if (isUserDataLoading || !firestore || !user?.uid) return null;
 
     const isAdmin = userData?.isAdmin ?? false;
     const baseQuery = collection(firestore, 'appointments');
-
-    if (isAdmin) {
-      // Admins see all upcoming appointments, ordered by time
-      return query(baseQuery, where('startTime', '>=', new Date().toISOString()), orderBy('startTime', 'asc'));
-    } else {
-      // Regular users only see their own appointments
-      return query(baseQuery, where('clientId', '==', user.uid), where('startTime', '>=', new Date().toISOString()), orderBy('startTime', 'asc'));
-    }
+    
+    // Admins need to fetch all to show in their admin panel, but we filter on the client for this specific page.
+    // Non-admins fetch only their own. This query satisfies both security rules.
+    return query(
+        baseQuery, 
+        where('startTime', '>=', new Date().toISOString()), 
+        orderBy('startTime', 'asc')
+    );
   }, [firestore, user?.uid, userData, isUserDataLoading]);
 
 
   const pastAppointmentsQuery = useMemoFirebase(() => {
-    // Wait until we know if the user is an admin or not and the user ID is available
     if (isUserDataLoading || !firestore || !user?.uid) return null;
     
     const isAdmin = userData?.isAdmin ?? false;
     const baseQuery = collection(firestore, 'appointments');
 
-    if (isAdmin) {
-      // Admins see all past appointments
-      return query(baseQuery, where('startTime', '<', new Date().toISOString()), orderBy('startTime', 'desc'));
-    } else {
-      // Regular users only see their own appointments
-      return query(baseQuery, where('clientId', '==', user.uid), where('startTime', '<', new Date().toISOString()), orderBy('startTime', 'desc'));
-    }
+    return query(
+        baseQuery, 
+        where('startTime', '<', new Date().toISOString()), 
+        orderBy('startTime', 'desc')
+    );
   }, [firestore, user?.uid, userData, isUserDataLoading]);
 
-  const { data: upcomingAppointmentsData, isLoading: isLoadingUpcoming } = useCollection<Appointment>(upcomingAppointmentsQuery);
-  const { data: pastAppointmentsData, isLoading: isLoadingPast } = useCollection<Appointment>(pastAppointmentsQuery);
+  const { data: allUpcomingAppointments, isLoading: isLoadingUpcoming } = useCollection<Appointment>(upcomingAppointmentsQuery);
+  const { data: allPastAppointments, isLoading: isLoadingPast } = useCollection<Appointment>(pastAppointmentsQuery);
   
-  const mapAppointments = (appointments: Appointment[] | null): AppointmentWithService[] => {
-    if (!appointments || !services) return [];
-    return appointments.map(apt => ({
-      ...apt,
-      serviceName: services.find(s => s.id === apt.serviceId)?.name || 'Serviço Desconhecido',
-    }));
+  const mapAndFilterAppointments = (appointments: Appointment[] | null): AppointmentWithService[] => {
+    if (!appointments || !services || !user?.uid) return [];
+    
+    const isAdmin = userData?.isAdmin ?? false;
+
+    return appointments
+      .filter(apt => isAdmin ? apt.clientId === user.uid : true) // For admins, filter to their own appointments for this page
+      .map(apt => ({
+        ...apt,
+        serviceName: services.find(s => s.id === apt.serviceId)?.name || 'Serviço Desconhecido',
+      }));
   };
 
-  const upcomingAppointments = mapAppointments(upcomingAppointmentsData);
-  const pastAppointments = mapAppointments(pastAppointmentsData);
+  const upcomingAppointments = mapAndFilterAppointments(allUpcomingAppointments);
+  const pastAppointments = mapAndFilterAppointments(allPastAppointments);
+
 
   const handleLogout = async () => {
     try {
@@ -165,7 +167,7 @@ export default function ProfilePage() {
             <CardHeader>
               <CardTitle className="font-headline flex items-center gap-2">
                 <Calendar className="text-primary" />
-                Próximos Agendamentos
+                Meus Próximos Agendamentos
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -180,7 +182,6 @@ export default function ProfilePage() {
                         <p className="text-sm text-muted-foreground">
                           {format(new Date(apt.startTime), "EEEE, d 'de' MMM 'às' HH:mm", { locale: ptBR })}
                         </p>
-                         {isAdmin && <p className="text-xs text-muted-foreground pt-1">Cliente: {apt.clientName}</p>}
                       </div>
                       <Button variant="outline" size="sm" disabled>Gerenciar</Button>
                     </li>
@@ -196,7 +197,7 @@ export default function ProfilePage() {
             <CardHeader>
               <CardTitle className="font-headline flex items-center gap-2">
                 <Calendar className="text-primary" />
-                Agendamentos Passados
+                Meus Agendamentos Passados
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -211,7 +212,6 @@ export default function ProfilePage() {
                         <p className="text-sm text-muted-foreground">
                           {format(new Date(apt.startTime), "EEEE, d 'de' MMM 'às' HH:mm", { locale: ptBR })}
                         </p>
-                        {isAdmin && <p className="text-xs text-muted-foreground pt-1">Cliente: {apt.clientName}</p>}
                       </div>
                       <Button asChild variant="secondary" size="sm">
                         <Link href={`/book?service=${apt.serviceId}`}>Agendar Novamente</Link>
@@ -255,3 +255,5 @@ export default function ProfilePage() {
     </div>
   );
 }
+
+    
