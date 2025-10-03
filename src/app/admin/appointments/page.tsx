@@ -42,11 +42,11 @@ export default function AdminAppointmentsPage() {
   const { toast } = useToast();
 
   const appointmentsQuery = useMemoFirebase(
-    () => firestore ? query(collectionGroup(firestore, 'appointments'), orderBy('startTime', 'desc')) : null,
+    () => (firestore ? query(collectionGroup(firestore, 'appointments'), orderBy('startTime', 'desc')) : null),
     [firestore]
   );
   
-  const servicesRef = useMemoFirebase(() => firestore ? collection(firestore, 'services') : null, [firestore]);
+  const servicesRef = useMemoFirebase(() => (firestore ? collection(firestore, 'services') : null), [firestore]);
 
   const { data: appointments, isLoading: isLoadingAppointments } = useCollection<Appointment>(appointmentsQuery);
   const { data: services, isLoading: isLoadingServices } = useCollection<Omit<Service, 'id'>>(servicesRef);
@@ -60,10 +60,7 @@ export default function AdminAppointmentsPage() {
   };
 
   const handleStatusChange = async (appointment: Appointment, newStatus: 'confirmed' | 'cancelled') => {
-    // The path to the document is users/{userId}/appointments/{appointmentId}
-    // and we can get it from the document snapshot's ref path.
-    // However, our useCollection hook doesn't expose the ref. We need the client ID (user ID) to build the path.
-    if (!firestore) return;
+    if (!firestore || !appointment.clientId || !appointment.id) return;
     const appointmentRef = doc(firestore, 'users', appointment.clientId, 'appointments', appointment.id);
     try {
       await updateDoc(appointmentRef, { status: newStatus });
