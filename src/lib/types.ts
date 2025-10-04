@@ -25,7 +25,7 @@ export type Appointment = {
   serviceId: string;
   startTime: string;
   endTime: string;
-  status: 'scheduled' | 'confirmed' | 'cancelled' | 'completed';
+  status: 'Marcado' | 'confirmado' | 'cancelado' | 'finalizado';
   clientName: string;
   clientEmail: string;
 };

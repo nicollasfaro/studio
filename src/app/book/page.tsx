@@ -100,7 +100,7 @@ export default function BookAppointmentPage() {
         serviceId: selectedService,
         startTime: startTime.toISOString(),
         endTime: endTime.toISOString(),
-        status: 'scheduled',
+        status: 'Marcado',
         clientName: name,
         clientEmail: email
     });

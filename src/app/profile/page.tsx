@@ -101,13 +101,13 @@ export default function ProfilePage() {
   
   const getBadgeVariant = (status: Appointment['status']) => {
     switch (status) {
-      case 'scheduled':
+      case 'Marcado':
         return 'secondary';
-      case 'confirmed':
+      case 'confirmado':
         return 'default';
-      case 'completed':
+      case 'finalizado':
         return 'outline';
-      case 'cancelled':
+      case 'cancelado':
         return 'destructive';
       default:
         return 'secondary';

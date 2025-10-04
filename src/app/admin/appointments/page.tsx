@@ -52,25 +52,25 @@ function AppointmentsTable({ services }: AppointmentsTableProps) {
     return service || { name: 'Serviço não encontrado', price: 0 };
   };
 
-  const handleStatusChange = (appointment: Appointment, newStatus: 'confirmed' | 'cancelled') => {
+  const handleStatusChange = (appointment: Appointment, newStatus: 'confirmado' | 'cancelado') => {
     if (!firestore || !appointment.id) return;
     const appointmentRef = doc(firestore, 'appointments', appointment.id);
     updateDocumentNonBlocking(appointmentRef, { status: newStatus });
     toast({
       title: 'Status do Agendamento Atualizado!',
-      description: `O agendamento foi marcado como ${newStatus === 'confirmed' ? 'confirmado' : 'cancelado'}.`,
+      description: `O agendamento foi marcado como ${newStatus === 'confirmado' ? 'confirmado' : 'cancelado'}.`,
     });
   };
   
   const getBadgeVariant = (status: Appointment['status']) => {
     switch (status) {
-      case 'scheduled':
+      case 'Marcado':
         return 'secondary';
-      case 'confirmed':
+      case 'confirmado':
         return 'default';
-      case 'completed':
+      case 'finalizado':
         return 'outline';
-      case 'cancelled':
+      case 'cancelado':
         return 'destructive';
       default:
         return 'secondary';
@@ -120,11 +120,11 @@ function AppointmentsTable({ services }: AppointmentsTableProps) {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={() => handleStatusChange(apt, 'confirmed')} disabled={apt.status === 'confirmed'}>
+                  <DropdownMenuItem onClick={() => handleStatusChange(apt, 'confirmado')} disabled={apt.status === 'confirmado'}>
                     <CheckCircle className="mr-2 h-4 w-4 text-green-500" />
                     Confirmar
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleStatusChange(apt, 'cancelled')} disabled={apt.status === 'cancelled'}>
+                  <DropdownMenuItem onClick={() => handleStatusChange(apt, 'cancelado')} disabled={apt.status === 'cancelado'}>
                     <XCircle className="mr-2 h-4 w-4 text-red-500" />
                     Cancelar
                   </DropdownMenuItem>
