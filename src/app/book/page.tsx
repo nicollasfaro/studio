@@ -106,8 +106,8 @@ export default function BookAppointmentPage() {
     });
 
     toast({
-      title: 'Agendamento Confirmado!',
-      description: `Estamos ansiosos para vê-lo em ${format(date, 'PPP', { locale: ptBR })} às ${selectedTime}.`,
+      title: 'Agendamento Solicitado!',
+      description: `Estamos ansiosos para vê-lo em ${format(date, 'PPP', { locale: ptBR })} às ${selectedTime}. Aguarde a confirmação do Salão!`,
     });
     setStep(4);
   };
