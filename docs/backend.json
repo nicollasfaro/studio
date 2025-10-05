@@ -1,3 +1,4 @@
+
 {
   "entities": {
     "User": {
@@ -204,6 +205,27 @@
         "endTime",
         "status"
       ]
+    },
+    "ThemeSettings": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "ThemeSettings",
+      "type": "object",
+      "description": "Stores the dynamic theme settings for the application.",
+      "properties": {
+        "primary": {
+          "type": "string",
+          "description": "The primary color in HSL format (e.g., '271 76% 34%')."
+        },
+        "secondary": {
+          "type": "string",
+          "description": "The secondary color in HSL format (e.g., '271 50% 80%')."
+        },
+        "accent": {
+          "type": "string",
+          "description": "The accent color in HSL format (e.g., '330 100% 71%')."
+        }
+      },
+      "required": ["primary", "secondary", "accent"]
     }
   },
   "auth": {
@@ -277,8 +299,24 @@
             }
           ]
         }
+      },
+      {
+        "path": "/theme/{themeId}",
+        "definition": {
+          "entityName": "ThemeSettings",
+          "schema": {
+            "$ref": "#/backend/entities/ThemeSettings"
+          },
+          "description": "Stores dynamic theme settings. Publicly readable, admin writable.",
+          "params": [
+            {
+              "name": "themeId",
+              "description": "The unique identifier for the theme document, typically 'global'."
+            }
+          ]
+        }
       }
     ],
-    "reasoning": "The Firestore structure is designed to support Thainnes Cuba Ciuldin's core features with a focus on security, scalability, and ease of debugging. It follows the principles of Authorization Independence, Structural Segregation, and Access Modeling.  \n\n*   **Users (Private Data with Admin Override):** User data is stored in a top-level `/users/{userId}` collection. This allows users to manage their own profile information while enabling administrators to have oversight.\n*   **Services (Public Data):** Services are stored in a single collection `/services/{serviceId}`. This allows for easy listing and retrieval of all available services.\n*   **Promotions (Public Data with Service References):** Promotions are stored in a single collection `/promotions/{promotionId}`.  Each promotion document contains an array `serviceIds` referencing the services to which the promotion applies.  This allows for easy listing and retrieval of all promotions.\n*   **Appointments (Centralized with Ownership):** Appointments are stored in a single, top-level `/appointments/{appointmentId}` collection. This simplifies queries for administrators who need to view all appointments. Each appointment document contains a `clientId` field to link it to the user who created it, ensuring data ownership can still be enforced in security rules. This is more efficient for admin-level queries than nesting appointments under each user.\n\n**Authorization Independence:**\n\n*   Authorization Independence is achieved by avoiding `get()` calls in the security rules where possible. Client data is secured via path-based rules under `/users/{userId}`. Admin access is handled by checking a flag on the user's own document.\n\n**QAPs (Rules are not Filters):**\n\n*   The structure enables secure `list` operations by segregating data based on access requirements. Public data (services, promotions) resides in dedicated collections. The centralized `/appointments` collection allows admins to `list` all documents, while individual user queries are filtered by `where('clientId', '==', uid)` on the client-side, which is then enforced by security rules."
+    "reasoning": "The Firestore structure is designed to support Thainnes Cuba Ciuldin's core features with a focus on security, scalability, and ease of debugging. It follows the principles of Authorization Independence, Structural Segregation, and Access Modeling.  \n\n*   **Users (Private Data with Admin Override):** User data is stored in a top-level `/users/{userId}` collection. This allows users to manage their own profile information while enabling administrators to have oversight.\n*   **Services (Public Data):** Services are stored in a single collection `/services/{serviceId}`. This allows for easy listing and retrieval of all available services.\n*   **Promotions (Public Data with Service References):** Promotions are stored in a single collection `/promotions/{promotionId}`.  Each promotion document contains an array `serviceIds` referencing the services to which the promotion applies.  This allows for easy listing and retrieval of all promotions.\n*   **Appointments (Centralized with Ownership):** Appointments are stored in a single, top-level `/appointments/{appointmentId}` collection. This simplifies queries for administrators who need to view all appointments. Each appointment document contains a `clientId` field to link it to the user who created it, ensuring data ownership can still be enforced in security rules. This is more efficient for admin-level queries than nesting appointments under each user.\n*   **Theme (Public Data, Admin Writable):** Theme settings are stored in a single document `/theme/global` for easy public access, allowing the app to load visual styles dynamically for all users, while write access is restricted to administrators.\n\n**Authorization Independence:**\n\n*   Authorization Independence is achieved by avoiding `get()` calls in the security rules where possible. Client data is secured via path-based rules under `/users/{userId}`. Admin access is handled by checking a flag on the user's own document.\n\n**QAPs (Rules are not Filters):**\n\n*   The structure enables secure `list` operations by segregating data based on access requirements. Public data (services, promotions, theme) resides in dedicated collections. The centralized `/appointments` collection allows admins to `list` all documents, while individual user queries are filtered by `where('clientId', '==', uid)` on the client-side, which is then enforced by security rules."
   }
 }
