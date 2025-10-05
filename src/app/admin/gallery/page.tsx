@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, ChangeEvent } from 'react';
@@ -19,7 +18,7 @@ import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
-import { Upload, Image as ImageIcon } from 'lucide-react';
+import { Upload, Image as ImageIcon, Trash2 } from 'lucide-react';
 import type { GalleryImage } from '@/lib/types';
 
 export default function AdminGalleryPage() {
@@ -40,6 +39,14 @@ export default function AdminGalleryPage() {
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
     if (selectedFile) {
+      if (selectedFile.size > 5 * 1024 * 1024) { // 5MB limit
+        toast({
+            variant: 'destructive',
+            title: 'Arquivo muito grande',
+            description: 'Por favor, selecione uma imagem com menos de 5MB.',
+        });
+        return;
+      }
       setFile(selectedFile);
       const reader = new FileReader();
       reader.onloadend = () => {
@@ -49,6 +56,19 @@ export default function AdminGalleryPage() {
     }
   };
 
+  const resetForm = () => {
+    setFile(null);
+    setDescription('');
+    setPreviewUrl(null);
+    setUploadProgress(null);
+    setIsUploading(false);
+    // Reset the file input visually
+    const fileInput = document.getElementById('picture') as HTMLInputElement;
+    if (fileInput) {
+        fileInput.value = '';
+    }
+  }
+
   const handleUpload = () => {
     if (!file || !description.trim()) {
       toast({
@@ -57,6 +77,14 @@ export default function AdminGalleryPage() {
         description: 'Por favor, selecione um arquivo e forneça uma descrição.',
       });
       return;
+    }
+    if (!galleryImagesRef) {
+        toast({
+            variant: 'destructive',
+            title: 'Erro de Conexão',
+            description: 'Não foi possível conectar ao banco de dados. Tente novamente.',
+        });
+        return;
     }
 
     setIsUploading(true);
@@ -77,41 +105,43 @@ export default function AdminGalleryPage() {
         toast({
           variant: 'destructive',
           title: 'Erro no Upload',
-          description: 'Não foi possível enviar a imagem. Verifique as permissões de armazenamento (CORS) e tente novamente.',
+          description: `Ocorreu um erro: ${error.code}. Verifique as regras de armazenamento e a conexão.`,
         });
-        setIsUploading(false);
-        setUploadProgress(null);
+        resetForm();
       },
-      async () => {
-        try {
-          const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-          if (galleryImagesRef) {
+      () => {
+        // Upload completed successfully, now get the download URL
+        getDownloadURL(uploadTask.snapshot.ref).then(downloadURL => {
+            // Save metadata to Firestore
             addDocumentNonBlocking(galleryImagesRef, {
               imageUrl: downloadURL,
               description: description,
               fileName: fileName,
               createdAt: serverTimestamp(),
+            }).then(() => {
+                toast({
+                    title: 'Upload Concluído!',
+                    description: 'A imagem foi adicionada à sua galeria.',
+                });
+            }).catch(dbError => {
+                console.error('Erro ao salvar no Firestore:', dbError);
+                toast({
+                    variant: 'destructive',
+                    title: 'Erro ao Salvar Dados',
+                    description: 'A imagem foi enviada, mas houve um erro ao salvá-la na galeria.',
+                });
+            }).finally(() => {
+                resetForm();
             });
-          }
-
-          toast({
-            title: 'Upload Concluído!',
-            description: 'A imagem foi adicionada à sua galeria.',
-          });
-        } catch (dbError) {
-          console.error('Erro ao salvar no Firestore:', dbError);
-          toast({
-            variant: 'destructive',
-            title: 'Erro ao Salvar',
-            description: 'A imagem foi enviada, mas não foi possível salvá-la na galeria.',
-          });
-        } finally {
-          setIsUploading(false);
-          setUploadProgress(null);
-          setFile(null);
-          setDescription('');
-          setPreviewUrl(null);
-        }
+        }).catch(urlError => {
+            console.error('Erro ao obter URL de download:', urlError);
+            toast({
+                variant: 'destructive',
+                title: 'Erro Pós-Upload',
+                description: 'Não foi possível obter a URL da imagem após o upload.',
+            });
+            resetForm();
+        });
       }
     );
   };
@@ -122,7 +152,7 @@ export default function AdminGalleryPage() {
         <CardHeader>
           <CardTitle>Enviar Nova Imagem</CardTitle>
           <CardDescription>
-            Faça o upload de uma nova imagem para ser usada nos serviços e promoções.
+            Faça o upload de uma nova imagem (PNG, JPG, WEBP, até 5MB) para ser usada nos serviços e promoções.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -136,7 +166,7 @@ export default function AdminGalleryPage() {
                     <div className="flex flex-col items-center justify-center text-center p-4">
                         <ImageIcon className="w-10 h-10 mb-2 text-muted-foreground" />
                         <p className="text-sm text-muted-foreground">Clique para selecionar uma imagem</p>
-                        <p className="text-xs text-muted-foreground">PNG, JPG, WEBP</p>
+                        <p className="text-xs text-muted-foreground">PNG, JPG, WEBP (max. 5MB)</p>
                     </div>
                   )}
                     <Input id="picture" type="file" className="hidden" onChange={handleFileChange} accept="image/png, image/jpeg, image/webp" disabled={isUploading} />
@@ -165,7 +195,7 @@ export default function AdminGalleryPage() {
       <Card>
         <CardHeader>
           <CardTitle>Galeria de Imagens</CardTitle>
-          <CardDescription>Imagens disponíveis para uso no site.</CardDescription>
+          <CardDescription>Imagens disponíveis para uso no site. O upload direto no Firebase Storage não reflete aqui; use o formulário acima.</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
@@ -181,8 +211,9 @@ export default function AdminGalleryPage() {
                   sizes="(max-width: 768px) 50vw, (max-width: 1200px) 33vw, 20vw"
                   className="object-cover rounded-md"
                 />
-                 <div className="absolute inset-0 bg-black/60 flex items-end p-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                   <p className="text-white text-xs text-center">{img.description}</p>
+                 <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center p-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                   <p className="text-white text-xs text-center mb-2">{img.description}</p>
+                   {/* Adicionar botão de deletar seria um próximo passo lógico aqui */}
                  </div>
               </div>
             ))}
