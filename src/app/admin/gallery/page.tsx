@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, ChangeEvent } from 'react';
@@ -81,21 +82,21 @@ export default function AdminGalleryPage() {
       return;
     }
     if (!galleryImagesRef || !storage) {
-        toast({
-            variant: 'destructive',
-            title: 'Erro de Conexão',
-            description: 'Não foi possível conectar ao Firebase. Tente novamente.',
-        });
-        return;
+      toast({
+        variant: 'destructive',
+        title: 'Erro de Conexão',
+        description: 'Não foi possível conectar ao Firebase. Tente novamente.',
+      });
+      return;
     }
-
+  
     setIsUploading(true);
     setUploadProgress(0);
-
+  
     const fileName = `${new Date().getTime()}_${file.name}`;
     const storageRef = ref(storage, `gallery/${fileName}`);
     const uploadTask = uploadBytesResumable(storageRef, file);
-
+  
     uploadTask.on(
       'state_changed',
       (snapshot) => {
@@ -107,48 +108,50 @@ export default function AdminGalleryPage() {
         toast({
           variant: 'destructive',
           title: 'Erro no Upload',
-          description: `Ocorreu um erro: ${error.code}. Verifique as regras de armazenamento e a conexão.`,
+          description: `Ocorreu um erro: ${error.message}. Verifique as regras de armazenamento e a conexão.`,
         });
         setIsUploading(false);
+        setUploadProgress(null);
       },
       () => {
         getDownloadURL(uploadTask.snapshot.ref)
           .then(downloadURL => {
             const docData = {
               imageUrl: downloadURL,
-              description: description,
-              fileName: fileName,
+              description,
+              fileName,
               createdAt: serverTimestamp(),
             };
-            
-            // Return the promise from addDoc
             return addDoc(galleryImagesRef, docData);
           })
           .then(() => {
             toast({
-                title: 'Upload Concluído!',
-                description: 'A imagem foi adicionada à sua galeria.',
+              title: 'Upload Concluído!',
+              description: 'A imagem foi adicionada à sua galeria.',
             });
             resetForm();
           })
           .catch(err => {
-             console.error('Erro ao salvar no Firestore ou obter URL:', err);
-             toast({
-                 variant: 'destructive',
-                 title: 'Erro Pós-Upload',
-                 description: 'A imagem foi enviada, mas houve um erro ao salvá-la na galeria. Verifique o console para detalhes.',
-             });
-              const contextualError = new FirestorePermissionError({
-                path: galleryImagesRef.path,
-                operation: 'create',
-                requestResourceData: { description },
-              });
-              errorEmitter.emit('permission-error', contextualError);
-             setIsUploading(false); // Make sure to stop loading on error
+            console.error('Erro ao salvar no Firestore ou obter URL:', err);
+            toast({
+              variant: 'destructive',
+              title: 'Erro ao Salvar Dados',
+              description: `A imagem foi enviada, mas houve um erro ao salvá-la no banco de dados: ${err.message}`,
+            });
+            const contextualError = new FirestorePermissionError({
+              path: galleryImagesRef.path,
+              operation: 'create',
+              requestResourceData: { description },
+            });
+            errorEmitter.emit('permission-error', contextualError);
+          }).finally(() => {
+              setIsUploading(false);
+              setUploadProgress(null);
           });
       }
     );
   };
+  
 
   return (
     <div className="space-y-8">

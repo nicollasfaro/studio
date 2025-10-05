@@ -23,8 +23,9 @@ import { ArrowLeft, ArrowRight, PartyPopper, Loader2, Info, Upload } from 'lucid
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { format, startOfDay, endOfDay, addMinutes, parse } from 'date-fns';
-import { useCollection, useDoc, useFirestore, useUser, useMemoFirebase } from '@/firebase';
+import { useCollection, useDoc, useFirestore, useUser, useMemoFirebase, useFirebaseApp } from '@/firebase';
 import { collection, query, where, doc, addDoc, updateDoc } from 'firebase/firestore';
+import { getStorage, ref as storageRef, uploadString, getDownloadURL } from 'firebase/storage';
 import type { Service, Appointment, Promotion } from '@/lib/types';
 import { timeSlots as allTimeSlots } from '@/lib/data';
 import { ptBR } from 'date-fns/locale';
@@ -66,6 +67,8 @@ export default function BookAppointmentPage() {
   const [finalPrice, setFinalPrice] = useState<number | undefined>();
 
   const firestore = useFirestore();
+  const app = useFirebaseApp();
+  const storage = getStorage(app);
   const { user, isUserLoading } = useUser();
   const servicesCollectionRef = useMemoFirebase(() => (firestore ? collection(firestore, 'services') : null), [firestore]);
   const { data: allServices, isLoading: isLoadingServices } = useCollection<Service>(servicesCollectionRef);
@@ -222,10 +225,9 @@ export default function BookAppointmentPage() {
   };
 
 
-  const handleBooking = () => {
+  const handleBooking = async () => {
     setIsBooking(true);
     const dateStep = currentService?.isPriceFrom ? 3 : 2;
-    const finalStep = currentService?.isPriceFrom ? 4 : 3;
     
     if (!selectedServiceId || !name || !email || (step === dateStep && (!date || !selectedTime)) ) {
       toast({ title: 'Por favor, preencha todos os campos.', variant: 'destructive' });
@@ -252,57 +254,70 @@ export default function BookAppointmentPage() {
         return;
     }
 
-    const [hours, minutes] = selectedTime.split(':').map(Number);
-    const startTime = new Date(date);
-    startTime.setHours(hours, minutes, 0, 0);
-    const endTime = new Date(startTime.getTime() + serviceDetails.durationMinutes * 60000);
+    try {
+      let finalHairPhotoUrl: string | null = null;
+      if (hairPhotoDataUrl && hairPhotoDataUrl.startsWith('data:image')) {
+          const fileName = `appointments/${user.uid}_${new Date().getTime()}.jpg`;
+          const imageRef = storageRef(storage, fileName);
+          
+          // 'data_url' is the correct string format specifier for uploadString
+          const snapshot = await uploadString(imageRef, hairPhotoDataUrl, 'data_url');
+          finalHairPhotoUrl = await getDownloadURL(snapshot.ref);
+      } else {
+        finalHairPhotoUrl = hairPhotoDataUrl; // Keep existing URL if rescheduling without new photo
+      }
+      
+      const [hours, minutes] = selectedTime.split(':').map(Number);
+      const startTime = new Date(date);
+      startTime.setHours(hours, minutes, 0, 0);
+      const endTime = new Date(startTime.getTime() + serviceDetails.durationMinutes * 60000);
 
-    const appointmentData: Partial<Appointment> = {
-        clientId: user.uid,
-        serviceId: selectedServiceId,
-        startTime: startTime.toISOString(),
-        endTime: endTime.toISOString(),
-        status: 'Marcado',
-        clientName: name,
-        clientEmail: email,
-        finalPrice: finalPrice,
-        hairLength: hairLength,
-        hairPhotoUrl: hairPhotoDataUrl
-    };
+      const appointmentData: Partial<Appointment> = {
+          clientId: user.uid,
+          serviceId: selectedServiceId,
+          startTime: startTime.toISOString(),
+          endTime: endTime.toISOString(),
+          status: 'Marcado',
+          clientName: name,
+          clientEmail: email,
+          finalPrice: finalPrice,
+          hairLength: hairLength,
+          hairPhotoUrl: finalHairPhotoUrl
+      };
 
-    if (rescheduleId && appointmentToRescheduleRef) {
-        updateDoc(appointmentToRescheduleRef, appointmentData).then(() => {
+      if (rescheduleId && appointmentToRescheduleRef) {
+          await updateDoc(appointmentToRescheduleRef, appointmentData)
           toast({
             title: 'Agendamento Remarcado!',
             description: `Seu agendamento foi atualizado para ${format(date, 'PPP', { locale: ptBR })} às ${selectedTime}.`,
           });
           router.push('/profile');
-        }).catch(error => {
-          toast({ title: 'Erro ao remarcar', description: 'Não foi possível atualizar o agendamento.', variant: 'destructive' });
-          errorEmitter.emit('permission-error', new FirestorePermissionError({
-            path: appointmentToRescheduleRef.path,
-            operation: 'update',
-            requestResourceData: appointmentData,
-          }));
-        }).finally(() => setIsBooking(false));
-    } else {
-        const appointmentsRef = collection(firestore, 'appointments');
-        addDoc(appointmentsRef, appointmentData).then(() => {
-            toast({
-              title: 'Agendamento Solicitado!',
-              description: `Estamos ansiosos para vê-lo em ${format(date, 'PPP', { locale: ptBR })} às ${selectedTime}. Aguarde a confirmação do Salão!`,
-            });
-             setStep(finalStep + 1);
-        }).catch(error => {
-            toast({ title: 'Erro ao agendar', description: 'Não foi possível criar o agendamento.', variant: 'destructive' });
-            errorEmitter.emit('permission-error', new FirestorePermissionError({
-              path: appointmentsRef.path,
-              operation: 'create',
-              requestResourceData: appointmentData,
-          }));
-        }).finally(() => setIsBooking(false));
-    }
 
+      } else {
+          const appointmentsRef = collection(firestore, 'appointments');
+          await addDoc(appointmentsRef, appointmentData)
+          toast({
+            title: 'Agendamento Solicitado!',
+            description: `Estamos ansiosos para vê-lo em ${format(date, 'PPP', { locale: ptBR })} às ${selectedTime}. Aguarde a confirmação do Salão!`,
+          });
+          const successStep = totalSteps + 1;
+          setStep(successStep);
+      }
+
+    } catch (error: any) {
+        console.error("Booking Error:", error);
+        toast({ title: 'Erro ao agendar', description: error.message || 'Não foi possível salvar o agendamento.', variant: 'destructive' });
+        
+        // This is a generic error emitter, you might want to be more specific
+        // based on where the error occurred (upload vs. firestore write)
+        errorEmitter.emit('permission-error', new FirestorePermissionError({
+          path: `appointments`,
+          operation: 'create',
+          requestResourceData: { serviceId: selectedServiceId },
+        }));
+    } finally {
+        setIsBooking(false);
+    }
   };
   
   const pageTitle = rescheduleId ? 'Remarcar Agendamento' : 'Faça seu Agendamento';
@@ -405,7 +420,7 @@ export default function BookAppointmentPage() {
                             <div className="flex flex-col items-center justify-center pt-5 pb-6">
                                 <Upload className="w-10 h-10 mb-3 text-muted-foreground" />
                                 <p className="mb-2 text-sm text-muted-foreground">Clique para fazer upload</p>
-                                <p className="text-xs text-muted-foreground">PNG, JPG (MAX. 800x400px)</p>
+                                <p className="text-xs text-muted-foreground">PNG, JPG (MAX. 5MB)</p>
                             </div>
                         )}
                         <Input id="hair-photo-upload" type="file" className="hidden" onChange={handlePhotoUpload} accept="image/png, image/jpeg" />

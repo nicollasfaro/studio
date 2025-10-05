@@ -1,16 +1,18 @@
+
 rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
     // Regras para a galeria de imagens
     match /gallery/{allPaths=**} {
-      // Qualquer pessoa pode ler as imagens (necessário para exibi-las no site).
       allow read;
-
-      // Apenas usuários autenticados podem escrever (fazer upload).
-      // A segurança de "apenas administradores" é feita na própria página de upload,
-      // que só é acessível por administradores.
       allow write: if request.auth != null;
+    }
+    
+    // Regras para as fotos de referência de agendamentos
+    match /appointments/{userId}/{allPaths=**} {
+        allow read; // Manter público se necessário, ou restringir a `if request.auth.uid == userId`
+        allow write: if request.auth.uid == userId;
     }
   }
 }
