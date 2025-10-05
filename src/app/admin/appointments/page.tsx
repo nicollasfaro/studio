@@ -1,6 +1,7 @@
 
 'use client';
 
+import { useMemo, useState } from 'react';
 import {
   Card,
   CardHeader,
@@ -21,6 +22,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -34,31 +36,26 @@ import { ptBR } from 'date-fns/locale';
 
 interface AppointmentsTableProps {
   services: (Omit<Service, 'id'> & { id: string })[];
+  appointments: Appointment[];
+  isLoading: boolean;
 }
 
-function AppointmentsTable({ services }: AppointmentsTableProps) {
+function AppointmentsTable({ services, appointments, isLoading }: AppointmentsTableProps) {
   const firestore = useFirestore();
   const { toast } = useToast();
-
-  const appointmentsQuery = useMemoFirebase(
-    () => (firestore ? query(collection(firestore, 'appointments'), orderBy('startTime', 'desc')) : null),
-    [firestore]
-  );
-  
-  const { data: appointments, isLoading: isLoadingAppointments } = useCollection<Appointment>(appointmentsQuery);
 
   const getServiceDetails = (serviceId: string) => {
     const service = services.find(s => s.id === serviceId);
     return service || { name: 'Serviço não encontrado', price: 0 };
   };
 
-  const handleStatusChange = (appointment: Appointment, newStatus: 'confirmado' | 'cancelado') => {
+  const handleStatusChange = (appointment: Appointment, newStatus: 'confirmado' | 'cancelado' | 'finalizado') => {
     if (!firestore || !appointment.id) return;
     const appointmentRef = doc(firestore, 'appointments', appointment.id);
     updateDocumentNonBlocking(appointmentRef, { status: newStatus });
     toast({
       title: 'Status do Agendamento Atualizado!',
-      description: `O agendamento foi marcado como ${newStatus === 'confirmado' ? 'confirmado' : 'cancelado'}.`,
+      description: `O agendamento foi marcado como ${newStatus}.`,
     });
   };
   
@@ -89,7 +86,7 @@ function AppointmentsTable({ services }: AppointmentsTableProps) {
         </TableRow>
       </TableHeader>
       <TableBody>
-        {isLoadingAppointments &&
+        {isLoading &&
           Array.from({ length: 5 }).map((_, i) => (
             <TableRow key={i}>
               <TableCell><Skeleton className="h-4 w-[150px]" /></TableCell>
@@ -99,7 +96,14 @@ function AppointmentsTable({ services }: AppointmentsTableProps) {
               <TableCell className="text-right"><Skeleton className="h-8 w-8 ml-auto" /></TableCell>
             </TableRow>
           ))}
-        {appointments?.map((apt) => (
+        {!isLoading && appointments.length === 0 && (
+            <TableRow>
+                <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
+                    Nenhum agendamento encontrado para este filtro.
+                </TableCell>
+            </TableRow>
+        )}
+        {!isLoading && appointments?.map((apt) => (
           <TableRow key={apt.id}>
             <TableCell>
               <div className="font-medium">{apt.clientName}</div>
@@ -120,11 +124,15 @@ function AppointmentsTable({ services }: AppointmentsTableProps) {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={() => handleStatusChange(apt, 'confirmado')} disabled={apt.status === 'confirmado'}>
+                  <DropdownMenuItem onClick={() => handleStatusChange(apt, 'confirmado')} disabled={apt.status === 'confirmado' || apt.status === 'finalizado' || apt.status === 'cancelado'}>
                     <CheckCircle className="mr-2 h-4 w-4 text-green-500" />
                     Confirmar
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleStatusChange(apt, 'cancelado')} disabled={apt.status === 'cancelado'}>
+                   <DropdownMenuItem onClick={() => handleStatusChange(apt, 'finalizado')} disabled={apt.status === 'finalizado' || apt.status === 'cancelado'}>
+                    <CheckCircle className="mr-2 h-4 w-4 text-blue-500" />
+                    Finalizar
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleStatusChange(apt, 'cancelado')} disabled={apt.status === 'cancelado' || apt.status === 'finalizado'}>
                     <XCircle className="mr-2 h-4 w-4 text-red-500" />
                     Cancelar
                   </DropdownMenuItem>
@@ -140,13 +148,45 @@ function AppointmentsTable({ services }: AppointmentsTableProps) {
 
 export default function AdminAppointmentsPage() {
   const firestore = useFirestore();
+  const [filter, setFilter] = useState('upcoming');
+  
   const servicesRef = useMemoFirebase(() => (firestore ? collection(firestore, 'services') : null), [firestore]);
   const { data: services, isLoading: isLoadingServices } = useCollection<Service>(servicesRef);
 
+  const appointmentsQuery = useMemoFirebase(
+    () => (firestore ? query(collection(firestore, 'appointments'), orderBy('startTime', 'desc')) : null),
+    [firestore]
+  );
+  
+  const { data: allAppointments, isLoading: isLoadingAppointments } = useCollection<Appointment>(appointmentsQuery);
+  
+  const filteredAppointments = useMemo(() => {
+    if (!allAppointments) return [];
+    const now = new Date();
+    switch (filter) {
+        case 'upcoming':
+            return allAppointments.filter(apt => new Date(apt.startTime) >= now && (apt.status === 'Marcado' || apt.status === 'confirmado'));
+        case 'history':
+            return allAppointments.filter(apt => new Date(apt.startTime) < now || apt.status === 'finalizado' || apt.status === 'cancelado');
+        case 'all':
+        default:
+            return allAppointments;
+    }
+  }, [allAppointments, filter]);
+
+  const isLoading = isLoadingServices || isLoadingAppointments;
+
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="flex-row items-center justify-between">
         <CardTitle>Gerenciamento de Agendamentos</CardTitle>
+        <Tabs defaultValue={filter} onValueChange={setFilter} className="w-auto">
+          <TabsList>
+            <TabsTrigger value="upcoming">Próximos</TabsTrigger>
+            <TabsTrigger value="history">Histórico</TabsTrigger>
+            <TabsTrigger value="all">Todos</TabsTrigger>
+          </TabsList>
+        </Tabs>
       </CardHeader>
       <CardContent>
         {isLoadingServices ? (
@@ -156,7 +196,7 @@ export default function AdminAppointmentsPage() {
             <Skeleton className="h-20 w-full" />
           </div>
         ) : services ? (
-          <AppointmentsTable services={services} />
+          <AppointmentsTable services={services} appointments={filteredAppointments} isLoading={isLoadingAppointments} />
         ) : (
            <p className="py-8 text-center text-muted-foreground">
             Não foi possível carregar os serviços necessários.
@@ -166,3 +206,4 @@ export default function AdminAppointmentsPage() {
     </Card>
   );
 }
+
