@@ -1,13 +1,12 @@
 
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestore, useDoc, useMemoFirebase, setDocumentNonBlocking } from '@/firebase';
@@ -26,6 +25,52 @@ const themeSchema = z.object({
 });
 
 type ThemeFormValues = z.infer<typeof themeSchema>;
+
+// --- Funções de Conversão de Cor ---
+function hslToHex(h: number, s: number, l: number): string {
+  l /= 100;
+  const a = (s * Math.min(l, 1 - l)) / 100;
+  const f = (n: number) => {
+    const k = (n + h / 30) % 12;
+    const color = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
+    return Math.round(255 * color)
+      .toString(16)
+      .padStart(2, '0'); // convert to Hex and prefix "0" if needed
+  };
+  return `#${f(0)}${f(8)}${f(4)}`;
+}
+
+function hexToHsl(hex: string): string {
+  let r = 0, g = 0, b = 0;
+  if (hex.length == 4) {
+    r = parseInt(hex[1] + hex[1], 16);
+    g = parseInt(hex[2] + hex[2], 16);
+    b = parseInt(hex[3] + hex[3], 16);
+  } else if (hex.length == 7) {
+    r = parseInt(hex.substring(1, 3), 16);
+    g = parseInt(hex.substring(3, 5), 16);
+    b = parseInt(hex.substring(5, 7), 16);
+  }
+  r /= 255;
+  g /= 255;
+  b /= 255;
+  const cmin = Math.min(r, g, b),
+    cmax = Math.max(r, g, b),
+    delta = cmax - cmin;
+  let h = 0, s = 0, l = 0;
+  if (delta == 0) h = 0;
+  else if (cmax == r) h = ((g - b) / delta) % 6;
+  else if (cmax == g) h = (b - r) / delta + 2;
+  else h = (r - g) / delta + 4;
+  h = Math.round(h * 60);
+  if (h < 0) h += 360;
+  l = (cmax + cmin) / 2;
+  s = delta == 0 ? 0 : delta / (1 - Math.abs(2 * l - 1));
+  s = +(s * 100).toFixed(0);
+  l = +(l * 100).toFixed(0);
+  return `${h} ${s}% ${l}%`;
+}
+
 
 export default function AdminThemePage() {
   const { toast } = useToast();
@@ -53,7 +98,7 @@ export default function AdminThemePage() {
     if (!themeDocRef) return;
 
     try {
-      await setDocumentNonBlocking(themeDocRef, values, { merge: false });
+      setDocumentNonBlocking(themeDocRef, values, { merge: false });
       toast({
         title: 'Tema Atualizado!',
         description: 'O novo tema foi salvo e será aplicado em todo o site.',
@@ -71,7 +116,11 @@ export default function AdminThemePage() {
 
   const ColorPickerField = ({ name, label }: { name: keyof ThemeFormValues, label: string }) => {
     const value = form.watch(name);
-    // This is a simple text input for HSL values, not a fancy color picker.
+    const colorInputRef = useRef<HTMLInputElement>(null);
+
+    const [h, s, l] = value.split(' ').map(v => parseInt(v.replace('%', '')));
+    const hexValue = hslToHex(h,s,l);
+
     return (
       <FormField
         control={form.control}
@@ -80,13 +129,21 @@ export default function AdminThemePage() {
           <FormItem>
             <FormLabel>{label}</FormLabel>
             <div className="flex items-center gap-4">
-              <FormControl>
-                <Input placeholder="H S L (ex: 240 10% 50%)" {...field} />
-              </FormControl>
-              <div
-                className="h-10 w-10 rounded-md border"
+               <div
+                className="h-10 w-10 rounded-md border cursor-pointer"
                 style={{ backgroundColor: `hsl(${value})` }}
+                onClick={() => colorInputRef.current?.click()}
               />
+              <FormControl>
+                <input
+                    type="color"
+                    value={hexValue}
+                    onChange={(e) => field.onChange(hexToHsl(e.target.value))}
+                    ref={colorInputRef}
+                    className="absolute opacity-0 w-0 h-0"
+                 />
+              </FormControl>
+               <span className="text-sm text-muted-foreground font-mono">{`hsl(${value})`}</span>
             </div>
             <FormMessage />
           </FormItem>
