@@ -232,7 +232,7 @@ export default function ProfilePage() {
                              <DropdownMenuItem asChild>
                                <Link href={`/book?service=${apt.serviceId}`}>
                                 <Repeat className="mr-2 h-4 w-4" />
-                                Remarcar
+                                Agendar Novamente
                                </Link>
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => setAppointmentToCancel(apt)} className="text-destructive focus:text-destructive">
