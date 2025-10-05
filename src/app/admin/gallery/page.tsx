@@ -25,8 +25,8 @@ import type { GalleryImage } from '@/lib/types';
 export default function AdminGalleryPage() {
   const { toast } = useToast();
   const firestore = useFirestore();
-  const app = useFirebaseApp(); // Obtenha a instância do app Firebase
-  const storage = getStorage(app); // Passe a instância do app para o getStorage
+  const app = useFirebaseApp(); 
+  const storage = getStorage(app); 
 
   const [file, setFile] = useState<File | null>(null);
   const [description, setDescription] = useState('');
@@ -77,7 +77,7 @@ export default function AdminGalleryPage() {
         toast({
           variant: 'destructive',
           title: 'Erro no Upload',
-          description: 'Não foi possível enviar a imagem. Tente novamente.',
+          description: 'Não foi possível enviar a imagem. Verifique as permissões de armazenamento (CORS) e tente novamente.',
         });
         setIsUploading(false);
         setUploadProgress(null);
@@ -139,7 +139,7 @@ export default function AdminGalleryPage() {
                         <p className="text-xs text-muted-foreground">PNG, JPG, WEBP</p>
                     </div>
                   )}
-                    <Input id="picture" type="file" className="hidden" onChange={handleFileChange} accept="image/*" disabled={isUploading} />
+                    <Input id="picture" type="file" className="hidden" onChange={handleFileChange} accept="image/png, image/jpeg, image/webp" disabled={isUploading} />
                 </div>
               </div>
             </Label>
