@@ -23,6 +23,9 @@ const themeSchema = z.object({
   secondary: hslColorSchema,
   accent: hslColorSchema,
   background: hslColorSchema,
+  foreground: hslColorSchema,
+  card: hslColorSchema,
+  cardForeground: hslColorSchema,
 });
 
 type ThemeFormValues = z.infer<typeof themeSchema>;
@@ -87,6 +90,9 @@ export default function AdminThemePage() {
       secondary: '271 50% 80%',
       accent: '330 100% 71%',
       background: '240 67% 94%',
+      foreground: '271 25% 15%',
+      card: '0 0% 100%',
+      cardForeground: '271 25% 15%',
     },
   });
 
@@ -164,6 +170,9 @@ export default function AdminThemePage() {
                 <Skeleton className="h-12 w-full" />
                 <Skeleton className="h-12 w-full" />
                 <Skeleton className="h-12 w-full" />
+                <Skeleton className="h-12 w-full" />
+                <Skeleton className="h-12 w-full" />
+                <Skeleton className="h-12 w-full" />
             </CardContent>
             <CardFooter>
                  <Skeleton className="h-10 w-24" />
@@ -179,11 +188,14 @@ export default function AdminThemePage() {
       </CardHeader>
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)}>
-          <CardContent className="space-y-8">
+          <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-8">
             <ColorPickerField name="primary" label="Cor Primária" />
             <ColorPickerField name="secondary" label="Cor Secundária" />
             <ColorPickerField name="accent" label="Cor de Destaque (Accent)" />
-            <ColorPickerField name="background" label="Cor de Fundo" />
+            <ColorPickerField name="background" label="Cor de Fundo (Geral)" />
+            <ColorPickerField name="foreground" label="Cor do Texto (Geral)" />
+            <ColorPickerField name="card" label="Cor de Fundo (Cards)" />
+            <ColorPickerField name="cardForeground" label="Cor do Texto (Cards)" />
           </CardContent>
           <CardFooter>
             <Button type="submit" disabled={form.formState.isSubmitting}>

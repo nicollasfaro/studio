@@ -14,11 +14,14 @@ body {
     --secondary-hsl: 271 50% 80%;
     --accent-hsl: 330 100% 71%;
     --background-hsl: 240 67% 94%;
+    --foreground-hsl: 271 25% 15%;
+    --card-hsl: 0 0% 100%;
+    --card-foreground-hsl: 271 25% 15%;
 
     --background: var(--background-hsl);
-    --foreground: 271 25% 15%;
-    --card: 0 0% 100%;
-    --card-foreground: 271 25% 15%;
+    --foreground: var(--foreground-hsl);
+    --card: var(--card-hsl);
+    --card-foreground: var(--card-foreground-hsl);
     --popover: 0 0% 100%;
     --popover-foreground: 271 25% 15%;
     --primary: var(--primary-hsl);
@@ -54,11 +57,14 @@ body {
     --secondary-hsl: 271 30% 25%;
     --accent-hsl: 330 100% 71%;
     --background-hsl: 271 30% 10%;
+    --foreground-hsl: 240 20% 90%;
+    --card-hsl: 271 30% 15%;
+    --card-foreground-hsl: 240 20% 90%;
 
     --background: var(--background-hsl);
-    --foreground: 240 20% 90%;
-    --card: 271 30% 15%;
-    --card-foreground: 240 20% 90%;
+    --foreground: var(--foreground-hsl);
+    --card: var(--card-hsl);
+    --card-foreground: var(--card-foreground-hsl);
     --popover: 271 30% 15%;
     --popover-foreground: 240 20% 90%;
     --primary: var(--primary-hsl);

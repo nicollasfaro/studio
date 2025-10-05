@@ -227,9 +227,21 @@
         "background": {
           "type": "string",
           "description": "The background color in HSL format (e.g., '240 67% 94%')."
+        },
+        "foreground": {
+          "type": "string",
+          "description": "The foreground color (main text) in HSL format."
+        },
+        "card": {
+          "type": "string",
+          "description": "The card background color in HSL format."
+        },
+        "cardForeground": {
+          "type": "string",
+          "description": "The card foreground color (text) in HSL format."
         }
       },
-      "required": ["primary", "secondary", "accent", "background"]
+      "required": ["primary", "secondary", "accent", "background", "foreground", "card", "cardForeground"]
     }
   },
   "auth": {

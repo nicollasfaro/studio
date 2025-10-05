@@ -10,6 +10,9 @@ interface ThemeSettings {
   secondary: string;
   accent: string;
   background: string;
+  foreground: string;
+  card: string;
+  cardForeground: string;
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
@@ -33,6 +36,9 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       root.style.setProperty('--secondary-hsl', themeData.secondary);
       root.style.setProperty('--accent-hsl', themeData.accent);
       root.style.setProperty('--background-hsl', themeData.background);
+      root.style.setProperty('--foreground-hsl', themeData.foreground);
+      root.style.setProperty('--card-hsl', themeData.card);
+      root.style.setProperty('--card-foreground-hsl', themeData.cardForeground);
     }
   }, [themeData]); // Re-run this effect only when themeData changes.
 
