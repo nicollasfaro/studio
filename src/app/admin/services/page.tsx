@@ -48,8 +48,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { useCollection, useFirestore, useMemoFirebase, addDocumentNonBlocking, deleteDocumentNonBlocking, setDocumentNonBlocking } from '@/firebase';
 import { collection, doc } from 'firebase/firestore';
-import type { Service } from '@/lib/types';
-import { PlaceHolderImages } from '@/lib/placeholder-images';
+import type { Service, GalleryImage } from '@/lib/types';
 import { PlusCircle, Edit, Trash2 } from 'lucide-react';
 import {
   Select,
@@ -90,7 +89,11 @@ export default function AdminServicesPage() {
   const [showDeleteAlert, setShowDeleteAlert] = useState<Service | null>(null);
 
   const servicesRef = useMemoFirebase(() => (firestore ? collection(firestore, 'services') : null), [firestore]);
-  const { data: services, isLoading } = useCollection<Service>(servicesRef);
+  const { data: services, isLoading: isLoadingServices } = useCollection<Service>(servicesRef);
+  
+  const galleryImagesRef = useMemoFirebase(() => (firestore ? collection(firestore, 'galleryImages') : null), [firestore]);
+  const { data: galleryImages, isLoading: isLoadingGallery } = useCollection<GalleryImage>(galleryImagesRef);
+
 
   const form = useForm<ServiceFormValues>({
     resolver: zodResolver(serviceSchema),
@@ -184,6 +187,8 @@ export default function AdminServicesPage() {
       });
   }
 
+  const isLoading = isLoadingServices || isLoadingGallery;
+
   return (
     <div className="grid gap-8 md:grid-cols-3">
       <div className="md:col-span-1">
@@ -226,14 +231,14 @@ export default function AdminServicesPage() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Imagem do Serviço</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
+                      <Select onValueChange={field.onChange} value={field.value} disabled={isLoadingGallery}>
                         <FormControl>
                           <SelectTrigger>
-                            <SelectValue placeholder="Selecione uma imagem" />
+                            <SelectValue placeholder={isLoadingGallery ? "Carregando imagens..." : "Selecione uma imagem"} />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {PlaceHolderImages.map((img) => (
+                          {galleryImages?.map((img) => (
                             <SelectItem key={img.id} value={img.id}>
                               {img.description}
                             </SelectItem>
@@ -433,3 +438,5 @@ export default function AdminServicesPage() {
     </div>
   );
 }
+
+    

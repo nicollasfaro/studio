@@ -57,3 +57,13 @@ export type SocialMediaLinks = {
   instagram?: string;
   twitter?: string;
 }
+
+export type GalleryImage = {
+  id: string;
+  imageUrl: string;
+  description: string;
+  fileName: string;
+  createdAt: string;
+};
+
+    

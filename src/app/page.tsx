@@ -1,5 +1,4 @@
 
-
 'use client';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -10,7 +9,7 @@ import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { Badge } from '@/components/ui/badge';
 import { useCollection, useFirestore, useMemoFirebase, useUser } from '@/firebase';
 import { collection, query, orderBy, limit } from 'firebase/firestore';
-import type { Service, Promotion } from '@/lib/types';
+import type { Service, Promotion, GalleryImage } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
 
 export default function Home() {
@@ -19,18 +18,24 @@ export default function Home() {
 
   const firestore = useFirestore();
   
-  const servicesCollectionRef = useMemoFirebase(() => (firestore ? collection(firestore, 'services') : null), [firestore]);
+  const servicesCollectionRef = useMemoFirebase(() => (firestore ? query(collection(firestore, 'services'), limit(3)) : null), [firestore]);
   const { data: services, isLoading: isLoadingServices } = useCollection<Service>(servicesCollectionRef);
 
   const promotionsQuery = useMemoFirebase(() => (firestore ? query(collection(firestore, 'promotions'), orderBy('startDate', 'desc'), limit(1)) : null), [firestore]);
   const { data: promotions, isLoading: isLoadingPromotions } = useCollection<Promotion>(promotionsQuery);
+  
+  const galleryImagesRef = useMemoFirebase(() => (firestore ? collection(firestore, 'galleryImages') : null), [firestore]);
+  const { data: galleryImages, isLoading: isLoadingGallery } = useCollection<GalleryImage>(galleryImagesRef);
 
-  const featuredServices = services?.slice(0, 3) || [];
+
+  const featuredServices = services || [];
   const latestPromotion = promotions?.[0];
-  const promotionImage = PlaceHolderImages.find((img) => img.id === latestPromotion?.imageId);
+  const promotionImage = galleryImages?.find((img) => img.id === latestPromotion?.imageId);
   
   const bookHref = user ? '/book' : '/login';
   const promoBookHref = latestPromotion ? (user ? `/book?promo=${latestPromotion.id}` : '/login') : '/promotions';
+
+  const isLoading = isLoadingServices || isLoadingPromotions || isLoadingGallery;
   
   return (
     <div className="flex flex-col min-h-[100dvh]">
@@ -70,7 +75,7 @@ export default function Home() {
             </p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {isLoadingServices && Array.from({ length: 3 }).map((_, i) => (
+            {isLoading && Array.from({ length: 3 }).map((_, i) => (
                 <Card key={i} className="flex flex-col overflow-hidden">
                     <CardHeader className="p-0">
                         <Skeleton className="w-full h-48" />
@@ -87,7 +92,7 @@ export default function Home() {
                 </Card>
             ))}
             {featuredServices.map((service) => {
-              const serviceImage = PlaceHolderImages.find(p => p.id === service.imageId)
+              const serviceImage = galleryImages?.find(p => p.id === service.imageId)
               return (
                 <Card key={service.id} className="flex flex-col overflow-hidden transform hover:scale-105 transition-transform duration-300 ease-in-out shadow-lg hover:shadow-2xl">
                   <CardHeader className="p-0">
@@ -131,7 +136,7 @@ export default function Home() {
                 <Sparkles className="mr-2 h-4 w-4" />
                 Oferta Especial
               </Badge>
-              {isLoadingPromotions ? (
+              {isLoading ? (
                 <>
                   <Skeleton className="h-10 w-3/4" />
                   <Skeleton className="h-5 w-full" />
@@ -165,14 +170,14 @@ export default function Home() {
                 </>
               )}
             </div>
-             {isLoadingPromotions ? <Skeleton className="w-full h-[400px] rounded-xl"/> : promotionImage && (
+             {isLoading ? <Skeleton className="w-full h-[400px] rounded-xl"/> : promotionImage && (
               <Image
                 src={promotionImage.imageUrl}
                 alt={promotionImage.description}
                 width={600}
                 height={600}
                 className="mx-auto aspect-square overflow-hidden rounded-xl object-cover"
-                data-ai-hint={promotionImage.imageHint}
+                data-ai-hint={promotionImage.description}
               />
             )}
           </div>
@@ -181,3 +186,5 @@ export default function Home() {
     </div>
   );
 }
+
+    

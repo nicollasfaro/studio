@@ -6,15 +6,19 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { useCollection, useFirestore, useMemoFirebase, useUser } from '@/firebase';
 import { collection } from 'firebase/firestore';
-import type { Service } from '@/lib/types';
+import type { Service, GalleryImage } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
-import { PlaceHolderImages } from '@/lib/placeholder-images';
 
 export default function ServicesPage() {
   const firestore = useFirestore();
   const { user } = useUser();
-  const servicesCollectionRef = useMemoFirebase(() => collection(firestore, 'services'), [firestore]);
-  const { data: services, isLoading } = useCollection<Omit<Service, 'id'>>(servicesCollectionRef);
+  const servicesCollectionRef = useMemoFirebase(() => (firestore ? collection(firestore, 'services') : null), [firestore]);
+  const { data: services, isLoading: isLoadingServices } = useCollection<Omit<Service, 'id'>>(servicesCollectionRef);
+  
+  const galleryImagesRef = useMemoFirebase(() => (firestore ? collection(firestore, 'galleryImages') : null), [firestore]);
+  const { data: galleryImages, isLoading: isLoadingGallery } = useCollection<GalleryImage>(galleryImagesRef);
+
+  const isLoading = isLoadingServices || isLoadingGallery;
 
   return (
     <div className="container mx-auto px-4 md:px-6 py-12">
@@ -46,11 +50,11 @@ export default function ServicesPage() {
             </CardFooter>
           </Card>
         ))}
-        {services && services.map((service) => {
-          const serviceImage = PlaceHolderImages.find((img) => img.id === service.imageId);
+        {services && galleryImages && services.map((service) => {
+          const serviceImage = galleryImages.find((img) => img.id === service.imageId);
           const bookHref = user ? `/book?service=${service.id}` : '/login';
           return (
-            <Card key={service.id} className="flex flex-col overflow-hidden shadow-md hover:shadow-xl transition-shadow duration-300">
+            <Card key={service.id} id={service.id} className="flex flex-col overflow-hidden shadow-md hover:shadow-xl transition-shadow duration-300">
               <CardHeader className="p-0">
                   <div className="aspect-w-16 aspect-h-9">
                     {serviceImage && (
@@ -94,3 +98,5 @@ export default function ServicesPage() {
     </div>
   );
 }
+
+    

@@ -1,21 +1,26 @@
+
 'use client';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
-import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { Sparkles } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { useCollection, useFirestore, useMemoFirebase, useUser } from '@/firebase';
 import { collection, query, orderBy } from 'firebase/firestore';
-import type { Promotion } from '@/lib/types';
+import type { Promotion, GalleryImage } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
 
 export default function PromotionsPage() {
   const { user } = useUser();
   const firestore = useFirestore();
   const promotionsQuery = useMemoFirebase(() => (firestore ? query(collection(firestore, 'promotions'), orderBy('startDate', 'desc')) : null), [firestore]);
-  const { data: promotions, isLoading } = useCollection<Promotion>(promotionsQuery);
+  const { data: promotions, isLoading: isLoadingPromotions } = useCollection<Promotion>(promotionsQuery);
+  
+  const galleryImagesRef = useMemoFirebase(() => (firestore ? collection(firestore, 'galleryImages') : null), [firestore]);
+  const { data: galleryImages, isLoading: isLoadingGallery } = useCollection<GalleryImage>(galleryImagesRef);
+
+  const isLoading = isLoadingPromotions || isLoadingGallery;
 
   return (
     <div className="container mx-auto px-4 md:px-6 py-12">
@@ -44,8 +49,8 @@ export default function PromotionsPage() {
         {promotions && promotions.length === 0 && !isLoading && (
             <p className="text-center text-muted-foreground py-8">Nenhuma promoção ativa no momento. Volte em breve!</p>
         )}
-        {promotions && promotions.map((promo) => {
-          const promoImage = PlaceHolderImages.find((img) => img.id === promo.imageId);
+        {promotions && galleryImages && promotions.map((promo) => {
+          const promoImage = galleryImages.find((img) => img.id === promo.imageId);
           const bookHref = user ? `/book?promo=${promo.id}` : '/login';
           return (
             <Card key={promo.id} className="w-full overflow-hidden shadow-lg hover:shadow-2xl transition-shadow duration-300 md:flex">
@@ -57,7 +62,6 @@ export default function PromotionsPage() {
                     width={600}
                     height={400}
                     className="object-cover h-full w-full"
-                    data-ai-hint={promoImage.imageHint}
                   />
                 </div>
               )}
@@ -86,3 +90,5 @@ export default function PromotionsPage() {
     </div>
   );
 }
+
+    

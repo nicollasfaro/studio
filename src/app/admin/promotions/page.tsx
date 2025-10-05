@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState } from 'react';
@@ -45,8 +46,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { useCollection, useFirestore, useMemoFirebase, addDocumentNonBlocking, deleteDocumentNonBlocking, setDocumentNonBlocking } from '@/firebase';
 import { collection, doc } from 'firebase/firestore';
-import type { Promotion, Service } from '@/lib/types';
-import { PlaceHolderImages } from '@/lib/placeholder-images';
+import type { Promotion, Service, GalleryImage } from '@/lib/types';
 import { PlusCircle, Edit, Trash2 } from 'lucide-react';
 import {
   Select,
@@ -83,6 +83,9 @@ export default function AdminPromotionsPage() {
   
   const { data: services, isLoading: isLoadingServices } = useCollection<Service>(servicesRef);
   const { data: promotions, isLoading: isLoadingPromotions } = useCollection<Promotion>(promotionsRef);
+
+  const galleryImagesRef = useMemoFirebase(() => (firestore ? collection(firestore, 'galleryImages') : null), [firestore]);
+  const { data: galleryImages, isLoading: isLoadingGallery } = useCollection<GalleryImage>(galleryImagesRef);
 
   const form = useForm<PromotionFormValues>({
     resolver: zodResolver(promotionSchema),
@@ -173,7 +176,7 @@ export default function AdminPromotionsPage() {
       });
   }
 
-  const isLoading = isLoadingServices || isLoadingPromotions;
+  const isLoading = isLoadingServices || isLoadingPromotions || isLoadingGallery;
 
   return (
     <div className="grid gap-8 md:grid-cols-3">
@@ -213,12 +216,14 @@ export default function AdminPromotionsPage() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Imagem da Promoção</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
+                      <Select onValueChange={field.onChange} value={field.value} disabled={isLoadingGallery}>
                         <FormControl>
-                          <SelectTrigger><SelectValue placeholder="Selecione uma imagem" /></SelectTrigger>
+                          <SelectTrigger>
+                            <SelectValue placeholder={isLoadingGallery ? "Carregando imagens..." : "Selecione uma imagem"} />
+                            </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {PlaceHolderImages.map((img) => (
+                          {galleryImages?.map((img) => (
                             <SelectItem key={img.id} value={img.id}>{img.description}</SelectItem>
                           ))}
                         </SelectContent>
@@ -380,3 +385,5 @@ export default function AdminPromotionsPage() {
     </div>
   );
 }
+
+    
