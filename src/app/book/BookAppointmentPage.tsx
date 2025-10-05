@@ -233,6 +233,10 @@ export default function BookAppointmentPage() {
           title: 'Agendamento Solicitado!',
           description: `Estamos ansiosos para vê-lo em ${format(date, 'PPP', { locale: ptBR })} às ${selectedTime}. Aguarde a confirmação do Salão!`,
         });
+
+        // Placeholder for notification logic
+        console.log("TODO: Implement Cloud Function to send notification for new appointment", appointmentData);
+
         setStep(4);
     }
 
