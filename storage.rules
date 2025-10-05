@@ -4,20 +4,20 @@ service firebase.storage {
   match /b/{bucket}/o {
     // Regras para a galeria de imagens
     match /gallery/{allPaths=**} {
-      // Qualquer pessoa pode ler as imagens, pois elas são exibidas publicamente no site.
+      // Qualquer pessoa pode ler as imagens (necessário para exibi-las no site).
       allow read;
-      // Apenas usuários autenticados podem escrever (upload, update, delete).
-      // A segurança é garantida pela página do admin, que só permite acesso a admins.
+      // Apenas usuários autenticados (administradores) podem enviar.
+      // A segurança real é feita na aplicação, que só mostra a página para admins.
       allow write: if request.auth != null;
     }
 
-    // Regras para as imagens de referência de agendamentos
+    // Regras para fotos de referência de agendamentos
     match /appointments/{fileName} {
-       // Permite a leitura pública para que os administradores possam ver a foto.
+       // Qualquer pessoa pode ler as imagens (o admin precisa ver a referência).
       allow read;
-      // Permite a escrita se o usuário estiver logado e o nome do arquivo
-      // começar com o UID do usuário.
-      allow write: if request.auth != null && fileName.startsWith(request.auth.uid + '_');
+      // Permite que um usuário autenticado escreva um arquivo se o nome do arquivo começar com seu UID.
+      // Isso impede que um usuário envie arquivos em nome de outro.
+      allow write: if request.auth != null && request.auth.uid == fileName.split('_')[0];
     }
   }
 }
