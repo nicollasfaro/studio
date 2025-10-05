@@ -9,6 +9,7 @@ interface ThemeSettings {
   primary: string;
   secondary: string;
   accent: string;
+  background: string;
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
@@ -31,6 +32,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       root.style.setProperty('--primary-hsl', themeData.primary);
       root.style.setProperty('--secondary-hsl', themeData.secondary);
       root.style.setProperty('--accent-hsl', themeData.accent);
+      root.style.setProperty('--background-hsl', themeData.background);
     }
   }, [themeData]); // Re-run this effect only when themeData changes.
 

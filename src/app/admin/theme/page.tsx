@@ -22,6 +22,7 @@ const themeSchema = z.object({
   primary: hslColorSchema,
   secondary: hslColorSchema,
   accent: hslColorSchema,
+  background: hslColorSchema,
 });
 
 type ThemeFormValues = z.infer<typeof themeSchema>;
@@ -85,6 +86,7 @@ export default function AdminThemePage() {
       primary: '271 76% 34%',
       secondary: '271 50% 80%',
       accent: '330 100% 71%',
+      background: '240 67% 94%',
     },
   });
 
@@ -118,7 +120,8 @@ export default function AdminThemePage() {
     const value = form.watch(name);
     const colorInputRef = useRef<HTMLInputElement>(null);
 
-    const [h, s, l] = value.split(' ').map(v => parseInt(v.replace('%', '')));
+    // Prevent crash if value is not a valid HSL string yet
+    const [h, s, l] = value?.split(' ').map(v => parseInt(v.replace('%', ''))) || [0,0,0];
     const hexValue = hslToHex(h,s,l);
 
     return (
@@ -160,6 +163,7 @@ export default function AdminThemePage() {
                 <Skeleton className="h-12 w-full" />
                 <Skeleton className="h-12 w-full" />
                 <Skeleton className="h-12 w-full" />
+                <Skeleton className="h-12 w-full" />
             </CardContent>
             <CardFooter>
                  <Skeleton className="h-10 w-24" />
@@ -179,6 +183,7 @@ export default function AdminThemePage() {
             <ColorPickerField name="primary" label="Cor Primária" />
             <ColorPickerField name="secondary" label="Cor Secundária" />
             <ColorPickerField name="accent" label="Cor de Destaque (Accent)" />
+            <ColorPickerField name="background" label="Cor de Fundo" />
           </CardContent>
           <CardFooter>
             <Button type="submit" disabled={form.formState.isSubmitting}>

@@ -223,9 +223,13 @@
         "accent": {
           "type": "string",
           "description": "The accent color in HSL format (e.g., '330 100% 71%')."
+        },
+        "background": {
+          "type": "string",
+          "description": "The background color in HSL format (e.g., '240 67% 94%')."
         }
       },
-      "required": ["primary", "secondary", "accent"]
+      "required": ["primary", "secondary", "accent", "background"]
     }
   },
   "auth": {

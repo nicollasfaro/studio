@@ -13,8 +13,9 @@ body {
     --primary-hsl: 271 76% 34%;
     --secondary-hsl: 271 50% 80%;
     --accent-hsl: 330 100% 71%;
+    --background-hsl: 240 67% 94%;
 
-    --background: 240 67% 94%;
+    --background: var(--background-hsl);
     --foreground: 271 25% 15%;
     --card: 0 0% 100%;
     --card-foreground: 271 25% 15%;
@@ -52,8 +53,9 @@ body {
     --primary-hsl: 271 76% 60%;
     --secondary-hsl: 271 30% 25%;
     --accent-hsl: 330 100% 71%;
+    --background-hsl: 271 30% 10%;
 
-    --background: 271 30% 10%;
+    --background: var(--background-hsl);
     --foreground: 240 20% 90%;
     --card: 271 30% 15%;
     --card-foreground: 240 20% 90%;
