@@ -1,3 +1,4 @@
+
 'use client';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -66,10 +67,20 @@ export default function ServicesPage() {
               <CardContent className="p-6 flex-grow">
                 <CardTitle className="font-headline text-2xl mb-2">{service.name}</CardTitle>
                 <CardDescription className="text-base">{service.description}</CardDescription>
+                {service.isPriceFrom && (
+                    <div className="mt-4 p-3 bg-secondary/50 rounded-md text-sm">
+                        <p className="font-bold text-secondary-foreground">Preços por Comprimento:</p>
+                        <ul className="list-disc list-inside text-muted-foreground">
+                            <li>Curto: R${service.priceShortHair?.toFixed(2)}</li>
+                            <li>Médio: R${service.priceMediumHair?.toFixed(2)}</li>
+                            <li>Longo: R${service.priceLongHair?.toFixed(2)}</li>
+                        </ul>
+                    </div>
+                )}
               </CardContent>
               <CardFooter className="p-6 pt-0 flex justify-between items-center">
                 <div>
-                  <p className="text-xl font-bold text-primary">${service.price}</p>
+                  <p className="text-xl font-bold text-primary">{service.isPriceFrom ? 'A partir de' : ''} R${service.price.toFixed(2)}</p>
                   <p className="text-sm text-muted-foreground">{service.durationMinutes} minutos</p>
                 </div>
                 <Button asChild>

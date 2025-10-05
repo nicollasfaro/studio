@@ -298,7 +298,7 @@ export default function BookAppointmentPage() {
                       <p className="text-sm text-muted-foreground">{service.description}</p>
                     </div>
                     <div className="text-right">
-                       <p className="font-bold text-primary">R${service.price.toFixed(2)}</p>
+                       <p className="font-bold text-primary">{service.isPriceFrom ? 'A partir de ' : ''}R${service.price.toFixed(2)}</p>
                       {service.originalPrice && (
                         <p className="text-sm text-muted-foreground line-through">
                           R${service.originalPrice.toFixed(2)}
@@ -365,7 +365,7 @@ export default function BookAppointmentPage() {
                         </div>
                          <div className="flex justify-between border-t pt-4 mt-4">
                             <span className="text-muted-foreground">Valor:</span>
-                            <span className="font-semibold text-primary">R${currentService?.price.toFixed(2)}</span>
+                            <span className="font-semibold text-primary">{currentService?.isPriceFrom ? 'A partir de ' : ''}R${currentService?.price.toFixed(2)}</span>
                         </div>
                     </CardContent>
                 </Card>

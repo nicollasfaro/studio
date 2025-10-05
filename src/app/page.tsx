@@ -104,7 +104,7 @@ export default function Home() {
                     <CardDescription>{service.description?.substring(0, 100)}...</CardDescription>
                   </CardContent>
                   <CardFooter className="p-6 pt-0 flex justify-between items-center">
-                    <p className="text-lg font-bold text-primary">${service.price}</p>
+                    <p className="text-lg font-bold text-primary">{service.isPriceFrom ? 'A partir de ' : ''}R${service.price.toFixed(2)}</p>
                     <Button asChild variant="outline">
                       <Link href={`/services#${service.id}`}>Saiba Mais</Link>
                     </Button>

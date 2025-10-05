@@ -8,6 +8,10 @@ export type Service = {
   durationMinutes: number;
   imageId: string;
   originalPrice?: number;
+  isPriceFrom?: boolean;
+  priceShortHair?: number;
+  priceMediumHair?: number;
+  priceLongHair?: number;
 };
 
 export type Promotion = {
@@ -50,3 +54,4 @@ export type SocialMediaLinks = {
   instagram?: string;
   twitter?: string;
 }
+

@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState } from 'react';
@@ -22,6 +23,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import {
   Form,
   FormControl,
@@ -62,7 +65,20 @@ const serviceSchema = z.object({
   price: z.coerce.number().min(0, 'O preço deve ser um número positivo.'),
   durationMinutes: z.coerce.number().int().min(1, 'A duração deve ser pelo menos 1 minuto.'),
   imageId: z.string().min(1, 'Por favor, selecione uma imagem.'),
+  isPriceFrom: z.boolean().default(false),
+  priceShortHair: z.coerce.number().optional(),
+  priceMediumHair: z.coerce.number().optional(),
+  priceLongHair: z.coerce.number().optional(),
+}).refine(data => {
+    if (data.isPriceFrom) {
+        return data.priceShortHair != null && data.priceMediumHair != null && data.priceLongHair != null;
+    }
+    return true;
+}, {
+    message: "Preencha os preços para todos os comprimentos de cabelo.",
+    path: ['priceShortHair'], // you can point this to any of the fields
 });
+
 
 type ServiceFormValues = z.infer<typeof serviceSchema>;
 
@@ -84,8 +100,11 @@ export default function AdminServicesPage() {
       price: 0,
       durationMinutes: 30,
       imageId: '',
+      isPriceFrom: false,
     },
   });
+
+  const isPriceFrom = form.watch('isPriceFrom');
 
   const onSubmit = async (values: ServiceFormValues) => {
     if (!firestore || !servicesRef) return;
@@ -106,7 +125,14 @@ export default function AdminServicesPage() {
           description: `O serviço "${values.name}" foi adicionado com sucesso.`,
         });
       }
-      form.reset();
+      form.reset({
+        name: '',
+        description: '',
+        price: 0,
+        durationMinutes: 30,
+        imageId: '',
+        isPriceFrom: false,
+      });
       setIsEditing(null);
     } catch (error) {
       console.error('Erro ao salvar serviço:', error);
@@ -151,6 +177,7 @@ export default function AdminServicesPage() {
         price: 0,
         durationMinutes: 30,
         imageId: '',
+        isPriceFrom: false,
       });
   }
 
@@ -214,8 +241,86 @@ export default function AdminServicesPage() {
                     </FormItem>
                   )}
                 />
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
+                 <FormField
+                  control={form.control}
+                  name="durationMinutes"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Duração (min)</FormLabel>
+                      <FormControl>
+                        <Input type="number" placeholder="60" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                 <FormField
+                    control={form.control}
+                    name="isPriceFrom"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                        <div className="space-y-0.5">
+                          <FormLabel>O valor é "a partir de"?</FormLabel>
+                        </div>
+                        <FormControl>
+                          <Switch
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                          />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+
+                {isPriceFrom ? (
+                  <>
+                     <FormField
+                        control={form.control}
+                        name="price"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Preço Base (R$)</FormLabel>
+                            <FormControl><Input type="number" placeholder="50.00" {...field} /></FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                     <div className="grid grid-cols-3 gap-2">
+                        <FormField
+                            control={form.control}
+                            name="priceShortHair"
+                            render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>Curto</FormLabel>
+                                <FormControl><Input type="number" placeholder="70" {...field} /></FormControl>
+                            </FormItem>
+                            )}
+                        />
+                         <FormField
+                            control={form.control}
+                            name="priceMediumHair"
+                            render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>Médio</FormLabel>
+                                <FormControl><Input type="number" placeholder="90" {...field} /></FormControl>
+                            </FormItem>
+                            )}
+                        />
+                         <FormField
+                            control={form.control}
+                            name="priceLongHair"
+                            render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>Longo</FormLabel>
+                                <FormControl><Input type="number" placeholder="120" {...field} /></FormControl>
+                            </FormItem>
+                            )}
+                        />
+                     </div>
+                      <FormMessage>{form.formState.errors.priceShortHair?.message}</FormMessage>
+                  </>
+                ) : (
+                   <FormField
                     control={form.control}
                     name="price"
                     render={({ field }) => (
@@ -228,20 +333,7 @@ export default function AdminServicesPage() {
                       </FormItem>
                     )}
                   />
-                  <FormField
-                    control={form.control}
-                    name="durationMinutes"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Duração (min)</FormLabel>
-                        <FormControl>
-                          <Input type="number" placeholder="60" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
+                )}
               </CardContent>
               <CardFooter className="flex justify-end gap-2">
                 {isEditing && (
@@ -296,7 +388,7 @@ export default function AdminServicesPage() {
                     {services?.map((service) => (
                     <TableRow key={service.id}>
                         <TableCell className="font-medium">{service.name}</TableCell>
-                        <TableCell>R${service.price.toFixed(2)}</TableCell>
+                        <TableCell>{service.isPriceFrom ? `A partir de R$${service.price.toFixed(2)}` : `R$${service.price.toFixed(2)}`}</TableCell>
                         <TableCell>{service.durationMinutes} min</TableCell>
                         <TableCell className="text-right">
                         <Button variant="ghost" size="icon" onClick={() => handleEditClick(service)}>

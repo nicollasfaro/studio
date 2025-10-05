@@ -94,7 +94,7 @@
         },
         "price": {
           "type": "number",
-          "description": "The price of the service."
+          "description": "The base price of the service. If isPriceFrom is true, this is the starting price."
         },
         "durationMinutes": {
           "type": "number",
@@ -103,6 +103,22 @@
         "imageId": {
           "type": "string",
           "description": "ID of the service image from placeholder list."
+        },
+        "isPriceFrom": {
+          "type": "boolean",
+          "description": "Indicates if the price is a starting price ('a partir de')."
+        },
+        "priceShortHair": {
+          "type": "number",
+          "description": "Price for short hair, if applicable."
+        },
+        "priceMediumHair": {
+          "type": "number",
+          "description": "Price for medium hair, if applicable."
+        },
+        "priceLongHair": {
+          "type": "number",
+          "description": "Price for long hair, if applicable."
         }
       },
       "required": [
