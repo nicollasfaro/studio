@@ -3,7 +3,7 @@
 
 import { useState, ChangeEvent } from 'react';
 import Image from 'next/image';
-import { useFirestore, useCollection, useMemoFirebase, addDocumentNonBlocking } from '@/firebase';
+import { useFirestore, useCollection, useMemoFirebase, addDocumentNonBlocking, useFirebaseApp } from '@/firebase';
 import { getStorage, ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { collection, serverTimestamp } from 'firebase/firestore';
 import {
@@ -25,7 +25,8 @@ import type { GalleryImage } from '@/lib/types';
 export default function AdminGalleryPage() {
   const { toast } = useToast();
   const firestore = useFirestore();
-  const storage = getStorage();
+  const app = useFirebaseApp(); // Obtenha a instância do app Firebase
+  const storage = getStorage(app); // Passe a instância do app para o getStorage
 
   const [file, setFile] = useState<File | null>(null);
   const [description, setDescription] = useState('');
@@ -85,7 +86,6 @@ export default function AdminGalleryPage() {
         try {
           const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
           if (galleryImagesRef) {
-            // Corrected: Removed 'await' from non-blocking function call
             addDocumentNonBlocking(galleryImagesRef, {
               imageUrl: downloadURL,
               description: description,
