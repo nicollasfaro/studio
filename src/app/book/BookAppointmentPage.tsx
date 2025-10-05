@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Calendar } from '@/components/ui/calendar';
@@ -19,11 +19,11 @@ import { Input } from '@/components/ui/input';
 import { Check, ArrowLeft, ArrowRight, PartyPopper } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
-import { format } from 'date-fns';
+import { format, startOfDay, endOfDay } from 'date-fns';
 import { useCollection, useFirestore, useUser, useMemoFirebase, addDocumentNonBlocking } from '@/firebase';
-import { collection } from 'firebase/firestore';
-import type { Service } from '@/lib/types';
-import { timeSlots } from '@/lib/data';
+import { collection, query, where } from 'firebase/firestore';
+import type { Service, Appointment } from '@/lib/types';
+import { timeSlots as allTimeSlots } from '@/lib/data';
 import { ptBR } from 'date-fns/locale';
 import {
   AlertDialog,
@@ -51,7 +51,30 @@ export default function BookAppointmentPage() {
   const firestore = useFirestore();
   const { user, isUserLoading } = useUser();
   const servicesCollectionRef = useMemoFirebase(() => (firestore ? collection(firestore, 'services') : null), [firestore]);
-  const { data: services, isLoading: isLoadingServices } = useCollection<Omit<Service, 'id'>>(servicesCollectionRef);
+  const { data: services, isLoading: isLoadingServices } = useCollection<Service>(servicesCollectionRef);
+
+  // Fetch appointments for the selected day to check for conflicts
+  const appointmentsQuery = useMemoFirebase(() => {
+    if (!firestore || !date) return null;
+    const start = startOfDay(date);
+    const end = endOfDay(date);
+    return query(
+      collection(firestore, 'appointments'),
+      where('startTime', '>=', start.toISOString()),
+      where('startTime', '<=', end.toISOString())
+    );
+  }, [firestore, date]);
+  
+  const { data: todaysAppointments, isLoading: isLoadingAppointments } = useCollection<Appointment>(appointmentsQuery);
+
+  // Filter available time slots
+  const availableTimeSlots = allTimeSlots.map(slot => {
+    const isBooked = todaysAppointments?.some(apt => {
+        const aptTime = format(new Date(apt.startTime), 'HH:mm');
+        return aptTime === slot.time && (apt.status === 'confirmado' || apt.status === 'Marcado');
+    });
+    return { ...slot, available: !isBooked };
+  });
 
   const handleNextStep = () => {
     if (step === 1 && !selectedService) {
@@ -170,18 +193,20 @@ export default function BookAppointmentPage() {
               </div>
               <div>
                 <h3 className="text-xl font-bold mb-4">Selecione uma Hora</h3>
-                <div className="grid grid-cols-3 gap-2">
-                  {timeSlots.map((slot) => (
-                    <Button
-                      key={slot.time}
-                      variant={selectedTime === slot.time ? 'default' : 'outline'}
-                      disabled={!slot.available}
-                      onClick={() => setSelectedTime(slot.time)}
-                    >
-                      {slot.time}
-                    </Button>
-                  ))}
-                </div>
+                {isLoadingAppointments ? <p>Verificando horários...</p> : (
+                  <div className="grid grid-cols-3 gap-2">
+                    {availableTimeSlots.map((slot) => (
+                      <Button
+                        key={slot.time}
+                        variant={selectedTime === slot.time ? 'default' : 'outline'}
+                        disabled={!slot.available}
+                        onClick={() => setSelectedTime(slot.time)}
+                      >
+                        {slot.time}
+                      </Button>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -238,8 +263,8 @@ export default function BookAppointmentPage() {
                 Próximo <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             ) : (
-              <Button onClick={handleBooking} disabled={isUserLoading}>
-                {isUserLoading ? 'Verificando...' : 'Confirmar Agendamento'} <Check className="ml-2 h-4 w-4" />
+              <Button onClick={handleBooking} disabled={isUserLoading || isLoadingAppointments}>
+                {isUserLoading || isLoadingAppointments ? 'Verificando...' : 'Confirmar Agendamento'} <Check className="ml-2 h-4 w-4" />
               </Button>
             )}
           </CardFooter>

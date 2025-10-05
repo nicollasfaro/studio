@@ -3,16 +3,16 @@ import type { TimeSlot, Appointment } from '@/lib/types';
 // This file now only contains mock data that is not yet in Firestore.
 // Services and Promotions are now fetched from Firestore.
 
-export const timeSlots: TimeSlot[] = [
-    { time: '09:00', available: true },
-    { time: '10:00', available: false },
-    { time: '11:00', available: true },
-    { time: '12:00', available: true },
-    { time: '13:00', available: false },
-    { time: '14:00', available: true },
-    { time: '15:00', available: true },
-    { time: '16:00', available: false },
-    { time: '17:00', available: true },
+export const timeSlots: Omit<TimeSlot, 'available'>[] = [
+    { time: '09:00' },
+    { time: '10:00' },
+    { time: '11:00' },
+    { time: '12:00' },
+    { time: '13:00' },
+    { time: '14:00' },
+    { time: '15:00' },
+    { time: '16:00' },
+    { time: '17:00' },
 ];
 
 // This is kept for the profile page example, but should be replaced with Firestore data.

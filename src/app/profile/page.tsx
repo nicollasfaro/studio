@@ -37,57 +37,43 @@ export default function ProfilePage() {
     }
   }, [user, isAuthLoading, router]);
 
-  // Fetch services to map serviceId to serviceName
   const servicesRef = useMemoFirebase(() => (firestore ? collection(firestore, 'services') : null), [firestore]);
-  const { data: services, isLoading: isLoadingServices } = useCollection<Omit<Service, 'id'>>(servicesRef);
+  const { data: services, isLoading: isLoadingServices } = useCollection<Service>(servicesRef);
 
-  const upcomingAppointmentsQuery = useMemoFirebase(() => {
-    if (isUserDataLoading || !firestore || !user?.uid) return null;
-
+  const appointmentsQuery = useMemoFirebase(() => {
+    if (isUserDataLoading || !firestore || !user?.uid) {
+      return null;
+    }
     const isAdmin = userData?.isAdmin ?? false;
     const baseQuery = collection(firestore, 'appointments');
     
-    // Admins need to fetch all to show in their admin panel, but we filter on the client for this specific page.
-    // Non-admins fetch only their own. This query satisfies both security rules.
-    return query(
-        baseQuery, 
-        where('startTime', '>=', new Date().toISOString()), 
-        orderBy('startTime', 'asc')
-    );
+    return isAdmin 
+      ? baseQuery
+      : query(baseQuery, where('clientId', '==', user.uid));
   }, [firestore, user?.uid, userData, isUserDataLoading]);
-
-
-  const pastAppointmentsQuery = useMemoFirebase(() => {
-    if (isUserDataLoading || !firestore || !user?.uid) return null;
-    
-    const isAdmin = userData?.isAdmin ?? false;
-    const baseQuery = collection(firestore, 'appointments');
-
-    return query(
-        baseQuery, 
-        where('startTime', '<', new Date().toISOString()), 
-        orderBy('startTime', 'desc')
-    );
-  }, [firestore, user?.uid, userData, isUserDataLoading]);
-
-  const { data: allUpcomingAppointments, isLoading: isLoadingUpcoming } = useCollection<Appointment>(upcomingAppointmentsQuery);
-  const { data: allPastAppointments, isLoading: isLoadingPast } = useCollection<Appointment>(pastAppointmentsQuery);
   
+  const { data: allAppointments, isLoading: isLoadingAppointments } = useCollection<Appointment>(appointmentsQuery);
+
   const mapAndFilterAppointments = (appointments: Appointment[] | null): AppointmentWithService[] => {
     if (!appointments || !services || !user?.uid) return [];
     
     const isAdmin = userData?.isAdmin ?? false;
-
+    
     return appointments
-      .filter(apt => isAdmin ? apt.clientId === user.uid : true) // For admins, filter to their own appointments for this page
+      .filter(apt => isAdmin ? apt.clientId === user.uid : true) 
       .map(apt => ({
         ...apt,
         serviceName: services.find(s => s.id === apt.serviceId)?.name || 'Serviço Desconhecido',
       }));
   };
 
-  const upcomingAppointments = mapAndFilterAppointments(allUpcomingAppointments);
-  const pastAppointments = mapAndFilterAppointments(allPastAppointments);
+  const allUserAppointments = mapAndFilterAppointments(allAppointments);
+  
+  const upcomingAppointments = allUserAppointments.filter(apt => new Date(apt.startTime) >= new Date());
+  upcomingAppointments.sort((a,b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+  
+  const pastAppointments = allUserAppointments.filter(apt => new Date(apt.startTime) < new Date());
+  pastAppointments.sort((a,b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
 
 
   const handleLogout = async () => {
@@ -186,7 +172,7 @@ export default function ProfilePage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              {isLoadingServices ? (
+              {isLoadingServices || isLoadingAppointments ? (
                 <Skeleton className="h-20 w-full" />
               ) : upcomingAppointments.length > 0 ? (
                 <ul className="space-y-4">
@@ -218,7 +204,7 @@ export default function ProfilePage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              {isLoadingServices ? (
+              {isLoadingServices || isLoadingAppointments ? (
                  <Skeleton className="h-20 w-full" />
               ) : pastAppointments.length > 0 ? (
                 <ul className="space-y-4">
@@ -272,5 +258,3 @@ export default function ProfilePage() {
     </div>
   );
 }
-
-    
