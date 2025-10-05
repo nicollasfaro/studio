@@ -1,9 +1,10 @@
 
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, ChangeEvent } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
 import { Calendar } from '@/components/ui/calendar';
 import { Button } from '@/components/ui/button';
 import {
@@ -18,7 +19,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { ArrowLeft, ArrowRight, PartyPopper, Loader2, Info } from 'lucide-react';
+import { ArrowLeft, ArrowRight, PartyPopper, Loader2, Info, Upload } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { format, startOfDay, endOfDay, addMinutes, parse } from 'date-fns';
@@ -57,6 +58,10 @@ export default function BookAppointmentPage() {
   const [isBooking, setIsBooking] = useState(false);
   
   const [servicesToDisplay, setServicesToDisplay] = useState<Service[]>([]);
+  
+  const [hairLength, setHairLength] = useState<'curto' | 'medio' | 'longo'>();
+  const [hairPhotoDataUrl, setHairPhotoDataUrl] = useState<string | null>(null);
+  const [finalPrice, setFinalPrice] = useState<number | undefined>();
 
   const firestore = useFirestore();
   const { user, isUserLoading } = useUser();
@@ -111,6 +116,24 @@ export default function BookAppointmentPage() {
         setServicesToDisplay(allServices);
     }
   }, [allServices, promotion, promoQueryParam, isLoadingServices, isLoadingPromotion, selectedServiceId]);
+  
+  const currentService = servicesToDisplay?.find(s => s.id === selectedServiceId);
+
+  // Update final price based on service and hair length
+  useEffect(() => {
+    if (currentService) {
+        if (currentService.isPriceFrom && hairLength) {
+            const prices = {
+                curto: currentService.priceShortHair,
+                medio: currentService.priceMediumHair,
+                longo: currentService.priceLongHair
+            }
+            setFinalPrice(prices[hairLength]);
+        } else {
+            setFinalPrice(currentService.price);
+        }
+    }
+  }, [currentService, hairLength]);
 
   // Fetch appointments for the selected day to check for conflicts
   const appointmentsQuery = useMemoFirebase(() => {
@@ -167,16 +190,42 @@ export default function BookAppointmentPage() {
       toast({ title: 'Por favor, selecione um serviço.', variant: 'destructive' });
       return;
     }
-    if (step === 2 && (!date || !selectedTime)) {
+    if (currentService?.isPriceFrom && step === 2) {
+        if (!hairLength) {
+            toast({ title: 'Por favor, selecione o comprimento do cabelo.', variant: 'destructive' });
+            return;
+        }
+        if (!hairPhotoDataUrl) {
+            toast({ title: 'Por favor, anexe uma foto do seu cabelo.', variant: 'destructive' });
+            return;
+        }
+    }
+    const dateStep = currentService?.isPriceFrom ? 3 : 2;
+    if (step === dateStep && (!date || !selectedTime)) {
       toast({ title: 'Por favor, selecione uma data e hora.', variant: 'destructive' });
       return;
     }
     setStep(step + 1);
   };
+  
+  const handlePhotoUpload = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setHairPhotoDataUrl(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
 
   const handleBooking = async () => {
     setIsBooking(true);
-    if (!selectedServiceId || !date || !selectedTime || !name || !email) {
+    const dateStep = currentService?.isPriceFrom ? 3 : 2;
+    const finalStep = currentService?.isPriceFrom ? 4 : 3;
+    
+    if (!selectedServiceId || !name || !email || (step === dateStep && (!date || !selectedTime)) ) {
       toast({ title: 'Por favor, preencha todos os campos.', variant: 'destructive' });
       setIsBooking(false);
       return;
@@ -195,8 +244,8 @@ export default function BookAppointmentPage() {
     }
 
     const serviceDetails = allServices?.find(s => s.id === selectedServiceId);
-    if (!serviceDetails) {
-        toast({ title: 'Serviço selecionado não encontrado.', variant: 'destructive' });
+    if (!serviceDetails || !date || !selectedTime) {
+        toast({ title: 'Detalhes do agendamento incompletos.', variant: 'destructive' });
         setIsBooking(false);
         return;
     }
@@ -206,14 +255,17 @@ export default function BookAppointmentPage() {
     startTime.setHours(hours, minutes, 0, 0);
     const endTime = new Date(startTime.getTime() + serviceDetails.durationMinutes * 60000);
 
-    const appointmentData = {
+    const appointmentData: Partial<Appointment> = {
         clientId: user.uid,
         serviceId: selectedServiceId,
         startTime: startTime.toISOString(),
         endTime: endTime.toISOString(),
         status: 'Marcado',
         clientName: name,
-        clientEmail: email
+        clientEmail: email,
+        finalPrice: finalPrice,
+        hairLength: hairLength,
+        hairPhotoUrl: hairPhotoDataUrl
     };
 
     if (rescheduleId && appointmentToRescheduleRef) {
@@ -237,25 +289,28 @@ export default function BookAppointmentPage() {
         // Placeholder for notification logic
         console.log("TODO: Implement Cloud Function to send notification for new appointment", appointmentData);
 
-        setStep(4);
+        setStep(finalStep + 1);
     }
 
     setIsBooking(false);
   };
-
-  const currentService = servicesToDisplay?.find(s => s.id === selectedServiceId);
-
+  
   const pageTitle = rescheduleId ? 'Remarcar Agendamento' : 'Faça seu Agendamento';
+  const totalSteps = currentService?.isPriceFrom ? 4 : 3;
+  const hairLengthStep = 2;
+  const dateTimeStep = currentService?.isPriceFrom ? 3 : 2;
+  const confirmationStep = currentService?.isPriceFrom ? 4 : 3;
+  const successStep = totalSteps + 1;
 
   return (
     <div className="container mx-auto px-4 md:px-6 py-12">
       <Card className="max-w-4xl mx-auto shadow-xl">
         <CardHeader>
           <CardTitle className="text-3xl font-headline text-center">
-            {step === 4 ? 'Solicitação Recebida!' : pageTitle}
+            {step === successStep ? 'Solicitação Recebida!' : pageTitle}
           </CardTitle>
           <CardDescription className="text-center">
-            {step < 4 && `Passo ${step} de 3 - ${step === 1 ? 'Escolha o Serviço' : step === 2 ? 'Selecione a Data e Hora' : 'Confirme os Detalhes'}`}
+            {step < successStep && `Passo ${step} de ${totalSteps}`}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -312,8 +367,44 @@ export default function BookAppointmentPage() {
               </RadioGroup>
             </div>
           )}
+          
+          {step === hairLengthStep && currentService?.isPriceFrom && (
+            <div className="grid md:grid-cols-2 gap-8">
+              <div>
+                <h3 className="text-xl font-bold mb-4">Selecione o Comprimento do Cabelo</h3>
+                <RadioGroup value={hairLength} onValueChange={(v) => setHairLength(v as any)}>
+                    {([
+                        {id: 'curto', label: 'Curto', price: currentService.priceShortHair},
+                        {id: 'medio', label: 'Médio', price: currentService.priceMediumHair},
+                        {id: 'longo', label: 'Longo', price: currentService.priceLongHair},
+                    ]).map((item) => (
+                        <Label key={item.id} htmlFor={`hair-${item.id}`} className={cn("flex items-center justify-between rounded-lg border p-4 transition-all hover:bg-secondary/50 cursor-pointer", hairLength === item.id && "bg-secondary border-primary ring-2 ring-primary")}>
+                            <div><p className="font-semibold">{item.label}</p></div>
+                             <div className="text-right"><p className="font-bold text-primary">R${item.price?.toFixed(2)}</p></div>
+                            <RadioGroupItem value={item.id} id={`hair-${item.id}`} className="sr-only" />
+                        </Label>
+                    ))}
+                </RadioGroup>
+              </div>
+               <div>
+                  <h3 className="text-xl font-bold mb-4">Anexe uma foto de referência</h3>
+                   <Label htmlFor="hair-photo-upload" className="flex flex-col items-center justify-center w-full h-48 border-2 border-dashed rounded-lg cursor-pointer hover:bg-secondary/50">
+                        {hairPhotoDataUrl ? (
+                            <Image src={hairPhotoDataUrl} alt="Pré-visualização do cabelo" width={192} height={192} className="h-full w-auto object-contain rounded-lg" />
+                        ) : (
+                            <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                                <Upload className="w-10 h-10 mb-3 text-muted-foreground" />
+                                <p className="mb-2 text-sm text-muted-foreground">Clique para fazer upload</p>
+                                <p className="text-xs text-muted-foreground">PNG, JPG (MAX. 800x400px)</p>
+                            </div>
+                        )}
+                        <Input id="hair-photo-upload" type="file" className="hidden" onChange={handlePhotoUpload} accept="image/png, image/jpeg" />
+                   </Label>
+              </div>
+            </div>
+          )}
 
-          {step === 2 && (
+          {step === dateTimeStep && (
             <div className="grid md:grid-cols-2 gap-8">
               <div>
                 <h3 className="text-xl font-bold mb-4">Selecione uma Data</h3>
@@ -346,7 +437,7 @@ export default function BookAppointmentPage() {
             </div>
           )}
 
-          {step === 3 && (
+          {step === confirmationStep && (
             <div className="space-y-6">
                 <h3 className="text-xl font-bold">Confirme Seus Dados</h3>
                 <Card className="bg-secondary/50">
@@ -355,6 +446,12 @@ export default function BookAppointmentPage() {
                             <span className="text-muted-foreground">Serviço:</span>
                             <span className="font-semibold">{currentService?.name}</span>
                         </div>
+                        {currentService?.isPriceFrom && hairLength && (
+                           <div className="flex justify-between">
+                                <span className="text-muted-foreground">Comprimento:</span>
+                                <span className="font-semibold capitalize">{hairLength}</span>
+                           </div>
+                        )}
                         <div className="flex justify-between">
                             <span className="text-muted-foreground">Data:</span>
                             <span className="font-semibold">{date ? format(date, "EEEE, d 'de' MMMM 'de' yyyy", { locale: ptBR }) : ''}</span>
@@ -365,7 +462,7 @@ export default function BookAppointmentPage() {
                         </div>
                          <div className="flex justify-between border-t pt-4 mt-4">
                             <span className="text-muted-foreground">Valor:</span>
-                            <span className="font-semibold text-primary">{currentService?.isPriceFrom ? 'A partir de ' : ''}R${currentService?.price.toFixed(2)}</span>
+                            <span className="font-semibold text-primary">R${finalPrice?.toFixed(2)}</span>
                         </div>
                     </CardContent>
                 </Card>
@@ -382,7 +479,7 @@ export default function BookAppointmentPage() {
             </div>
           )}
             
-          {step === 4 && (
+          {step === successStep && (
             <div className="text-center flex flex-col items-center gap-4 py-8">
               <PartyPopper className="w-16 h-16 text-accent" />
               <p className="max-w-md text-muted-foreground">Sua solicitação de agendamento foi recebida. Enviamos os detalhes para o seu e-mail e você será notificado assim que o salão confirmar. Mal podemos esperar para mimar você!</p>
@@ -392,12 +489,12 @@ export default function BookAppointmentPage() {
             </div>
           )}
         </CardContent>
-        {step < 4 && (
+        {step < successStep && (
           <CardFooter className="flex justify-between">
             <Button variant="outline" onClick={() => setStep(step - 1)} disabled={step === 1}>
               <ArrowLeft /> Voltar
             </Button>
-            {step < 3 ? (
+            {step < confirmationStep ? (
               <Button onClick={handleNextStep}>
                 Próximo <ArrowRight />
               </Button>

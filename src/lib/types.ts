@@ -34,6 +34,9 @@ export type Appointment = {
   status: 'Marcado' | 'confirmado' | 'cancelado' | 'finalizado';
   clientName: string;
   clientEmail: string;
+  hairLength?: 'curto' | 'medio' | 'longo';
+  hairPhotoUrl?: string | null;
+  finalPrice?: number;
 };
 
 export type TimeSlot = {
@@ -54,4 +57,3 @@ export type SocialMediaLinks = {
   instagram?: string;
   twitter?: string;
 }
-
