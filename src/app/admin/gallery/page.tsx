@@ -85,7 +85,8 @@ export default function AdminGalleryPage() {
         try {
           const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
           if (galleryImagesRef) {
-            await addDocumentNonBlocking(galleryImagesRef, {
+            // Corrected: Removed 'await' from non-blocking function call
+            addDocumentNonBlocking(galleryImagesRef, {
               imageUrl: downloadURL,
               description: description,
               fileName: fileName,
@@ -196,5 +197,3 @@ export default function AdminGalleryPage() {
     </div>
   );
 }
-
-    
