@@ -1,7 +1,21 @@
+
+'use client';
 import { Twitter, Instagram, Facebook } from 'lucide-react';
 import Link from 'next/link';
+import { useFirestore, useDoc, useMemoFirebase } from '@/firebase';
+import { doc } from 'firebase/firestore';
+
+interface SocialLinks {
+    facebook?: string;
+    instagram?: string;
+    twitter?: string;
+}
 
 export function Footer() {
+  const firestore = useFirestore();
+  const socialDocRef = useMemoFirebase(() => (firestore ? doc(firestore, 'socialMedia', 'links') : null), [firestore]);
+  const { data: socialLinks } = useDoc<SocialLinks>(socialDocRef);
+
   return (
     <footer className="bg-secondary/50">
       <div className="container mx-auto px-6 py-8">
@@ -11,15 +25,21 @@ export function Footer() {
 Seu santuário de beleza e bem-estar.
           </p>
           <div className="flex justify-center mt-6 space-x-6">
-            <Link href="#" aria-label="Facebook page">
-              <Facebook className="h-6 w-6 text-muted-foreground hover:text-primary transition-colors" />
-            </Link>
-            <Link href="#" aria-label="Instagram page">
-              <Instagram className="h-6 w-6 text-muted-foreground hover:text-primary transition-colors" />
-            </Link>
-            <Link href="#" aria-label="Twitter page">
-              <Twitter className="h-6 w-6 text-muted-foreground hover:text-primary transition-colors" />
-            </Link>
+            {socialLinks?.facebook && (
+              <Link href={socialLinks.facebook} aria-label="Facebook page" target="_blank" rel="noopener noreferrer">
+                <Facebook className="h-6 w-6 text-muted-foreground hover:text-primary transition-colors" />
+              </Link>
+            )}
+            {socialLinks?.instagram && (
+              <Link href={socialLinks.instagram} aria-label="Instagram page" target="_blank" rel="noopener noreferrer">
+                <Instagram className="h-6 w-6 text-muted-foreground hover:text-primary transition-colors" />
+              </Link>
+            )}
+            {socialLinks?.twitter && (
+              <Link href={socialLinks.twitter} aria-label="Twitter page" target="_blank" rel="noopener noreferrer">
+                <Twitter className="h-6 w-6 text-muted-foreground hover:text-primary transition-colors" />
+              </Link>
+            )}
           </div>
         </div>
 

@@ -1,4 +1,5 @@
 
+
 export type Service = {
   id: string;
   name: string;
@@ -42,4 +43,10 @@ export type User = {
     email: string;
     createdAt: string;
     isAdmin?: boolean;
+}
+
+export type SocialMediaLinks = {
+  facebook?: string;
+  instagram?: string;
+  twitter?: string;
 }
