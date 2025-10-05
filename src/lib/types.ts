@@ -1,5 +1,4 @@
 
-
 export type Service = {
   id: string;
   name: string;
@@ -44,5 +43,3 @@ export type User = {
     createdAt: string;
     isAdmin?: boolean;
 }
-
-    

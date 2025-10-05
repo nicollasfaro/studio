@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -10,15 +10,32 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
-import { useAuth, useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, query, where, orderBy } from 'firebase/firestore';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { useAuth, useUser, useFirestore, useCollection, useMemoFirebase, updateDocumentNonBlocking } from '@/firebase';
+import { collection, query, where, orderBy, doc } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { User, Edit, LogOut, Calendar, Bell } from 'lucide-react';
+import { User, Edit, LogOut, Calendar, Bell, MoreVertical, Trash2, Repeat } from 'lucide-react';
 import type { Appointment, Service } from '@/lib/types';
 import Link from 'next/link';
 import { useUserData } from '@/hooks/use-user-data';
+import { useToast } from '@/hooks/use-toast';
 
 interface AppointmentWithService extends Appointment {
   serviceName?: string;
@@ -30,6 +47,9 @@ export default function ProfilePage() {
   const auth = useAuth();
   const firestore = useFirestore();
   const router = useRouter();
+  const { toast } = useToast();
+
+  const [appointmentToCancel, setAppointmentToCancel] = useState<Appointment | null>(null);
 
   useEffect(() => {
     if (!isAuthLoading && !user) {
@@ -69,10 +89,10 @@ export default function ProfilePage() {
 
   const allUserAppointments = mapAndFilterAppointments(allAppointments);
   
-  const upcomingAppointments = allUserAppointments.filter(apt => new Date(apt.startTime) >= new Date());
+  const upcomingAppointments = allUserAppointments.filter(apt => new Date(apt.startTime) >= new Date() && apt.status !== 'cancelado');
   upcomingAppointments.sort((a,b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
   
-  const pastAppointments = allUserAppointments.filter(apt => new Date(apt.startTime) < new Date());
+  const pastAppointments = allUserAppointments.filter(apt => new Date(apt.startTime) < new Date() || apt.status === 'cancelado');
   pastAppointments.sort((a,b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
 
 
@@ -83,6 +103,20 @@ export default function ProfilePage() {
     } catch (error) {
       console.error('Erro ao sair: ', error);
     }
+  };
+
+  const handleCancelAppointment = () => {
+    if (!appointmentToCancel || !firestore) return;
+
+    const appointmentRef = doc(firestore, 'appointments', appointmentToCancel.id);
+    updateDocumentNonBlocking(appointmentRef, { status: 'cancelado' });
+
+    toast({
+      title: 'Agendamento Cancelado',
+      description: 'Seu agendamento foi cancelado com sucesso.',
+    });
+
+    setAppointmentToCancel(null);
   };
   
   const getBadgeVariant = (status: Appointment['status']) => {
@@ -164,95 +198,130 @@ export default function ProfilePage() {
         </div>
 
         <div className="lg:col-span-2 space-y-8">
-          <Card className="shadow-lg">
-            <CardHeader>
-              <CardTitle className="font-headline flex items-center gap-2">
-                <Calendar className="text-primary" />
-                Meus Próximos Agendamentos
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {isLoadingServices || isLoadingAppointments ? (
-                <Skeleton className="h-20 w-full" />
-              ) : upcomingAppointments.length > 0 ? (
-                <ul className="space-y-4">
-                  {upcomingAppointments.map((apt) => (
-                    <li key={apt.id} className="flex items-center justify-between p-4 bg-secondary/30 rounded-lg">
-                      <div>
-                        <p className="font-semibold">{apt.serviceName}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {format(new Date(apt.startTime), "EEEE, d 'de' MMM 'às' HH:mm", { locale: ptBR })}
-                        </p>
-                      </div>
-                       <Badge variant={getBadgeVariant(apt.status)} className="capitalize">
-                        {apt.status}
-                      </Badge>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-muted-foreground text-center py-4">Você não tem agendamentos futuros.</p>
-              )}
-            </CardContent>
-          </Card>
-          
-          <Card className="shadow-lg">
-            <CardHeader>
-              <CardTitle className="font-headline flex items-center gap-2">
-                <Calendar className="text-primary" />
-                Meus Agendamentos Passados
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {isLoadingServices || isLoadingAppointments ? (
-                 <Skeleton className="h-20 w-full" />
-              ) : pastAppointments.length > 0 ? (
-                <ul className="space-y-4">
-                  {pastAppointments.map((apt) => (
-                    <li key={apt.id} className="flex items-center justify-between p-4 bg-secondary/30 rounded-lg">
-                      <div>
-                        <p className="font-semibold">{apt.serviceName}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {format(new Date(apt.startTime), "EEEE, d 'de' MMM 'às' HH:mm", { locale: ptBR })}
-                        </p>
-                      </div>
-                      <Button asChild variant="secondary" size="sm">
-                        <Link href={`/book?service=${apt.serviceId}`}>Agendar Novamente</Link>
-                      </Button>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-muted-foreground text-center py-4">Você não tem agendamentos passados.</p>
-              )}
-            </CardContent>
-          </Card>
+          <AlertDialog open={!!appointmentToCancel} onOpenChange={(open) => !open && setAppointmentToCancel(null)}>
+            <Card className="shadow-lg">
+              <CardHeader>
+                <CardTitle className="font-headline flex items-center gap-2">
+                  <Calendar className="text-primary" />
+                  Meus Próximos Agendamentos
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {isLoadingServices || isLoadingAppointments ? (
+                  <Skeleton className="h-20 w-full" />
+                ) : upcomingAppointments.length > 0 ? (
+                  <ul className="space-y-4">
+                    {upcomingAppointments.map((apt) => (
+                      <li key={apt.id} className="flex items-center justify-between p-4 bg-secondary/30 rounded-lg">
+                        <div className="flex-1">
+                          <p className="font-semibold">{apt.serviceName}</p>
+                          <p className="text-sm text-muted-foreground">
+                            {format(new Date(apt.startTime), "EEEE, d 'de' MMM 'às' HH:mm", { locale: ptBR })}
+                          </p>
+                           <Badge variant={getBadgeVariant(apt.status)} className="capitalize mt-2">
+                            {apt.status}
+                          </Badge>
+                        </div>
+                         <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon">
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                             <DropdownMenuItem asChild>
+                               <Link href={`/book?service=${apt.serviceId}`}>
+                                <Repeat className="mr-2 h-4 w-4" />
+                                Remarcar
+                               </Link>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setAppointmentToCancel(apt)} className="text-destructive focus:text-destructive">
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              Cancelar
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-muted-foreground text-center py-4">Você não tem agendamentos futuros.</p>
+                )}
+              </CardContent>
+            </Card>
+            
+            <Card className="shadow-lg">
+              <CardHeader>
+                <CardTitle className="font-headline flex items-center gap-2">
+                  <Calendar className="text-primary" />
+                  Histórico de Agendamentos
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {isLoadingServices || isLoadingAppointments ? (
+                   <Skeleton className="h-20 w-full" />
+                ) : pastAppointments.length > 0 ? (
+                  <ul className="space-y-4">
+                    {pastAppointments.map((apt) => (
+                      <li key={apt.id} className="flex items-center justify-between p-4 bg-secondary/30 rounded-lg">
+                        <div>
+                          <p className="font-semibold">{apt.serviceName}</p>
+                          <p className="text-sm text-muted-foreground">
+                            {format(new Date(apt.startTime), "d 'de' MMM, yyyy", { locale: ptBR })} - <Badge variant={getBadgeVariant(apt.status)} className="capitalize">{apt.status}</Badge>
+                          </p>
+                        </div>
+                         {apt.status !== 'cancelado' && (
+                            <Button asChild variant="secondary" size="sm">
+                                <Link href={`/book?service=${apt.serviceId}`}>Agendar Novamente</Link>
+                            </Button>
+                         )}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-muted-foreground text-center py-4">Você não tem agendamentos passados.</p>
+                )}
+              </CardContent>
+            </Card>
 
-          <Card className="shadow-lg">
-            <CardHeader>
-              <CardTitle className="font-headline flex items-center gap-2">
-                <Bell className="text-primary" />
-                Configurações de Notificação
-              </CardTitle>
-              <CardDescription>Gerencie como nos comunicamos com você.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between p-4 border rounded-lg">
-                <Label htmlFor="promo-notifications" className="flex flex-col gap-1">
-                  <span className="font-semibold">Notificações Promocionais</span>
-                  <span className="text-sm text-muted-foreground">Receba atualizações sobre ofertas especiais e novos serviços.</span>
-                </Label>
-                <Switch id="promo-notifications" defaultChecked />
-              </div>
-              <div className="flex items-center justify-between p-4 border rounded-lg">
-                <Label htmlFor="reminder-notifications" className="flex flex-col gap-1">
-                  <span className="font-semibold">Lembretes de Agendamento</span>
-                   <span className="text-sm text-muted-foreground">Receba lembretes para seus próximos agendamentos.</span>
-                </Label>
-                <Switch id="reminder-notifications" defaultChecked />
-              </div>
-            </CardContent>
-          </Card>
+            <Card className="shadow-lg">
+              <CardHeader>
+                <CardTitle className="font-headline flex items-center gap-2">
+                  <Bell className="text-primary" />
+                  Configurações de Notificação
+                </CardTitle>
+                <CardDescription>Gerencie como nos comunicamos com você.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center justify-between p-4 border rounded-lg">
+                  <Label htmlFor="promo-notifications" className="flex flex-col gap-1">
+                    <span className="font-semibold">Notificações Promocionais</span>
+                    <span className="text-sm text-muted-foreground">Receba atualizações sobre ofertas especiais e novos serviços.</span>
+                  </Label>
+                  <Switch id="promo-notifications" defaultChecked />
+                </div>
+                <div className="flex items-center justify-between p-4 border rounded-lg">
+                  <Label htmlFor="reminder-notifications" className="flex flex-col gap-1">
+                    <span className="font-semibold">Lembretes de Agendamento</span>
+                     <span className="text-sm text-muted-foreground">Receba lembretes para seus próximos agendamentos.</span>
+                  </Label>
+                  <Switch id="reminder-notifications" defaultChecked />
+                </div>
+              </CardContent>
+            </Card>
+            <AlertDialogContent>
+                <AlertDialogHeader>
+                    <AlertDialogTitle>Você tem certeza?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                        Esta ação não pode ser desfeita. Isso cancelará permanentemente seu agendamento para o serviço "{appointmentToCancel?.serviceName}" no dia {appointmentToCancel && format(new Date(appointmentToCancel.startTime), "dd/MM/yyyy 'às' HH:mm")}.
+                    </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                    <AlertDialogCancel onClick={() => setAppointmentToCancel(null)}>Voltar</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleCancelAppointment} className="bg-destructive hover:bg-destructive/90">Sim, cancelar</AlertDialogAction>
+                </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
       </div>
     </div>
