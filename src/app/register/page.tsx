@@ -91,7 +91,7 @@ export default function RegisterPage() {
       <Card className="w-full max-w-md shadow-2xl">
         <CardHeader className="text-center">
           <CardTitle className="text-3xl font-headline">Crie uma Conta</CardTitle>
-          <CardDescription>Junte-se à GlamEase e comece sua jornada de beleza</CardDescription>
+          <CardDescription>Junte-se à Thainnes Cuba Ciuldin e comece sua jornada de beleza</CardDescription>
         </CardHeader>
         <CardContent>
           <Form {...form}>

@@ -7,7 +7,7 @@ import { Toaster } from '@/components/ui/toaster';
 import { FirebaseClientProvider } from '@/firebase';
 
 export const metadata: Metadata = {
-  title: 'GlamEase',
+  title: 'Thainnes Cuba Ciuldin',
   description: 'Your one-stop beauty and wellness salon.',
 };
 

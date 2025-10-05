@@ -6,9 +6,9 @@ export function Footer() {
     <footer className="bg-secondary/50">
       <div className="container mx-auto px-6 py-8">
         <div className="flex flex-col items-center text-center">
-          <h3 className="text-2xl font-headline text-primary">GlamEase</h3>
+          <h3 className="text-2xl font-headline text-primary">Thainnes Cuba Ciuldin</h3>
           <p className="max-w-md mx-auto mt-2 text-muted-foreground">
-            Your sanctuary for beauty and wellness.
+Seu santuário de beleza e bem-estar.
           </p>
           <div className="flex justify-center mt-6 space-x-6">
             <Link href="#" aria-label="Facebook page">
@@ -27,7 +27,7 @@ export function Footer() {
 
         <div className="text-center">
           <p className="text-sm text-muted-foreground">
-            &copy; {new Date().getFullYear()} GlamEase. All Rights Reserved.
+            &copy; {new Date().getFullYear()} Thainnes Cuba Ciuldin. All Rights Reserved.
           </p>
         </div>
       </div>

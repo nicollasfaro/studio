@@ -1,5 +1,5 @@
 /**
- * @fileoverview Firestore Security Rules for GlamEase.
+ * @fileoverview Firestore Security Rules for Thainnes Cuba Ciuldin.
  *
  * Core Philosophy: This ruleset enforces a user-ownership model for appointments
  * and user profiles, with admin override capabilities. Public read access is granted

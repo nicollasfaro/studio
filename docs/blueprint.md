@@ -1,4 +1,4 @@
-# **App Name**: GlamEase
+# **App Name**: Thainnes Cuba Ciuldin
 
 ## Core Features:
 
