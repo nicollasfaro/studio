@@ -1,9 +1,9 @@
 
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
-import { collection, doc, updateDoc, query, orderBy, limit, startAfter, getDocs, endBefore, limitToLast } from 'firebase/firestore';
+import { collection, doc, updateDoc, query, orderBy, limit, startAfter, getDocs, endBefore, limitToLast, DocumentSnapshot, where } from 'firebase/firestore';
 import type { User } from '@/lib/types';
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card';
 import {
@@ -37,17 +37,19 @@ export default function AdminUsersPage({ isAdmin }: { isAdmin: boolean }) {
   const { toast } = useToast();
 
   const [page, setPage] = useState(0);
-  const [lastVisible, setLastVisible] = useState<any>(null);
-  const [firstVisible, setFirstVisible] = useState<any>(null);
+  const [paginationSnapshots, setPaginationSnapshots] = useState<(DocumentSnapshot | null)[]>([null]);
 
-  const usersQuery = useMemo(() => {
+
+  const usersQuery = useMemoFirebase(() => {
     if (!firestore) return null;
-    let q = query(collection(firestore, 'users'), orderBy('createdAt', 'desc'), limit(USERS_PER_PAGE));
-    if (page > 0 && lastVisible) {
-      q = query(collection(firestore, 'users'), orderBy('createdAt', 'desc'), startAfter(lastVisible), limit(USERS_PER_PAGE));
+    const q = query(collection(firestore, 'users'), orderBy('createdAt', 'desc'), limit(USERS_PER_PAGE));
+    
+    if (page > 0 && paginationSnapshots[page]) {
+      return query(collection(firestore, 'users'), orderBy('createdAt', 'desc'), startAfter(paginationSnapshots[page]), limit(USERS_PER_PAGE));
     }
+    
     return q;
-  }, [firestore, page, lastVisible]);
+  }, [firestore, page, paginationSnapshots]);
   
   const { data: users, isLoading } = useCollection<User>(usersQuery);
 
@@ -82,35 +84,26 @@ export default function AdminUsersPage({ isAdmin }: { isAdmin: boolean }) {
   };
 
   const handleNextPage = async () => {
-    if (!firestore || !users || users.length < USERS_PER_PAGE) return;
-    
+    if (!users || users.length === 0) return;
     const lastUser = users[users.length - 1];
-    const lastUserDoc = await getDocs(query(collection(firestore, 'users'), where('id', '==', lastUser.id)));
 
-    if (!lastUserDoc.empty) {
-        const lastDocSnapshot = lastUserDoc.docs[0];
-        setLastVisible(lastDocSnapshot);
-        setFirstVisible(users[0]);
-        setPage(prev => prev + 1);
+    if (!firestore) return;
+    // We need to fetch the actual DocumentSnapshot for the last user.
+    // The user object from useCollection doesn't contain the snapshot.
+    const lastUserDocQuery = query(collection(firestore, "users"), where("id", "==", lastUser.id), limit(1));
+    const lastUserDocSnapshot = await getDocs(lastUserDocQuery);
+    const lastVisibleDoc = lastUserDocSnapshot.docs[0];
+    
+    if (lastVisibleDoc) {
+      setPaginationSnapshots(prev => [...prev, lastVisibleDoc]);
+      setPage(prev => prev + 1);
     }
   };
 
   const handlePrevPage = async () => {
-     if (!firestore || page === 0 || !firstVisible) return;
-
-     const prevQuery = query(collection(firestore, 'users'), orderBy('createdAt', 'desc'), endBefore(firstVisible), limitToLast(USERS_PER_PAGE));
-     const prevSnapshot = await getDocs(prevQuery);
-     const prevUsers = prevSnapshot.docs.map(d => d.data() as User);
-
-     if(prevUsers.length > 0) {
-        setLastVisible(prevSnapshot.docs[prevSnapshot.docs.length-1]);
-        setFirstVisible(prevSnapshot.docs[0]);
-     } else {
-        setFirstVisible(null);
-        setLastVisible(null);
-     }
-     
+     if (page === 0) return;
      setPage(prev => prev - 1);
+     // The snapshot for the previous page is already in the array
   };
   
 
@@ -131,7 +124,7 @@ export default function AdminUsersPage({ isAdmin }: { isAdmin: boolean }) {
           </TableHeader>
           <TableBody>
             {isLoading &&
-              Array.from({ length: 5 }).map((_, i) => (
+              Array.from({ length: USERS_PER_PAGE }).map((_, i) => (
                 <TableRow key={i}>
                   <TableCell>
                     <Skeleton className="h-4 w-[150px]" />
@@ -189,7 +182,7 @@ export default function AdminUsersPage({ isAdmin }: { isAdmin: boolean }) {
             variant="outline"
             size="sm"
             onClick={handlePrevPage}
-            disabled={page === 0}
+            disabled={page === 0 || isLoading}
           >
             <ChevronLeft className="h-4 w-4 mr-1" />
             Anterior
@@ -198,7 +191,7 @@ export default function AdminUsersPage({ isAdmin }: { isAdmin: boolean }) {
             variant="outline"
             size="sm"
             onClick={handleNextPage}
-            disabled={!users || users.length < USERS_PER_PAGE}
+            disabled={!users || users.length < USERS_PER_PAGE || isLoading}
           >
             Próximo
             <ChevronRight className="h-4 w-4 ml-1" />
@@ -207,5 +200,3 @@ export default function AdminUsersPage({ isAdmin }: { isAdmin: boolean }) {
     </Card>
   );
 }
-
-    
