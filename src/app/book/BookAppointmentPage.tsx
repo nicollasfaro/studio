@@ -21,7 +21,7 @@ import { ArrowLeft, ArrowRight, PartyPopper, Loader2, Info } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { format, startOfDay, endOfDay, addMinutes, parse } from 'date-fns';
-import { useCollection, useDoc, useFirestore, useUser, useMemoFirebase, addDocumentNonBlocking } from '@/firebase';
+import { useCollection, useDoc, useFirestore, useUser, useMemoFirebase, addDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
 import { collection, query, where, doc } from 'firebase/firestore';
 import type { Service, Appointment, Promotion } from '@/lib/types';
 import { timeSlots as allTimeSlots } from '@/lib/data';
@@ -44,6 +44,7 @@ export default function BookAppointmentPage() {
   
   const serviceQueryParam = searchParams.get('service');
   const promoQueryParam = searchParams.get('promo');
+  const rescheduleId = searchParams.get('remarcarId');
 
   const [step, setStep] = useState(1);
   const [selectedServiceId, setSelectedServiceId] = useState<string | undefined>(serviceQueryParam || undefined);
@@ -63,6 +64,18 @@ export default function BookAppointmentPage() {
 
   const promotionRef = useMemoFirebase(() => (firestore && promoQueryParam ? doc(firestore, 'promotions', promoQueryParam) : null), [firestore, promoQueryParam]);
   const { data: promotion, isLoading: isLoadingPromotion } = useDoc<Promotion>(promotionRef);
+
+  const appointmentToRescheduleRef = useMemoFirebase(() => (firestore && rescheduleId ? doc(firestore, 'appointments', rescheduleId) : null), [firestore, rescheduleId]);
+  const { data: appointmentToReschedule, isLoading: isLoadingReschedule } = useDoc<Appointment>(appointmentToRescheduleRef);
+
+  // Set service ID if rescheduling
+  useEffect(() => {
+    if (rescheduleId && appointmentToReschedule && !selectedServiceId) {
+      setSelectedServiceId(appointmentToReschedule.serviceId);
+      setName(appointmentToReschedule.clientName);
+      setEmail(appointmentToReschedule.clientEmail);
+    }
+  }, [appointmentToReschedule, rescheduleId, selectedServiceId]);
 
   // Filter services based on promotion
   useEffect(() => {
@@ -112,6 +125,9 @@ export default function BookAppointmentPage() {
     const bookedSlots = new Set<string>();
 
     todaysAppointments.forEach(apt => {
+        // When rescheduling, ignore the appointment being rescheduled from conflict checking
+        if (rescheduleId && apt.id === rescheduleId) return;
+
         if (apt.status === 'cancelado') return; // Ignore canceled appointments
 
         const service = allServices.find(s => s.id === apt.serviceId);
@@ -133,7 +149,7 @@ export default function BookAppointmentPage() {
       available: !bookedSlots.has(slot.time)
     }));
 
-  }, [todaysAppointments, allServices, isLoadingAppointments]);
+  }, [todaysAppointments, allServices, isLoadingAppointments, rescheduleId]);
 
 
   const handleNextStep = () => {
@@ -180,9 +196,7 @@ export default function BookAppointmentPage() {
     startTime.setHours(hours, minutes, 0, 0);
     const endTime = new Date(startTime.getTime() + serviceDetails.durationMinutes * 60000);
 
-    const appointmentsRef = collection(firestore, 'appointments');
-    
-    addDocumentNonBlocking(appointmentsRef, {
+    const appointmentData = {
         clientId: user.uid,
         serviceId: selectedServiceId,
         startTime: startTime.toISOString(),
@@ -190,24 +204,41 @@ export default function BookAppointmentPage() {
         status: 'Marcado',
         clientName: name,
         clientEmail: email
-    });
+    };
 
-    toast({
-      title: 'Agendamento Solicitado!',
-      description: `Estamos ansiosos para vê-lo em ${format(date, 'PPP', { locale: ptBR })} às ${selectedTime}. Aguarde a confirmação do Salão!`,
-    });
-    setStep(4);
+    if (rescheduleId && appointmentToRescheduleRef) {
+        // Update existing appointment
+        updateDocumentNonBlocking(appointmentToRescheduleRef, appointmentData);
+        toast({
+          title: 'Agendamento Remarcado!',
+          description: `Seu agendamento foi atualizado para ${format(date, 'PPP', { locale: ptBR })} às ${selectedTime}.`,
+        });
+        // Redirect to profile page after rescheduling
+        router.push('/profile');
+    } else {
+        // Create new appointment
+        const appointmentsRef = collection(firestore, 'appointments');
+        addDocumentNonBlocking(appointmentsRef, appointmentData);
+        toast({
+          title: 'Agendamento Solicitado!',
+          description: `Estamos ansiosos para vê-lo em ${format(date, 'PPP', { locale: ptBR })} às ${selectedTime}. Aguarde a confirmação do Salão!`,
+        });
+        setStep(4);
+    }
+
     setIsBooking(false);
   };
 
   const currentService = servicesToDisplay?.find(s => s.id === selectedServiceId);
+
+  const pageTitle = rescheduleId ? 'Remarcar Agendamento' : 'Faça seu Agendamento';
 
   return (
     <div className="container mx-auto px-4 md:px-6 py-12">
       <Card className="max-w-4xl mx-auto shadow-xl">
         <CardHeader>
           <CardTitle className="text-3xl font-headline text-center">
-            {step === 4 ? 'Solicitação Recebida!' : 'Faça seu Agendamento'}
+            {step === 4 ? 'Solicitação Recebida!' : pageTitle}
           </CardTitle>
           <CardDescription className="text-center">
             {step < 4 && `Passo ${step} de 3 - ${step === 1 ? 'Escolha o Serviço' : step === 2 ? 'Selecione a Data e Hora' : 'Confirme os Detalhes'}`}
@@ -227,15 +258,25 @@ export default function BookAppointmentPage() {
           {step === 1 && (
             <div className="space-y-6">
               <h3 className="text-xl font-bold">Selecione um Serviço</h3>
-              <RadioGroup value={selectedServiceId} onValueChange={setSelectedServiceId}>
-                {(isLoadingServices || (promoQueryParam && isLoadingPromotion)) && <p>Carregando serviços...</p>}
+               {rescheduleId && (
+                  <Alert variant="default" className="bg-blue-50 border-blue-200">
+                    <Info className="h-4 w-4 text-blue-600" />
+                    <AlertTitle className="text-blue-800 font-semibold">Remarcando</AlertTitle>
+                    <AlertDescription className="text-blue-700">
+                      Você está remarcando o serviço: <span className="font-semibold">{currentService?.name}</span>. Para trocar o serviço, cancele e faça um novo agendamento.
+                    </AlertDescription>
+                  </Alert>
+                )}
+              <RadioGroup value={selectedServiceId} onValueChange={setSelectedServiceId} disabled={!!rescheduleId}>
+                {(isLoadingServices || (promoQueryParam && isLoadingPromotion) || isLoadingReschedule) && <p>Carregando serviços...</p>}
                 {servicesToDisplay?.map((service) => (
                   <Label
                     key={service.id}
                     htmlFor={service.id}
                     className={cn(
-                        "flex items-center justify-between rounded-lg border p-4 cursor-pointer transition-all hover:bg-secondary/50",
-                        selectedServiceId === service.id && "bg-secondary border-primary ring-2 ring-primary"
+                        "flex items-center justify-between rounded-lg border p-4 transition-all hover:bg-secondary/50",
+                        selectedServiceId === service.id && "bg-secondary border-primary ring-2 ring-primary",
+                        !!rescheduleId ? "cursor-not-allowed opacity-70" : "cursor-pointer"
                     )}
                   >
                     <div>
@@ -317,11 +358,11 @@ export default function BookAppointmentPage() {
               <div className="grid sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="name">Nome Completo</Label>
-                  <Input id="name" placeholder="Jane Doe" value={name} onChange={(e) => setName(e.target.value)} />
+                  <Input id="name" placeholder="Jane Doe" value={name} onChange={(e) => setName(e.target.value)} disabled={!!rescheduleId} />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="email">Endereço de Email</Label>
-                  <Input id="email" type="email" placeholder="jane@exemplo.com" value={email} onChange={(e) => setEmail(e.target.value)} />
+                  <Input id="email" type="email" placeholder="jane@exemplo.com" value={email} onChange={(e) => setEmail(e.target.value)} disabled={!!rescheduleId}/>
                 </div>
               </div>
             </div>
@@ -348,7 +389,7 @@ export default function BookAppointmentPage() {
               </Button>
             ) : (
               <Button onClick={handleBooking} disabled={isBooking || isUserLoading || isLoadingAppointments}>
-                {isBooking ? <Loader2 className="animate-spin" /> : 'Confirmar Agendamento'}
+                {isBooking ? <Loader2 className="animate-spin" /> : rescheduleId ? 'Confirmar Remarcação' : 'Confirmar Agendamento'}
               </Button>
             )}
           </CardFooter>

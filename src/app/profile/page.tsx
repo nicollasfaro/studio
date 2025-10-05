@@ -90,7 +90,7 @@ export default function ProfilePage() {
   const allUserAppointments = mapAndFilterAppointments(allAppointments);
   
   const upcomingAppointments = allUserAppointments.filter(apt => new Date(apt.startTime) >= new Date() && apt.status !== 'cancelado');
-  upcomingAppointments.sort((a,b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+  upcomingAppointments.sort((a,b) => new Date(a.startTime).getTime() - new Date(a.startTime).getTime());
   
   const pastAppointments = allUserAppointments.filter(apt => new Date(apt.startTime) < new Date() || apt.status === 'cancelado');
   pastAppointments.sort((a,b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
@@ -230,9 +230,9 @@ export default function ProfilePage() {
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
                              <DropdownMenuItem asChild>
-                               <Link href={`/book?service=${apt.serviceId}`}>
+                               <Link href={`/book?remarcarId=${apt.id}`}>
                                 <Repeat className="mr-2 h-4 w-4" />
-                                Agendar Novamente
+                                Remarcar
                                </Link>
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => setAppointmentToCancel(apt)} className="text-destructive focus:text-destructive">
