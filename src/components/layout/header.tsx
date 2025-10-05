@@ -35,11 +35,10 @@ import { useToast } from '@/hooks/use-toast';
 import { useUserData } from '@/hooks/use-user-data';
 
 
-const navLinks = [
+const baseNavLinks = [
   { href: '/', label: 'Início', icon: Home },
   { href: '/services', label: 'Serviços', icon: Scissors },
   { href: '/promotions', label: 'Promoções', icon: Gift },
-  { href: '/book', label: 'Agendar', icon: Calendar },
 ];
 
 export function Header() {
@@ -68,6 +67,14 @@ export function Header() {
       });
     }
   };
+  
+  const bookHref = user ? '/book' : '/login';
+
+  const navLinks = [
+    ...baseNavLinks,
+    { href: bookHref, label: 'Agendar', icon: Calendar },
+  ];
+
 
   const isLoading = isUserDataLoading;
 
