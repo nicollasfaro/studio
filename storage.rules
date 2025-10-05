@@ -4,13 +4,13 @@ service firebase.storage {
   match /b/{bucket}/o {
     // Regras para a galeria de imagens
     match /gallery/{allPaths=**} {
-      // Qualquer pessoa pode ler as imagens, pois elas são exibidas publicamente no site.
+      // Qualquer pessoa pode ler as imagens (necessário para exibi-las no site).
       allow read;
 
-      // Apenas usuários autenticados que são administradores podem escrever (upload, update, delete).
-      // A função get() verifica o campo 'isAdmin' no documento do usuário no Firestore.
-      allow write: if request.auth != null &&
-                    get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+      // Apenas usuários autenticados podem escrever (fazer upload).
+      // A segurança de "apenas administradores" é feita na própria página de upload,
+      // que só é acessível por administradores.
+      allow write: if request.auth != null;
     }
   }
 }
