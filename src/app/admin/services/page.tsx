@@ -101,6 +101,9 @@ export default function AdminServicesPage() {
       durationMinutes: 30,
       imageId: '',
       isPriceFrom: false,
+      priceShortHair: 0,
+      priceMediumHair: 0,
+      priceLongHair: 0,
     },
   });
 
@@ -125,15 +128,7 @@ export default function AdminServicesPage() {
           description: `O serviço "${values.name}" foi adicionado com sucesso.`,
         });
       }
-      form.reset({
-        name: '',
-        description: '',
-        price: 0,
-        durationMinutes: 30,
-        imageId: '',
-        isPriceFrom: false,
-      });
-      setIsEditing(null);
+      handleCancelEdit();
     } catch (error) {
       console.error('Erro ao salvar serviço:', error);
       toast({
@@ -166,7 +161,12 @@ export default function AdminServicesPage() {
 
   const handleEditClick = (service: Service) => {
     setIsEditing(service);
-    form.reset(service);
+    form.reset({
+      ...service,
+      priceShortHair: service.priceShortHair || 0,
+      priceMediumHair: service.priceMediumHair || 0,
+      priceLongHair: service.priceLongHair || 0,
+    });
   };
   
   const handleCancelEdit = () => {
@@ -178,6 +178,9 @@ export default function AdminServicesPage() {
         durationMinutes: 30,
         imageId: '',
         isPriceFrom: false,
+        priceShortHair: 0,
+        priceMediumHair: 0,
+        priceLongHair: 0,
       });
   }
 
