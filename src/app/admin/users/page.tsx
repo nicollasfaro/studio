@@ -1,9 +1,11 @@
+
 'use client';
 
+import { useState, useMemo } from 'react';
 import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
-import { collection, doc, updateDoc } from 'firebase/firestore';
+import { collection, doc, updateDoc, query, orderBy, limit, startAfter, getDocs, endBefore, limitToLast } from 'firebase/firestore';
 import type { User } from '@/lib/types';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card';
 import {
   Table,
   TableHeader,
@@ -12,7 +14,6 @@ import {
   TableBody,
   TableCell,
 } from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Select,
@@ -23,18 +24,32 @@ import {
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { useUser } from '@/firebase';
+import { Button } from '@/components/ui/button';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 
+
+const USERS_PER_PAGE = 10;
 
 // This component now receives isAdmin as a prop from the layout
 export default function AdminUsersPage({ isAdmin }: { isAdmin: boolean }) {
   const firestore = useFirestore();
   const { user: currentUser } = useUser();
   const { toast } = useToast();
+
+  const [page, setPage] = useState(0);
+  const [lastVisible, setLastVisible] = useState<any>(null);
+  const [firstVisible, setFirstVisible] = useState<any>(null);
+
+  const usersQuery = useMemo(() => {
+    if (!firestore) return null;
+    let q = query(collection(firestore, 'users'), orderBy('createdAt', 'desc'), limit(USERS_PER_PAGE));
+    if (page > 0 && lastVisible) {
+      q = query(collection(firestore, 'users'), orderBy('createdAt', 'desc'), startAfter(lastVisible), limit(USERS_PER_PAGE));
+    }
+    return q;
+  }, [firestore, page, lastVisible]);
   
-  // The layout already protects this route, so the isAdmin check here was redundant
-  // and causing issues with data fetching timing.
-  const usersRef = useMemoFirebase(() => (firestore ? collection(firestore, 'users') : null), [firestore]);
-  const { data: users, isLoading } = useCollection<User>(usersRef);
+  const { data: users, isLoading } = useCollection<User>(usersQuery);
 
   const handleRoleChange = async (userId: string, newRole: 'admin' | 'user') => {
     if (!firestore) return;
@@ -65,6 +80,39 @@ export default function AdminUsersPage({ isAdmin }: { isAdmin: boolean }) {
       });
     }
   };
+
+  const handleNextPage = async () => {
+    if (!firestore || !users || users.length < USERS_PER_PAGE) return;
+    
+    const lastUser = users[users.length - 1];
+    const lastUserDoc = await getDocs(query(collection(firestore, 'users'), where('id', '==', lastUser.id)));
+
+    if (!lastUserDoc.empty) {
+        const lastDocSnapshot = lastUserDoc.docs[0];
+        setLastVisible(lastDocSnapshot);
+        setFirstVisible(users[0]);
+        setPage(prev => prev + 1);
+    }
+  };
+
+  const handlePrevPage = async () => {
+     if (!firestore || page === 0 || !firstVisible) return;
+
+     const prevQuery = query(collection(firestore, 'users'), orderBy('createdAt', 'desc'), endBefore(firstVisible), limitToLast(USERS_PER_PAGE));
+     const prevSnapshot = await getDocs(prevQuery);
+     const prevUsers = prevSnapshot.docs.map(d => d.data() as User);
+
+     if(prevUsers.length > 0) {
+        setLastVisible(prevSnapshot.docs[prevSnapshot.docs.length-1]);
+        setFirstVisible(prevSnapshot.docs[0]);
+     } else {
+        setFirstVisible(null);
+        setLastVisible(null);
+     }
+     
+     setPage(prev => prev - 1);
+  };
+  
 
   return (
     <Card>
@@ -133,6 +181,31 @@ export default function AdminUsersPage({ isAdmin }: { isAdmin: boolean }) {
           </p>
         )}
       </CardContent>
+       <CardFooter className="flex items-center justify-end space-x-2 py-4">
+          <span className="text-sm text-muted-foreground">
+            Página {page + 1}
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handlePrevPage}
+            disabled={page === 0}
+          >
+            <ChevronLeft className="h-4 w-4 mr-1" />
+            Anterior
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleNextPage}
+            disabled={!users || users.length < USERS_PER_PAGE}
+          >
+            Próximo
+            <ChevronRight className="h-4 w-4 ml-1" />
+          </Button>
+        </CardFooter>
     </Card>
   );
 }
+
+    
