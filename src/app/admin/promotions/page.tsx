@@ -1,18 +1,382 @@
-
 'use client';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+
+import { useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import * as z from 'zod';
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardContent,
+  CardFooter,
+} from '@/components/ui/card';
+import {
+  Table,
+  TableHeader,
+  TableRow,
+  TableHead,
+  TableBody,
+  TableCell,
+} from '@/components/ui/table';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/ui/form';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useToast } from '@/hooks/use-toast';
+import { useCollection, useFirestore, useMemoFirebase, addDocumentNonBlocking, deleteDocumentNonBlocking, setDocumentNonBlocking } from '@/firebase';
+import { collection, doc } from 'firebase/firestore';
+import type { Promotion, Service } from '@/lib/types';
+import { PlaceHolderImages } from '@/lib/placeholder-images';
+import { PlusCircle, Edit, Trash2 } from 'lucide-react';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
+import { ScrollArea } from '@/components/ui/scroll-area';
+
+const promotionSchema = z.object({
+  name: z.string().min(3, 'O nome deve ter pelo menos 3 caracteres.'),
+  description: z.string().min(10, 'A descrição deve ter pelo menos 10 caracteres.'),
+  discountPercentage: z.coerce.number().min(1, 'O desconto deve ser de no mínimo 1%.').max(100, 'O desconto não pode passar de 100%.'),
+  imageId: z.string().min(1, 'Por favor, selecione uma imagem.'),
+  serviceIds: z.array(z.string()).min(1, 'Selecione pelo menos um serviço.'),
+  // Dates are stored as strings, validation for date logic is handled separately if needed
+  startDate: z.string().min(1, 'Data de início é obrigatória.'),
+  endDate: z.string().min(1, 'Data de fim é obrigatória.'),
+});
+
+type PromotionFormValues = z.infer<typeof promotionSchema>;
 
 export default function AdminPromotionsPage() {
-    return (
-        <Card>
-            <CardHeader>
-                <CardTitle>Gerenciamento de Promoções</CardTitle>
-            </CardHeader>
-            <CardContent>
-                <p className="text-muted-foreground">Esta página está em construção. Em breve, você poderá criar e gerenciar promoções e ofertas especiais aqui.</p>
-            </CardContent>
-        </Card>
-    )
-}
+  const { toast } = useToast();
+  const firestore = useFirestore();
 
-    
+  const [isEditing, setIsEditing] = useState<Promotion | null>(null);
+  const [showDeleteAlert, setShowDeleteAlert] = useState<Promotion | null>(null);
+
+  const servicesRef = useMemoFirebase(() => (firestore ? collection(firestore, 'services') : null), [firestore]);
+  const promotionsRef = useMemoFirebase(() => (firestore ? collection(firestore, 'promotions') : null), [firestore]);
+  
+  const { data: services, isLoading: isLoadingServices } = useCollection<Service>(servicesRef);
+  const { data: promotions, isLoading: isLoadingPromotions } = useCollection<Promotion>(promotionsRef);
+
+  const form = useForm<PromotionFormValues>({
+    resolver: zodResolver(promotionSchema),
+    defaultValues: {
+      name: '',
+      description: '',
+      discountPercentage: 10,
+      imageId: '',
+      serviceIds: [],
+      startDate: new Date().toISOString().split('T')[0],
+      endDate: new Date(new Date().setDate(new Date().getDate() + 7)).toISOString().split('T')[0],
+    },
+  });
+
+  const onSubmit = async (values: PromotionFormValues) => {
+    if (!firestore || !promotionsRef) return;
+    try {
+      const promotionData = {
+          ...values,
+          startDate: new Date(values.startDate).toISOString(),
+          endDate: new Date(values.endDate).toISOString()
+      }
+
+      if (isEditing) {
+        const promotionDocRef = doc(firestore, 'promotions', isEditing.id);
+        setDocumentNonBlocking(promotionDocRef, promotionData, { merge: true });
+        toast({
+          title: 'Promoção Atualizada!',
+          description: `A promoção "${values.name}" foi atualizada com sucesso.`,
+        });
+      } else {
+        addDocumentNonBlocking(promotionsRef, promotionData);
+        toast({
+          title: 'Promoção Adicionada!',
+          description: `A promoção "${values.name}" foi adicionada com sucesso.`,
+        });
+      }
+      handleCancelEdit();
+    } catch (error) {
+      console.error('Erro ao salvar promoção:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Erro ao salvar',
+        description: 'Não foi possível salvar a promoção. Tente novamente.',
+      });
+    }
+  };
+
+  const handleDeletePromotion = async () => {
+    if (!showDeleteAlert || !firestore) return;
+    try {
+        const promotionDocRef = doc(firestore, 'promotions', showDeleteAlert.id);
+        deleteDocumentNonBlocking(promotionDocRef);
+        toast({
+            title: 'Promoção Removida!',
+            description: `A promoção "${showDeleteAlert.name}" foi removida.`,
+        });
+        setShowDeleteAlert(null);
+    } catch (error) {
+        console.error('Erro ao remover promoção:', error);
+        toast({
+            variant: 'destructive',
+            title: 'Erro ao remover',
+            description: 'Não foi possível remover a promoção.',
+        });
+    }
+  };
+
+  const handleEditClick = (promotion: Promotion) => {
+    setIsEditing(promotion);
+    form.reset({
+        ...promotion,
+        startDate: new Date(promotion.startDate).toISOString().split('T')[0],
+        endDate: new Date(promotion.endDate).toISOString().split('T')[0],
+    });
+  };
+  
+  const handleCancelEdit = () => {
+      setIsEditing(null);
+      form.reset({
+        name: '',
+        description: '',
+        discountPercentage: 10,
+        imageId: '',
+        serviceIds: [],
+        startDate: new Date().toISOString().split('T')[0],
+        endDate: new Date(new Date().setDate(new Date().getDate() + 7)).toISOString().split('T')[0],
+      });
+  }
+
+  const isLoading = isLoadingServices || isLoadingPromotions;
+
+  return (
+    <div className="grid gap-8 md:grid-cols-3">
+      <div className="md:col-span-1">
+        <Card>
+          <CardHeader>
+            <CardTitle>{isEditing ? 'Editar Promoção' : 'Adicionar Nova Promoção'}</CardTitle>
+          </CardHeader>
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)}>
+              <CardContent className="space-y-4">
+                <FormField
+                  control={form.control}
+                  name="name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Nome da Promoção</FormLabel>
+                      <FormControl><Input placeholder="Ex: Especial de Verão" {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="description"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Descrição</FormLabel>
+                      <FormControl><Textarea placeholder="Descreva a promoção..." {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                 <FormField
+                  control={form.control}
+                  name="imageId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Imagem da Promoção</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger><SelectValue placeholder="Selecione uma imagem" /></SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {PlaceHolderImages.map((img) => (
+                            <SelectItem key={img.id} value={img.id}>{img.description}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                 <FormField
+                  control={form.control}
+                  name="discountPercentage"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Desconto (%)</FormLabel>
+                      <FormControl><Input type="number" placeholder="15" {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                 <FormField
+                  control={form.control}
+                  name="serviceIds"
+                  render={() => (
+                    <FormItem>
+                      <FormLabel>Serviços Aplicáveis</FormLabel>
+                      <ScrollArea className="h-32 w-full rounded-md border p-4">
+                        {services?.map((service) => (
+                          <FormField
+                            key={service.id}
+                            control={form.control}
+                            name="serviceIds"
+                            render={({ field }) => (
+                              <FormItem key={service.id} className="flex flex-row items-start space-x-3 space-y-0">
+                                <FormControl>
+                                  <Checkbox
+                                    checked={field.value?.includes(service.id)}
+                                    onCheckedChange={(checked) => {
+                                      return checked
+                                        ? field.onChange([...(field.value || []), service.id])
+                                        : field.onChange(field.value?.filter((value) => value !== service.id));
+                                    }}
+                                  />
+                                </FormControl>
+                                <FormLabel className="font-normal">{service.name}</FormLabel>
+                              </FormItem>
+                            )}
+                          />
+                        ))}
+                      </ScrollArea>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="startDate"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Data de Início</FormLabel>
+                        <FormControl><Input type="date" {...field} /></FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="endDate"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Data de Fim</FormLabel>
+                        <FormControl><Input type="date" {...field} /></FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </CardContent>
+              <CardFooter className="flex justify-end gap-2">
+                {isEditing && (
+                    <Button type="button" variant="outline" onClick={handleCancelEdit}>Cancelar</Button>
+                )}
+                <Button type="submit" disabled={form.formState.isSubmitting}>
+                  <PlusCircle className="mr-2 h-4 w-4" />
+                  {isEditing ? 'Salvar Alterações' : 'Adicionar Promoção'}
+                </Button>
+              </CardFooter>
+            </form>
+          </Form>
+        </Card>
+      </div>
+
+      <div className="md:col-span-2">
+        <AlertDialog>
+            <Card>
+            <CardHeader><CardTitle>Promoções Cadastradas</CardTitle></CardHeader>
+            <CardContent>
+                <Table>
+                <TableHeader>
+                    <TableRow>
+                    <TableHead>Nome</TableHead>
+                    <TableHead>Desconto</TableHead>
+                    <TableHead>Validade</TableHead>
+                    <TableHead className="text-right">Ações</TableHead>
+                    </TableRow>
+                </TableHeader>
+                <TableBody>
+                    {isLoading &&
+                    Array.from({ length: 3 }).map((_, i) => (
+                        <TableRow key={i}>
+                            <TableCell><Skeleton className="h-4 w-[150px]" /></TableCell>
+                            <TableCell><Skeleton className="h-4 w-[60px]" /></TableCell>
+                            <TableCell><Skeleton className="h-4 w-[180px]" /></TableCell>
+                            <TableCell className="text-right"><Skeleton className="h-8 w-16 ml-auto" /></TableCell>
+                        </TableRow>
+                    ))}
+                    {promotions?.map((promo) => (
+                    <TableRow key={promo.id}>
+                        <TableCell className="font-medium">{promo.name}</TableCell>
+                        <TableCell>{promo.discountPercentage}%</TableCell>
+                        <TableCell>
+                            {new Date(promo.startDate).toLocaleDateString()} - {new Date(promo.endDate).toLocaleDateString()}
+                        </TableCell>
+                        <TableCell className="text-right">
+                        <Button variant="ghost" size="icon" onClick={() => handleEditClick(promo)}>
+                            <Edit className="h-4 w-4" />
+                        </Button>
+                        <AlertDialogTrigger asChild>
+                            <Button variant="ghost" size="icon" onClick={() => setShowDeleteAlert(promo)}>
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                        </AlertDialogTrigger>
+                        </TableCell>
+                    </TableRow>
+                    ))}
+                </TableBody>
+                </Table>
+                {!isLoading && promotions?.length === 0 && (
+                <p className="text-center text-muted-foreground py-8">Nenhuma promoção cadastrada ainda.</p>
+                )}
+            </CardContent>
+            </Card>
+            <AlertDialogContent>
+                <AlertDialogHeader>
+                    <AlertDialogTitle>Você tem certeza?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                        Esta ação não pode ser desfeita. Isso removerá permanentemente a promoção "{showDeleteAlert?.name}".
+                    </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                    <AlertDialogCancel onClick={() => setShowDeleteAlert(null)}>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleDeletePromotion} className="bg-destructive hover:bg-destructive/90">
+                        Sim, remover
+                    </AlertDialogAction>
+                </AlertDialogFooter>
+            </AlertDialogContent>
+        </AlertDialog>
+      </div>
+    </div>
+  );
+}
