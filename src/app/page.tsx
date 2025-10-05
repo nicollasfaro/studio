@@ -30,6 +30,7 @@ export default function Home() {
   const promotionImage = PlaceHolderImages.find((img) => img.id === latestPromotion?.imageId);
   
   const bookHref = user ? '/book' : '/login';
+  const promoBookHref = latestPromotion ? (user ? `/book?promo=${latestPromotion.id}` : '/login') : '/promotions';
   
   return (
     <div className="flex flex-col min-h-[100dvh]">
@@ -148,7 +149,7 @@ export default function Home() {
                   </p>
                   <div className="flex flex-col sm:flex-row gap-4">
                     <Button asChild size="lg" className="font-bold">
-                      <Link href={`/book?promo=${latestPromotion.id}`}>Aproveitar Oferta</Link>
+                      <Link href={promoBookHref}>Aproveitar Oferta</Link>
                     </Button>
                      <Button asChild size="lg" variant="outline">
                       <Link href="/promotions">Ver Todas as Promoções</Link>
