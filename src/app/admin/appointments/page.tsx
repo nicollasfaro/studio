@@ -22,17 +22,26 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { MoreHorizontal, CheckCircle, XCircle } from 'lucide-react';
+import { MoreHorizontal, CheckCircle, XCircle, Camera } from 'lucide-react';
 import { useCollection, useFirestore, useMemoFirebase, updateDocumentNonBlocking } from '@/firebase';
 import { collection, query, orderBy, doc } from 'firebase/firestore';
 import type { Appointment, Service } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import Image from 'next/image';
+
 
 interface AppointmentsTableProps {
   services: (Omit<Service, 'id'> & { id: string })[];
@@ -106,7 +115,32 @@ function AppointmentsTable({ services, appointments, isLoading }: AppointmentsTa
         {!isLoading && appointments?.map((apt) => (
           <TableRow key={apt.id}>
             <TableCell>
-              <div className="font-medium">{apt.clientName}</div>
+              <div className="flex items-center gap-2">
+                <div className="font-medium">{apt.clientName}</div>
+                {apt.hairPhotoUrl && (
+                  <Dialog>
+                    <DialogTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-6 w-6">
+                        <Camera className="h-4 w-4 text-muted-foreground" />
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="max-w-md">
+                      <DialogHeader>
+                        <DialogTitle>Foto de Referência do Cabelo</DialogTitle>
+                      </DialogHeader>
+                      <div className="mt-4 relative aspect-square">
+                        <Image
+                            src={apt.hairPhotoUrl}
+                            alt={`Referência para ${apt.clientName}`}
+                            layout="fill"
+                            objectFit="contain"
+                            className="rounded-md"
+                        />
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+                )}
+              </div>
               <div className="text-sm text-muted-foreground">{apt.clientEmail}</div>
             </TableCell>
             <TableCell>{getServiceDetails(apt.serviceId).name}</TableCell>
@@ -206,4 +240,3 @@ export default function AdminAppointmentsPage() {
     </Card>
   );
 }
-
