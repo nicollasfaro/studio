@@ -110,29 +110,31 @@ export default function AdminGalleryPage() {
         resetForm();
       },
       () => {
-        // Upload completed successfully, now get the download URL
         getDownloadURL(uploadTask.snapshot.ref).then(downloadURL => {
-            // Save metadata to Firestore
-            addDocumentNonBlocking(galleryImagesRef, {
+            const docData = {
               imageUrl: downloadURL,
               description: description,
               fileName: fileName,
               createdAt: serverTimestamp(),
-            }).then(() => {
-                toast({
-                    title: 'Upload Concluído!',
-                    description: 'A imagem foi adicionada à sua galeria.',
+            };
+            addDocumentNonBlocking(galleryImagesRef, docData)
+                .then(() => {
+                    toast({
+                        title: 'Upload Concluído!',
+                        description: 'A imagem foi adicionada à sua galeria.',
+                    });
+                })
+                .catch(dbError => {
+                    console.error('Erro ao salvar no Firestore:', dbError);
+                    toast({
+                        variant: 'destructive',
+                        title: 'Erro ao Salvar Dados',
+                        description: 'A imagem foi enviada, mas houve um erro ao salvá-la na galeria.',
+                    });
+                })
+                .finally(() => {
+                    resetForm();
                 });
-            }).catch(dbError => {
-                console.error('Erro ao salvar no Firestore:', dbError);
-                toast({
-                    variant: 'destructive',
-                    title: 'Erro ao Salvar Dados',
-                    description: 'A imagem foi enviada, mas houve um erro ao salvá-la na galeria.',
-                });
-            }).finally(() => {
-                resetForm();
-            });
         }).catch(urlError => {
             console.error('Erro ao obter URL de download:', urlError);
             toast({
