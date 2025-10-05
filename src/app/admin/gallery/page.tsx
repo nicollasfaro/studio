@@ -1,11 +1,11 @@
 
 'use client';
 
-import { useState, ChangeEvent } from 'react';
+import { useState, ChangeEvent, useMemo } from 'react';
 import Image from 'next/image';
 import { useFirestore, useCollection, useMemoFirebase, useFirebaseApp } from '@/firebase';
-import { getStorage, ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
-import { collection, serverTimestamp, addDoc } from 'firebase/firestore';
+import { getStorage, ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
+import { collection, serverTimestamp, addDoc, doc, deleteDoc, writeBatch } from 'firebase/firestore';
 import {
   Card,
   CardHeader,
@@ -19,11 +19,21 @@ import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
-import { Upload, Image as ImageIcon } from 'lucide-react';
+import { Upload, Image as ImageIcon, Trash2, X, CheckCircle, GripVertical } from 'lucide-react';
 import type { GalleryImage } from '@/lib/types';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
-
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { cn } from '@/lib/utils';
 
 export default function AdminGalleryPage() {
   const { toast } = useToast();
@@ -37,8 +47,18 @@ export default function AdminGalleryPage() {
   const [isUploading, setIsUploading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedImages, setSelectedImages] = useState<string[]>([]);
+  const [showDeleteAlert, setShowDeleteAlert] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+
   const galleryImagesRef = useMemoFirebase(() => (firestore ? collection(firestore, 'galleryImages') : null), [firestore]);
   const { data: images, isLoading: isLoadingImages } = useCollection<GalleryImage>(galleryImagesRef);
+
+  const sortedImages = useMemo(() => {
+    if (!images) return [];
+    return [...images].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }, [images]);
 
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -152,6 +172,68 @@ export default function AdminGalleryPage() {
     );
   };
   
+  const handleToggleSelection = (imageId: string) => {
+    setSelectedImages(prev => 
+      prev.includes(imageId) ? prev.filter(id => id !== imageId) : [...prev, imageId]
+    );
+  };
+
+  const handleCancelSelection = () => {
+    setSelectionMode(false);
+    setSelectedImages([]);
+  };
+
+  const handleDeleteSelected = async () => {
+    if (selectedImages.length === 0 || !firestore) {
+      toast({
+        title: 'Nenhuma imagem selecionada',
+        variant: 'destructive'
+      });
+      return;
+    }
+    
+    setIsDeleting(true);
+    setShowDeleteAlert(false);
+
+    try {
+      const batch = writeBatch(firestore);
+      const deletePromises: Promise<void>[] = [];
+
+      selectedImages.forEach(id => {
+        const imageToDelete = images?.find(img => img.id === id);
+        if (imageToDelete) {
+          // Delete from Storage
+          const imageRef = ref(storage, `gallery/${imageToDelete.fileName}`);
+          deletePromises.push(deleteObject(imageRef));
+
+          // Delete from Firestore
+          const docRef = doc(firestore, 'galleryImages', id);
+          batch.delete(docRef);
+        }
+      });
+      
+      // Execute all deletions
+      await Promise.all(deletePromises);
+      await batch.commit();
+
+      toast({
+        title: 'Imagens Excluídas!',
+        description: `${selectedImages.length} imagem(ns) foram removidas com sucesso.`
+      });
+
+    } catch (error) {
+        console.error("Error deleting images:", error);
+        toast({
+          title: 'Erro ao Excluir',
+          description: 'Não foi possível excluir as imagens. Verifique as permissões e tente novamente.',
+          variant: 'destructive'
+        });
+    } finally {
+        setIsDeleting(false);
+        handleCancelSelection();
+    }
+  };
+
 
   return (
     <div className="space-y-8">
@@ -200,30 +282,66 @@ export default function AdminGalleryPage() {
       </Card>
 
       <Card>
-        <CardHeader>
-          <CardTitle>Galeria de Imagens</CardTitle>
-          <CardDescription>Imagens disponíveis para uso no site. O upload direto no Firebase Storage não reflete aqui; use o formulário acima.</CardDescription>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div>
+            <CardTitle>Galeria de Imagens</CardTitle>
+            <CardDescription>Imagens disponíveis para uso no site.</CardDescription>
+          </div>
+          {selectionMode ? (
+             <div className="flex items-center gap-2">
+                <Button variant="destructive" onClick={() => setShowDeleteAlert(true)} disabled={selectedImages.length === 0 || isDeleting}>
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Excluir ({selectedImages.length})
+                </Button>
+                <Button variant="outline" onClick={handleCancelSelection} disabled={isDeleting}>
+                  <X className="mr-2 h-4 w-4" />
+                  Cancelar
+                </Button>
+             </div>
+          ) : (
+            <Button variant="outline" onClick={() => setSelectionMode(true)} disabled={!images || images.length === 0}>
+                <GripVertical className="mr-2 h-4 w-4" />
+                Selecionar
+            </Button>
+          )}
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
             {isLoadingImages && Array.from({length: 5}).map((_, i) => (
                 <Skeleton key={i} className="aspect-square rounded-md" />
             ))}
-            {images?.map((img) => (
-              <div key={img.id} className="relative group aspect-square">
+            {sortedImages?.map((img) => {
+              const isSelected = selectedImages.includes(img.id);
+              return (
+              <div 
+                key={img.id} 
+                className={cn(
+                  "relative group aspect-square rounded-md overflow-hidden",
+                  selectionMode && "cursor-pointer",
+                  isSelected && "ring-2 ring-primary ring-offset-2"
+                )}
+                onClick={() => selectionMode && handleToggleSelection(img.id)}
+              >
                 <Image
                   src={img.imageUrl}
                   alt={img.description}
                   fill
                   sizes="(max-width: 768px) 50vw, (max-width: 1200px) 33vw, 20vw"
-                  className="object-cover rounded-md"
+                  className="object-cover transition-transform duration-300 group-hover:scale-110"
                 />
-                 <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center p-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                   <p className="text-white text-xs text-center mb-2">{img.description}</p>
-                   {/* Adicionar botão de deletar seria um próximo passo lógico aqui */}
+                 <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center p-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                   <p className="text-white text-xs text-center">{img.description}</p>
                  </div>
+                 {selectionMode && (
+                    <div className={cn(
+                      "absolute top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center transition-all",
+                      isSelected ? "bg-primary text-primary-foreground" : "bg-white/50 backdrop-blur-sm"
+                    )}>
+                      {isSelected && <CheckCircle className="w-5 h-5" />}
+                    </div>
+                  )}
               </div>
-            ))}
+            )})}
              {!isLoadingImages && images?.length === 0 && (
                 <p className="col-span-full text-center text-muted-foreground py-8">
                     Sua galeria está vazia. Comece enviando sua primeira imagem!
@@ -232,6 +350,22 @@ export default function AdminGalleryPage() {
           </div>
         </CardContent>
       </Card>
+      <AlertDialog open={showDeleteAlert} onOpenChange={setShowDeleteAlert}>
+        <AlertDialogContent>
+            <AlertDialogHeader>
+                <AlertDialogTitle>Você tem certeza?</AlertDialogTitle>
+                <AlertDialogDescription>
+                   Esta ação não pode ser desfeita. Isso removerá permanentemente as {selectedImages.length} imagens selecionadas do Firebase Storage e do banco de dados.
+                </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                <AlertDialogAction onClick={handleDeleteSelected} className="bg-destructive hover:bg-destructive/90">
+                    Sim, excluir
+                </AlertDialogAction>
+            </AlertDialogFooter>
+        </AlertDialogContent>
+    </AlertDialog>
     </div>
   );
 }
