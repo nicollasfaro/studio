@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SidebarProvider, Sidebar, SidebarTrigger, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarContent, SidebarHeader, SidebarInset } from '@/components/ui/sidebar';
 import { Logo } from '@/components/logo';
-import { LayoutDashboard, Users, Calendar, Scissors, Gift, Palette, Share2, Bell } from 'lucide-react';
+import { LayoutDashboard, Users, Calendar, Scissors, Gift, Palette, Share2, Bell, Image } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useUserData } from '@/hooks/use-user-data';
 
@@ -87,6 +87,11 @@ export default function AdminLayout({
              <SidebarMenuItem>
               <SidebarMenuButton href="/admin/promotions" leftIcon={<Gift />}>
                 Promoções
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+             <SidebarMenuItem>
+              <SidebarMenuButton href="/admin/gallery" leftIcon={<Image />}>
+                Galeria
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
