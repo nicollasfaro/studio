@@ -5,29 +5,29 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { ArrowRight, Sparkles } from 'lucide-react';
-import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { Badge } from '@/components/ui/badge';
-import { useCollection, useFirestore, useMemoFirebase, useUser } from '@/firebase';
-import { collection, query, orderBy, limit } from 'firebase/firestore';
-import type { Service, Promotion, GalleryImage } from '@/lib/types';
+import { useCollection, useDoc, useFirestore, useMemoFirebase, useUser } from '@/firebase';
+import { collection, doc, query, orderBy, limit } from 'firebase/firestore';
+import type { Service, Promotion, GalleryImage, HeroBanner } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
 
 export default function Home() {
   const { user } = useUser();
-  const heroImage = PlaceHolderImages.find((img) => img.id === 'hero');
-
   const firestore = useFirestore();
   
+  // --- Data Fetching ---
   const servicesCollectionRef = useMemoFirebase(() => (firestore ? query(collection(firestore, 'services'), limit(3)) : null), [firestore]);
-  const { data: services, isLoading: isLoadingServices } = useCollection<Service>(servicesCollectionRef);
-
   const promotionsQuery = useMemoFirebase(() => (firestore ? query(collection(firestore, 'promotions'), orderBy('startDate', 'desc'), limit(1)) : null), [firestore]);
-  const { data: promotions, isLoading: isLoadingPromotions } = useCollection<Promotion>(promotionsQuery);
-  
   const galleryImagesRef = useMemoFirebase(() => (firestore ? collection(firestore, 'galleryImages') : null), [firestore]);
+  const heroBannerRef = useMemoFirebase(() => (firestore ? doc(firestore, 'content', 'heroBanner') : null), [firestore]);
+
+  const { data: services, isLoading: isLoadingServices } = useCollection<Service>(servicesCollectionRef);
+  const { data: promotions, isLoading: isLoadingPromotions } = useCollection<Promotion>(promotionsQuery);
   const { data: galleryImages, isLoading: isLoadingGallery } = useCollection<GalleryImage>(galleryImagesRef);
+  const { data: heroData, isLoading: isLoadingHero } = useDoc<HeroBanner>(heroBannerRef);
 
-
+  // --- Data Processing ---
+  const heroImage = galleryImages?.find(img => img.id === heroData?.imageId);
   const featuredServices = services || [];
   const latestPromotion = promotions?.[0];
   const promotionImage = galleryImages?.find((img) => img.id === latestPromotion?.imageId);
@@ -35,34 +35,42 @@ export default function Home() {
   const bookHref = user ? '/book' : '/login';
   const promoBookHref = latestPromotion ? (user ? `/book?promo=${latestPromotion.id}` : '/login') : '/promotions';
 
-  const isLoading = isLoadingServices || isLoadingPromotions || isLoadingGallery;
+  const isLoading = isLoadingServices || isLoadingPromotions || isLoadingGallery || isLoadingHero;
   
   return (
     <div className="flex flex-col min-h-[100dvh]">
       <section className="relative w-full h-[60vh] md:h-[80vh]">
-        {heroImage && (
+        {isLoadingHero || !heroImage ? (
+          <Skeleton className="w-full h-full" />
+        ) : (
           <Image
             src={heroImage.imageUrl}
             alt={heroImage.description}
             fill
             className="object-cover"
             priority
-            data-ai-hint={heroImage.imageHint}
+            data-ai-hint={heroImage.description}
           />
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
         <div className="relative h-full flex flex-col items-center justify-center text-center text-white p-4">
-          <h1 className="text-4xl md:text-6xl lg:text-7xl font-headline tracking-tighter mb-4 drop-shadow-lg">
-            Experimente o Verdadeiro Glamour
-          </h1>
-          <p className="max-w-2xl text-lg md:text-xl text-primary-foreground/90 mb-8 drop-shadow-md">
-            Mime-se com nossos tratamentos de beleza de classe mundial e deixe seu brilho interior resplandecer.
-          </p>
-          <Button asChild size="lg" className="font-bold">
-            <Link href={bookHref}>
-              Agende um Horário <ArrowRight className="ml-2" />
-            </Link>
-          </Button>
+          {isLoadingHero ? <Skeleton className="h-16 w-3/4 max-w-3xl mb-4"/> : (
+             <h1 className="text-4xl md:text-6xl lg:text-7xl font-headline tracking-tighter mb-4 drop-shadow-lg">
+                {heroData?.largeText}
+            </h1>
+          )}
+          {isLoadingHero ? <Skeleton className="h-5 w-1/2 max-w-xl mb-8"/> : (
+            <p className="max-w-2xl text-lg md:text-xl text-primary-foreground/90 mb-8 drop-shadow-md">
+                {heroData?.smallText}
+            </p>
+          )}
+          {isLoadingHero ? <Skeleton className="h-12 w-48" /> : (
+            <Button asChild size="lg" className="font-bold">
+              <Link href={bookHref}>
+                {heroData?.buttonText} <ArrowRight className="ml-2" />
+              </Link>
+            </Button>
+          )}
         </div>
       </section>
 
@@ -75,7 +83,7 @@ export default function Home() {
             </p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {isLoading && Array.from({ length: 3 }).map((_, i) => (
+            {isLoadingServices && Array.from({ length: 3 }).map((_, i) => (
                 <Card key={i} className="flex flex-col overflow-hidden">
                     <CardHeader className="p-0">
                         <Skeleton className="w-full h-48" />
@@ -96,13 +104,13 @@ export default function Home() {
               return (
                 <Card key={service.id} className="flex flex-col overflow-hidden transform hover:scale-105 transition-transform duration-300 ease-in-out shadow-lg hover:shadow-2xl">
                   <CardHeader className="p-0">
-                    {serviceImage && <Image
+                    {serviceImage ? <Image
                       src={serviceImage.imageUrl}
                       alt={service.name}
                       width={600}
                       height={400}
                       className="object-cover w-full h-48"
-                    />}
+                    /> : <Skeleton className="w-full h-48" />}
                   </CardHeader>
                   <CardContent className="p-6 flex-grow">
                     <CardTitle className="font-headline text-2xl mb-2">{service.name}</CardTitle>
@@ -136,7 +144,7 @@ export default function Home() {
                 <Sparkles className="mr-2 h-4 w-4" />
                 Oferta Especial
               </Badge>
-              {isLoading ? (
+              {(isLoadingPromotions || isLoadingGallery) ? (
                 <>
                   <Skeleton className="h-10 w-3/4" />
                   <Skeleton className="h-5 w-full" />
@@ -170,7 +178,7 @@ export default function Home() {
                 </>
               )}
             </div>
-             {isLoading ? <Skeleton className="w-full h-[400px] rounded-xl"/> : promotionImage && (
+             {(isLoadingPromotions || isLoadingGallery) ? <Skeleton className="w-full h-[400px] rounded-xl"/> : promotionImage && (
               <Image
                 src={promotionImage.imageUrl}
                 alt={promotionImage.description}

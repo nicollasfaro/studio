@@ -66,4 +66,12 @@ export type GalleryImage = {
   createdAt: string;
 };
 
+export type HeroBanner = {
+  imageId: string;
+  largeText: string;
+  smallText: string;
+  buttonText: string;
+};
+    
+
     
