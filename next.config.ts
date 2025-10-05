@@ -1,4 +1,6 @@
+
 import type {NextConfig} from 'next';
+import { firebaseConfig } from './src/firebase/config';
 
 const nextConfig: NextConfig = {
   /* config options here */
@@ -28,8 +30,17 @@ const nextConfig: NextConfig = {
         port: '',
         pathname: '/**',
       },
+      {
+        protocol: 'https',
+        hostname: 'firebasestorage.googleapis.com',
+        port: '',
+        pathname: '/**',
+      }
     ],
   },
+  env: {
+    FIREBASE_STORAGE_BUCKET: firebaseConfig.storageBucket,
+  }
 };
 
 export default nextConfig;
