@@ -3,7 +3,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
-import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
+import { useCollection, useFirestore, useMemoFirebase, useUser } from '@/firebase';
 import { collection } from 'firebase/firestore';
 import type { Service } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -11,6 +11,7 @@ import { PlaceHolderImages } from '@/lib/placeholder-images';
 
 export default function ServicesPage() {
   const firestore = useFirestore();
+  const { user } = useUser();
   const servicesCollectionRef = useMemoFirebase(() => collection(firestore, 'services'), [firestore]);
   const { data: services, isLoading } = useCollection<Omit<Service, 'id'>>(servicesCollectionRef);
 
@@ -46,6 +47,7 @@ export default function ServicesPage() {
         ))}
         {services && services.map((service) => {
           const serviceImage = PlaceHolderImages.find((img) => img.id === service.imageId);
+          const bookHref = user ? `/book?service=${service.id}` : '/login';
           return (
             <Card key={service.id} className="flex flex-col overflow-hidden shadow-md hover:shadow-xl transition-shadow duration-300">
               <CardHeader className="p-0">
@@ -71,7 +73,7 @@ export default function ServicesPage() {
                   <p className="text-sm text-muted-foreground">{service.durationMinutes} minutos</p>
                 </div>
                 <Button asChild>
-                  <Link href={`/book?service=${service.id}`}>Agendar Agora</Link>
+                  <Link href={bookHref}>Agendar Agora</Link>
                 </Button>
               </CardFooter>
             </Card>
