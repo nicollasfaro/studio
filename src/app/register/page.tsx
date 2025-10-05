@@ -64,6 +64,7 @@ export default function RegisterPage() {
             name: values.name,
             email: values.email,
             createdAt: new Date().toISOString(),
+            isAdmin: false, // Default new users to not be admins
         }, { merge: true });
       }
       
@@ -71,7 +72,7 @@ export default function RegisterPage() {
         title: "Registro bem-sucedido",
         description: "Sua conta foi criada.",
       });
-      router.push('/profile');
+      router.push('/');
     } catch (error: any) {
       console.error('Erro de registro:', error);
       let description = 'Ocorreu um erro durante o registro. Por favor, tente novamente.';
