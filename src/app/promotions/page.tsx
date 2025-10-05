@@ -6,12 +6,13 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { Sparkles } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
+import { useCollection, useFirestore, useMemoFirebase, useUser } from '@/firebase';
 import { collection, query, orderBy } from 'firebase/firestore';
 import type { Promotion } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
 
 export default function PromotionsPage() {
+  const { user } = useUser();
   const firestore = useFirestore();
   const promotionsQuery = useMemoFirebase(() => (firestore ? query(collection(firestore, 'promotions'), orderBy('startDate', 'desc')) : null), [firestore]);
   const { data: promotions, isLoading } = useCollection<Promotion>(promotionsQuery);
@@ -45,6 +46,7 @@ export default function PromotionsPage() {
         )}
         {promotions && promotions.map((promo) => {
           const promoImage = PlaceHolderImages.find((img) => img.id === promo.imageId);
+          const bookHref = user ? `/book?promo=${promo.id}` : '/login';
           return (
             <Card key={promo.id} className="w-full overflow-hidden shadow-lg hover:shadow-2xl transition-shadow duration-300 md:flex">
               {promoImage && (
@@ -73,7 +75,7 @@ export default function PromotionsPage() {
                 </CardContent>
                 <CardFooter className="p-6 pt-0">
                   <Button asChild size="lg">
-                    <Link href={`/book?promo=${promo.id}`}>Agendar esta Oferta</Link>
+                    <Link href={bookHref}>Agendar esta Oferta</Link>
                   </Button>
                 </CardFooter>
               </div>
