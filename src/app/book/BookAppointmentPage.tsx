@@ -16,13 +16,14 @@ import {
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
-import { ArrowLeft, ArrowRight, PartyPopper, Loader2 } from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { ArrowLeft, ArrowRight, PartyPopper, Loader2, Info } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { format, startOfDay, endOfDay, addMinutes, parse } from 'date-fns';
-import { useCollection, useFirestore, useUser, useMemoFirebase, addDocumentNonBlocking } from '@/firebase';
-import { collection, query, where } from 'firebase/firestore';
-import type { Service, Appointment } from '@/lib/types';
+import { useCollection, useDoc, useFirestore, useUser, useMemoFirebase, addDocumentNonBlocking } from '@/firebase';
+import { collection, query, where, doc } from 'firebase/firestore';
+import type { Service, Appointment, Promotion } from '@/lib/types';
 import { timeSlots as allTimeSlots } from '@/lib/data';
 import { ptBR } from 'date-fns/locale';
 import {
@@ -40,19 +41,53 @@ export default function BookAppointmentPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { toast } = useToast();
+  
+  const serviceQueryParam = searchParams.get('service');
+  const promoQueryParam = searchParams.get('promo');
+
   const [step, setStep] = useState(1);
-  const [selectedServiceId, setSelectedServiceId] = useState<string | undefined>(searchParams.get('service') || undefined);
+  const [selectedServiceId, setSelectedServiceId] = useState<string | undefined>(serviceQueryParam || undefined);
   const [date, setDate] = useState<Date | undefined>(new Date());
   const [selectedTime, setSelectedTime] = useState<string | undefined>();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [showAuthAlert, setShowAuthAlert] = useState(false);
   const [isBooking, setIsBooking] = useState(false);
+  
+  const [servicesToDisplay, setServicesToDisplay] = useState<Service[]>([]);
 
   const firestore = useFirestore();
   const { user, isUserLoading } = useUser();
   const servicesCollectionRef = useMemoFirebase(() => (firestore ? collection(firestore, 'services') : null), [firestore]);
-  const { data: services, isLoading: isLoadingServices } = useCollection<Service>(servicesCollectionRef);
+  const { data: allServices, isLoading: isLoadingServices } = useCollection<Service>(servicesCollectionRef);
+
+  const promotionRef = useMemoFirebase(() => (firestore && promoQueryParam ? doc(firestore, 'promotions', promoQueryParam) : null), [firestore, promoQueryParam]);
+  const { data: promotion, isLoading: isLoadingPromotion } = useDoc<Promotion>(promotionRef);
+
+  // Filter services based on promotion
+  useEffect(() => {
+    if (isLoadingServices || isLoadingPromotion) return;
+
+    if (promoQueryParam && promotion && allServices) {
+        const promoServices = allServices
+            .filter(service => promotion.serviceIds.includes(service.id))
+            .map(service => {
+                const discountedPrice = service.price * (1 - promotion.discountPercentage / 100);
+                return { 
+                    ...service, 
+                    originalPrice: service.price,
+                    price: discountedPrice 
+                };
+            });
+        setServicesToDisplay(promoServices);
+        // If a service was pre-selected but is not in the promo, deselect it
+        if(selectedServiceId && !promoServices.some(s => s.id === selectedServiceId)) {
+          setSelectedServiceId(undefined);
+        }
+    } else if (allServices) {
+        setServicesToDisplay(allServices);
+    }
+  }, [allServices, promotion, promoQueryParam, isLoadingServices, isLoadingPromotion, selectedServiceId]);
 
   // Fetch appointments for the selected day to check for conflicts
   const appointmentsQuery = useMemoFirebase(() => {
@@ -70,7 +105,7 @@ export default function BookAppointmentPage() {
 
   // Memoize available time slots calculation
   const availableTimeSlots = useMemo(() => {
-    if (isLoadingAppointments || !todaysAppointments || !services) {
+    if (isLoadingAppointments || !todaysAppointments || !allServices) {
       return allTimeSlots.map(slot => ({ ...slot, available: false }));
     }
     
@@ -79,16 +114,14 @@ export default function BookAppointmentPage() {
     todaysAppointments.forEach(apt => {
         if (apt.status === 'cancelado') return; // Ignore canceled appointments
 
-        const service = services.find(s => s.id === apt.serviceId);
+        const service = allServices.find(s => s.id === apt.serviceId);
         if (!service) return; // Ignore if service details are not found
 
         const startTime = parse(format(new Date(apt.startTime), 'HH:mm'), 'HH:mm', new Date());
         const endTime = addMinutes(startTime, service.durationMinutes);
         
-        // Iterate through all possible time slots and mark them as booked if they fall within the appointment's duration
         allTimeSlots.forEach(slot => {
             const slotTime = parse(slot.time, 'HH:mm', new Date());
-            // Check if the slot time is between the start (inclusive) and end (exclusive) of the appointment
             if (slotTime >= startTime && slotTime < endTime) {
                 bookedSlots.add(slot.time);
             }
@@ -100,7 +133,7 @@ export default function BookAppointmentPage() {
       available: !bookedSlots.has(slot.time)
     }));
 
-  }, [todaysAppointments, services, isLoadingAppointments]);
+  }, [todaysAppointments, allServices, isLoadingAppointments]);
 
 
   const handleNextStep = () => {
@@ -135,7 +168,7 @@ export default function BookAppointmentPage() {
       return;
     }
 
-    const serviceDetails = services?.find(s => s.id === selectedServiceId);
+    const serviceDetails = allServices?.find(s => s.id === selectedServiceId);
     if (!serviceDetails) {
         toast({ title: 'Serviço selecionado não encontrado.', variant: 'destructive' });
         setIsBooking(false);
@@ -167,8 +200,7 @@ export default function BookAppointmentPage() {
     setIsBooking(false);
   };
 
-  const currentService = services?.find(s => s.id === selectedServiceId);
-  const currentServiceName = currentService?.name;
+  const currentService = servicesToDisplay?.find(s => s.id === selectedServiceId);
 
   return (
     <div className="container mx-auto px-4 md:px-6 py-12">
@@ -182,12 +214,22 @@ export default function BookAppointmentPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {promoQueryParam && promotion && (
+            <Alert className="mb-6 bg-accent/10 border-accent/50 text-accent-foreground">
+              <Info className="h-4 w-4 !text-accent" />
+              <AlertTitle className="font-bold text-accent">Você está agendando com uma promoção!</AlertTitle>
+              <AlertDescription>
+                Os preços e serviços abaixo são exclusivos da promoção "{promotion.name}".
+              </AlertDescription>
+            </Alert>
+          )}
+
           {step === 1 && (
             <div className="space-y-6">
               <h3 className="text-xl font-bold">Selecione um Serviço</h3>
               <RadioGroup value={selectedServiceId} onValueChange={setSelectedServiceId}>
-                {isLoadingServices && <p>Carregando serviços...</p>}
-                {services?.map((service) => (
+                {(isLoadingServices || (promoQueryParam && isLoadingPromotion)) && <p>Carregando serviços...</p>}
+                {servicesToDisplay?.map((service) => (
                   <Label
                     key={service.id}
                     htmlFor={service.id}
@@ -201,7 +243,12 @@ export default function BookAppointmentPage() {
                       <p className="text-sm text-muted-foreground">{service.description}</p>
                     </div>
                     <div className="text-right">
-                      <p className="font-bold text-primary">R${service.price.toFixed(2)}</p>
+                       <p className="font-bold text-primary">R${service.price.toFixed(2)}</p>
+                      {service.originalPrice && (
+                        <p className="text-sm text-muted-foreground line-through">
+                          R${service.originalPrice.toFixed(2)}
+                        </p>
+                      )}
                       <p className="text-sm text-muted-foreground">{service.durationMinutes} min</p>
                     </div>
                     <RadioGroupItem value={service.id} id={service.id} className="sr-only" />
@@ -251,7 +298,7 @@ export default function BookAppointmentPage() {
                     <CardContent className="p-6 space-y-4">
                         <div className="flex justify-between">
                             <span className="text-muted-foreground">Serviço:</span>
-                            <span className="font-semibold">{currentServiceName}</span>
+                            <span className="font-semibold">{currentService?.name}</span>
                         </div>
                         <div className="flex justify-between">
                             <span className="text-muted-foreground">Data:</span>
@@ -260,6 +307,10 @@ export default function BookAppointmentPage() {
                         <div className="flex justify-between">
                             <span className="text-muted-foreground">Hora:</span>
                             <span className="font-semibold">{selectedTime}</span>
+                        </div>
+                         <div className="flex justify-between border-t pt-4 mt-4">
+                            <span className="text-muted-foreground">Valor:</span>
+                            <span className="font-semibold text-primary">R${currentService?.price.toFixed(2)}</span>
                         </div>
                     </CardContent>
                 </Card>
@@ -325,5 +376,3 @@ export default function BookAppointmentPage() {
     </div>
   );
 }
-
-    

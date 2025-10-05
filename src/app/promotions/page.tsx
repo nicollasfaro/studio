@@ -73,7 +73,7 @@ export default function PromotionsPage() {
                 </CardContent>
                 <CardFooter className="p-6 pt-0">
                   <Button asChild size="lg">
-                    <Link href="/book">Agendar esta Oferta</Link>
+                    <Link href={`/book?promo=${promo.id}`}>Agendar esta Oferta</Link>
                   </Button>
                 </CardFooter>
               </div>

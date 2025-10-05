@@ -1,4 +1,5 @@
 
+
 export type Service = {
   id: string;
   name: string;
@@ -6,6 +7,7 @@ export type Service = {
   price: number;
   durationMinutes: number;
   imageId: string;
+  originalPrice?: number;
 };
 
 export type Promotion = {

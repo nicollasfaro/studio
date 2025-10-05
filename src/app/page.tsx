@@ -1,4 +1,5 @@
 
+
 'use client';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -147,7 +148,7 @@ export default function Home() {
                   </p>
                   <div className="flex flex-col sm:flex-row gap-4">
                     <Button asChild size="lg" className="font-bold">
-                      <Link href="/book">Aproveitar Oferta</Link>
+                      <Link href={`/book?promo=${latestPromotion.id}`}>Aproveitar Oferta</Link>
                     </Button>
                      <Button asChild size="lg" variant="outline">
                       <Link href="/promotions">Ver Todas as Promoções</Link>
