@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -68,10 +69,19 @@ export default function BookAppointmentPage() {
   const appointmentToRescheduleRef = useMemoFirebase(() => (firestore && rescheduleId ? doc(firestore, 'appointments', rescheduleId) : null), [firestore, rescheduleId]);
   const { data: appointmentToReschedule, isLoading: isLoadingReschedule } = useDoc<Appointment>(appointmentToRescheduleRef);
 
+  // Auto-fill user data if logged in
+  useEffect(() => {
+    if (user) {
+      setName(user.displayName || '');
+      setEmail(user.email || '');
+    }
+  }, [user]);
+
   // Set service ID if rescheduling
   useEffect(() => {
     if (rescheduleId && appointmentToReschedule && !selectedServiceId) {
       setSelectedServiceId(appointmentToReschedule.serviceId);
+      // Data is already filled by the user effect or from the appointment itself if user is not logged in
       setName(appointmentToReschedule.clientName);
       setEmail(appointmentToReschedule.clientEmail);
     }
@@ -358,11 +368,11 @@ export default function BookAppointmentPage() {
               <div className="grid sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="name">Nome Completo</Label>
-                  <Input id="name" placeholder="Jane Doe" value={name} onChange={(e) => setName(e.target.value)} disabled={!!rescheduleId} />
+                  <Input id="name" placeholder="Jane Doe" value={name} onChange={(e) => setName(e.target.value)} disabled={!!user || !!rescheduleId} />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="email">Endereço de Email</Label>
-                  <Input id="email" type="email" placeholder="jane@exemplo.com" value={email} onChange={(e) => setEmail(e.target.value)} disabled={!!rescheduleId}/>
+                  <Input id="email" type="email" placeholder="jane@exemplo.com" value={email} onChange={(e) => setEmail(e.target.value)} disabled={!!user || !!rescheduleId}/>
                 </div>
               </div>
             </div>
