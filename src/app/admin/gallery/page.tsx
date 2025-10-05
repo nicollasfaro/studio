@@ -18,7 +18,7 @@ import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
-import { Upload, Image as ImageIcon, Trash2 } from 'lucide-react';
+import { Upload, Image as ImageIcon } from 'lucide-react';
 import type { GalleryImage } from '@/lib/types';
 
 export default function AdminGalleryPage() {
@@ -62,7 +62,6 @@ export default function AdminGalleryPage() {
     setPreviewUrl(null);
     setUploadProgress(null);
     setIsUploading(false);
-    // Reset the file input visually
     const fileInput = document.getElementById('picture') as HTMLInputElement;
     if (fileInput) {
         fileInput.value = '';
@@ -78,11 +77,11 @@ export default function AdminGalleryPage() {
       });
       return;
     }
-    if (!galleryImagesRef) {
+    if (!galleryImagesRef || !storage) {
         toast({
             variant: 'destructive',
             title: 'Erro de Conexão',
-            description: 'Não foi possível conectar ao banco de dados. Tente novamente.',
+            description: 'Não foi possível conectar ao Firebase. Tente novamente.',
         });
         return;
     }
@@ -110,40 +109,35 @@ export default function AdminGalleryPage() {
         resetForm();
       },
       () => {
-        getDownloadURL(uploadTask.snapshot.ref).then(downloadURL => {
+        // Upload successful, now get download URL and save to Firestore
+        getDownloadURL(uploadTask.snapshot.ref)
+          .then(downloadURL => {
             const docData = {
               imageUrl: downloadURL,
               description: description,
               fileName: fileName,
               createdAt: serverTimestamp(),
             };
-            addDocumentNonBlocking(galleryImagesRef, docData)
-                .then(() => {
-                    toast({
-                        title: 'Upload Concluído!',
-                        description: 'A imagem foi adicionada à sua galeria.',
-                    });
-                })
-                .catch(dbError => {
-                    console.error('Erro ao salvar no Firestore:', dbError);
-                    toast({
-                        variant: 'destructive',
-                        title: 'Erro ao Salvar Dados',
-                        description: 'A imagem foi enviada, mas houve um erro ao salvá-la na galeria.',
-                    });
-                })
-                .finally(() => {
-                    resetForm();
-                });
-        }).catch(urlError => {
-            console.error('Erro ao obter URL de download:', urlError);
+            
+            // IMPORTANT: Return the promise from addDocumentNonBlocking
+            return addDocumentNonBlocking(galleryImagesRef, docData);
+          })
+          .then(() => {
             toast({
-                variant: 'destructive',
-                title: 'Erro Pós-Upload',
-                description: 'Não foi possível obter a URL da imagem após o upload.',
+                title: 'Upload Concluído!',
+                description: 'A imagem foi adicionada à sua galeria.',
             });
             resetForm();
-        });
+          })
+          .catch(err => {
+             console.error('Erro ao salvar no Firestore ou obter URL:', err);
+             toast({
+                 variant: 'destructive',
+                 title: 'Erro Pós-Upload',
+                 description: 'A imagem foi enviada, mas houve um erro ao salvá-la na galeria. Verifique o console para detalhes.',
+             });
+             resetForm();
+          });
       }
     );
   };
