@@ -8,20 +8,25 @@ import { ArrowRight, Sparkles } from 'lucide-react';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { Badge } from '@/components/ui/badge';
 import { useCollection, useFirestore, useMemoFirebase, useUser } from '@/firebase';
-import { collection } from 'firebase/firestore';
-import type { Service } from '@/lib/types';
+import { collection, query, orderBy, limit } from 'firebase/firestore';
+import type { Service, Promotion } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
 
 export default function Home() {
   const { user } = useUser();
   const heroImage = PlaceHolderImages.find((img) => img.id === 'hero');
-  const promotionImage = PlaceHolderImages.find((img) => img.id === 'promo1');
 
   const firestore = useFirestore();
-  const servicesCollectionRef = useMemoFirebase(() => collection(firestore, 'services'), [firestore]);
-  const { data: services, isLoading } = useCollection<Omit<Service, 'id'>>(servicesCollectionRef);
+  
+  const servicesCollectionRef = useMemoFirebase(() => (firestore ? collection(firestore, 'services') : null), [firestore]);
+  const { data: services, isLoading: isLoadingServices } = useCollection<Service>(servicesCollectionRef);
+
+  const promotionsQuery = useMemoFirebase(() => (firestore ? query(collection(firestore, 'promotions'), orderBy('startDate', 'desc'), limit(1)) : null), [firestore]);
+  const { data: promotions, isLoading: isLoadingPromotions } = useCollection<Promotion>(promotionsQuery);
 
   const featuredServices = services?.slice(0, 3) || [];
+  const latestPromotion = promotions?.[0];
+  const promotionImage = PlaceHolderImages.find((img) => img.id === latestPromotion?.imageId);
   
   const bookHref = user ? '/book' : '/login';
   
@@ -63,7 +68,7 @@ export default function Home() {
             </p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {isLoading && Array.from({ length: 3 }).map((_, i) => (
+            {isLoadingServices && Array.from({ length: 3 }).map((_, i) => (
                 <Card key={i} className="flex flex-col overflow-hidden">
                     <CardHeader className="p-0">
                         <Skeleton className="w-full h-48" />
@@ -99,7 +104,7 @@ export default function Home() {
                   <CardFooter className="p-6 pt-0 flex justify-between items-center">
                     <p className="text-lg font-bold text-primary">${service.price}</p>
                     <Button asChild variant="outline">
-                      <Link href="/services">Saiba Mais</Link>
+                      <Link href={`/services#${service.id}`}>Saiba Mais</Link>
                     </Button>
                   </CardFooter>
                 </Card>
@@ -124,20 +129,41 @@ export default function Home() {
                 <Sparkles className="mr-2 h-4 w-4" />
                 Oferta Especial
               </Badge>
-              <h2 className="text-3xl md:text-4xl font-headline tracking-tight">Pacote de Mimos no Meio da Semana</h2>
-              <p className="max-w-xl text-muted-foreground md:text-xl">
-                Recarregue suas energias com nosso pacote de mimos exclusivo. Faça um tratamento facial de luxo e uma manicure clássica por um preço especial. Oferta por tempo limitado!
-              </p>
-              <div className="flex flex-col sm:flex-row gap-4">
-                <Button asChild size="lg" className="font-bold">
-                  <Link href="/book">Aproveitar Oferta</Link>
-                </Button>
-                 <Button asChild size="lg" variant="outline">
-                  <Link href="/promotions">Ver Todas as Promoções</Link>
-                </Button>
-              </div>
+              {isLoadingPromotions ? (
+                <>
+                  <Skeleton className="h-10 w-3/4" />
+                  <Skeleton className="h-5 w-full" />
+                  <Skeleton className="h-5 w-5/6" />
+                   <div className="flex flex-col sm:flex-row gap-4 mt-4">
+                      <Skeleton className="h-12 w-36" />
+                      <Skeleton className="h-12 w-48" />
+                   </div>
+                </>
+              ) : latestPromotion ? (
+                <>
+                  <h2 className="text-3xl md:text-4xl font-headline tracking-tight">{latestPromotion.name}</h2>
+                  <p className="max-w-xl text-muted-foreground md:text-xl">
+                    {latestPromotion.description}
+                  </p>
+                  <div className="flex flex-col sm:flex-row gap-4">
+                    <Button asChild size="lg" className="font-bold">
+                      <Link href="/book">Aproveitar Oferta</Link>
+                    </Button>
+                     <Button asChild size="lg" variant="outline">
+                      <Link href="/promotions">Ver Todas as Promoções</Link>
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                <>
+                    <h2 className="text-3xl md:text-4xl font-headline tracking-tight">Nenhuma promoção no momento</h2>
+                    <p className="max-w-xl text-muted-foreground md:text-xl">
+                       Fique de olho para futuras ofertas especiais e descontos exclusivos!
+                    </p>
+                </>
+              )}
             </div>
-             {promotionImage && (
+             {isLoadingPromotions ? <Skeleton className="w-full h-[400px] rounded-xl"/> : promotionImage && (
               <Image
                 src={promotionImage.imageUrl}
                 alt={promotionImage.description}

@@ -7,14 +7,14 @@ import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { Sparkles } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
-import { collection } from 'firebase/firestore';
+import { collection, query, orderBy } from 'firebase/firestore';
 import type { Promotion } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
 
 export default function PromotionsPage() {
   const firestore = useFirestore();
-  const promotionsCollectionRef = useMemoFirebase(() => collection(firestore, 'promotions'), [firestore]);
-  const { data: promotions, isLoading } = useCollection<Omit<Promotion, 'id'>>(promotionsCollectionRef);
+  const promotionsQuery = useMemoFirebase(() => (firestore ? query(collection(firestore, 'promotions'), orderBy('startDate', 'desc')) : null), [firestore]);
+  const { data: promotions, isLoading } = useCollection<Promotion>(promotionsQuery);
 
   return (
     <div className="container mx-auto px-4 md:px-6 py-12">
@@ -26,9 +26,9 @@ export default function PromotionsPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-1 gap-12">
-        {isLoading && Array.from({ length: 3 }).map((_, i) => (
+        {isLoading && Array.from({ length: 2 }).map((_, i) => (
           <Card key={i} className="w-full overflow-hidden shadow-lg md:flex">
-             <div className="md:w-1/3">
+             <div className="md:w-1/3 bg-muted">
                 <Skeleton className="w-full h-full aspect-[4/3] md:aspect-auto" />
              </div>
              <div className="md:w-2/3 flex flex-col p-6">
@@ -40,6 +40,9 @@ export default function PromotionsPage() {
              </div>
           </Card>
         ))}
+        {promotions && promotions.length === 0 && !isLoading && (
+            <p className="text-center text-muted-foreground py-8">Nenhuma promoção ativa no momento. Volte em breve!</p>
+        )}
         {promotions && promotions.map((promo) => {
           const promoImage = PlaceHolderImages.find((img) => img.id === promo.imageId);
           return (
@@ -66,6 +69,7 @@ export default function PromotionsPage() {
                 </CardHeader>
                 <CardContent className="p-6 pt-0 flex-grow">
                   <CardDescription className="text-base">{promo.description}</CardDescription>
+                   <p className="text-2xl font-bold text-primary mt-4">{promo.discountPercentage}% OFF</p>
                 </CardContent>
                 <CardFooter className="p-6 pt-0">
                   <Button asChild size="lg">
