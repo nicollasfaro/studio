@@ -34,13 +34,15 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { MoreHorizontal, CheckCircle, XCircle, Camera } from 'lucide-react';
-import { useCollection, useFirestore, useMemoFirebase, updateDocumentNonBlocking } from '@/firebase';
-import { collection, query, orderBy, doc } from 'firebase/firestore';
+import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
+import { collection, query, orderBy, doc, updateDoc } from 'firebase/firestore';
 import type { Appointment, Service } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import Image from 'next/image';
+import { errorEmitter } from '@/firebase/error-emitter';
+import { FirestorePermissionError } from '@/firebase/errors';
 
 
 interface AppointmentsTableProps {
@@ -61,10 +63,25 @@ function AppointmentsTable({ services, appointments, isLoading }: AppointmentsTa
   const handleStatusChange = (appointment: Appointment, newStatus: 'confirmado' | 'cancelado' | 'finalizado') => {
     if (!firestore || !appointment.id) return;
     const appointmentRef = doc(firestore, 'appointments', appointment.id);
-    updateDocumentNonBlocking(appointmentRef, { status: newStatus });
-    toast({
-      title: 'Status do Agendamento Atualizado!',
-      description: `O agendamento foi marcado como ${newStatus}.`,
+    const updateData = { status: newStatus };
+
+    updateDoc(appointmentRef, updateData).then(() => {
+      toast({
+        title: 'Status do Agendamento Atualizado!',
+        description: `O agendamento foi marcado como ${newStatus}.`,
+      });
+    }).catch(error => {
+      console.error("Error updating appointment status:", error);
+      toast({
+        variant: 'destructive',
+        title: 'Erro ao atualizar',
+        description: 'Não foi possível alterar o status do agendamento.',
+      });
+       errorEmitter.emit('permission-error', new FirestorePermissionError({
+          path: appointmentRef.path,
+          operation: 'update',
+          requestResourceData: updateData,
+       }));
     });
   };
   

@@ -26,8 +26,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { useAuth, useUser, useFirestore, useCollection, useMemoFirebase, updateDocumentNonBlocking } from '@/firebase';
-import { collection, query, where, orderBy, doc } from 'firebase/firestore';
+import { useAuth, useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
+import { collection, query, where, orderBy, doc, updateDoc } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -36,6 +36,8 @@ import type { Appointment, Service } from '@/lib/types';
 import Link from 'next/link';
 import { useUserData } from '@/hooks/use-user-data';
 import { useToast } from '@/hooks/use-toast';
+import { errorEmitter } from '@/firebase/error-emitter';
+import { FirestorePermissionError } from '@/firebase/errors';
 
 interface AppointmentWithService extends Appointment {
   serviceName?: string;
@@ -109,14 +111,24 @@ export default function ProfilePage() {
     if (!appointmentToCancel || !firestore) return;
 
     const appointmentRef = doc(firestore, 'appointments', appointmentToCancel.id);
-    updateDocumentNonBlocking(appointmentRef, { status: 'cancelado' });
-
-    toast({
-      title: 'Agendamento Cancelado',
-      description: 'Seu agendamento foi cancelado com sucesso.',
+    updateDoc(appointmentRef, { status: 'cancelado' }).then(() => {
+      toast({
+        title: 'Agendamento Cancelado',
+        description: 'Seu agendamento foi cancelado com sucesso.',
+      });
+      setAppointmentToCancel(null);
+    }).catch(error => {
+      toast({
+        variant: 'destructive',
+        title: 'Erro ao Cancelar',
+        description: 'Não foi possível cancelar o agendamento.',
+      });
+      errorEmitter.emit('permission-error', new FirestorePermissionError({
+        path: appointmentRef.path,
+        operation: 'update',
+        requestResourceData: { status: 'cancelado' },
+      }));
     });
-
-    setAppointmentToCancel(null);
   };
   
   const getBadgeVariant = (status: Appointment['status']) => {

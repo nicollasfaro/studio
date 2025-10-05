@@ -23,8 +23,8 @@ import { ArrowLeft, ArrowRight, PartyPopper, Loader2, Info, Upload } from 'lucid
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { format, startOfDay, endOfDay, addMinutes, parse } from 'date-fns';
-import { useCollection, useDoc, useFirestore, useUser, useMemoFirebase, addDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
-import { collection, query, where, doc } from 'firebase/firestore';
+import { useCollection, useDoc, useFirestore, useUser, useMemoFirebase } from '@/firebase';
+import { collection, query, where, doc, addDoc, updateDoc } from 'firebase/firestore';
 import type { Service, Appointment, Promotion } from '@/lib/types';
 import { timeSlots as allTimeSlots } from '@/lib/data';
 import { ptBR } from 'date-fns/locale';
@@ -38,6 +38,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import { errorEmitter } from '@/firebase/error-emitter';
+import { FirestorePermissionError } from '@/firebase/errors';
 
 export default function BookAppointmentPage() {
   const searchParams = useSearchParams();
@@ -220,7 +222,7 @@ export default function BookAppointmentPage() {
   };
 
 
-  const handleBooking = async () => {
+  const handleBooking = () => {
     setIsBooking(true);
     const dateStep = currentService?.isPriceFrom ? 3 : 2;
     const finalStep = currentService?.isPriceFrom ? 4 : 3;
@@ -269,30 +271,38 @@ export default function BookAppointmentPage() {
     };
 
     if (rescheduleId && appointmentToRescheduleRef) {
-        // Update existing appointment
-        updateDocumentNonBlocking(appointmentToRescheduleRef, appointmentData);
-        toast({
-          title: 'Agendamento Remarcado!',
-          description: `Seu agendamento foi atualizado para ${format(date, 'PPP', { locale: ptBR })} às ${selectedTime}.`,
-        });
-        // Redirect to profile page after rescheduling
-        router.push('/profile');
+        updateDoc(appointmentToRescheduleRef, appointmentData).then(() => {
+          toast({
+            title: 'Agendamento Remarcado!',
+            description: `Seu agendamento foi atualizado para ${format(date, 'PPP', { locale: ptBR })} às ${selectedTime}.`,
+          });
+          router.push('/profile');
+        }).catch(error => {
+          toast({ title: 'Erro ao remarcar', description: 'Não foi possível atualizar o agendamento.', variant: 'destructive' });
+          errorEmitter.emit('permission-error', new FirestorePermissionError({
+            path: appointmentToRescheduleRef.path,
+            operation: 'update',
+            requestResourceData: appointmentData,
+          }));
+        }).finally(() => setIsBooking(false));
     } else {
-        // Create new appointment
         const appointmentsRef = collection(firestore, 'appointments');
-        addDocumentNonBlocking(appointmentsRef, appointmentData);
-        toast({
-          title: 'Agendamento Solicitado!',
-          description: `Estamos ansiosos para vê-lo em ${format(date, 'PPP', { locale: ptBR })} às ${selectedTime}. Aguarde a confirmação do Salão!`,
-        });
-
-        // Placeholder for notification logic
-        console.log("TODO: Implement Cloud Function to send notification for new appointment", appointmentData);
-
-        setStep(finalStep + 1);
+        addDoc(appointmentsRef, appointmentData).then(() => {
+            toast({
+              title: 'Agendamento Solicitado!',
+              description: `Estamos ansiosos para vê-lo em ${format(date, 'PPP', { locale: ptBR })} às ${selectedTime}. Aguarde a confirmação do Salão!`,
+            });
+             setStep(finalStep + 1);
+        }).catch(error => {
+            toast({ title: 'Erro ao agendar', description: 'Não foi possível criar o agendamento.', variant: 'destructive' });
+            errorEmitter.emit('permission-error', new FirestorePermissionError({
+              path: appointmentsRef.path,
+              operation: 'create',
+              requestResourceData: appointmentData,
+          }));
+        }).finally(() => setIsBooking(false));
     }
 
-    setIsBooking(false);
   };
   
   const pageTitle = rescheduleId ? 'Remarcar Agendamento' : 'Faça seu Agendamento';

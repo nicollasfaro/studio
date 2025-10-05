@@ -9,10 +9,12 @@ import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/componen
 import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { useToast } from '@/hooks/use-toast';
-import { useFirestore, useDoc, useMemoFirebase, setDocumentNonBlocking } from '@/firebase';
-import { doc } from 'firebase/firestore';
+import { useFirestore, useDoc, useMemoFirebase } from '@/firebase';
+import { doc, setDoc } from 'firebase/firestore';
 import { Loader2 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
+import { errorEmitter } from '@/firebase/error-emitter';
+import { FirestorePermissionError } from '@/firebase/errors';
 
 // HSL color string validation
 const hslRegex = /^(\d{1,3})\s(\d{1,3})%\s(\d{1,3})%$/;
@@ -102,24 +104,27 @@ export default function AdminThemePage() {
     }
   }, [themeData, form]);
 
-  const onSubmit = async (values: ThemeFormValues) => {
+  const onSubmit = (values: ThemeFormValues) => {
     if (!themeDocRef) return;
 
-    try {
-      setDocumentNonBlocking(themeDocRef, values, { merge: false });
+    setDoc(themeDocRef, values, { merge: false }).then(() => {
       toast({
         title: 'Tema Atualizado!',
         description: 'O novo tema foi salvo e será aplicado em todo o site.',
       });
-      // A aplicação irá recarregar o tema dinamicamente
-    } catch (error) {
-      console.error('Erro ao salvar o tema:', error);
+    }).catch(error => {
+       console.error('Erro ao salvar o tema:', error);
       toast({
         variant: 'destructive',
         title: 'Erro ao Salvar',
         description: 'Não foi possível salvar as configurações de tema.',
       });
-    }
+      errorEmitter.emit('permission-error', new FirestorePermissionError({
+        path: themeDocRef.path,
+        operation: 'write',
+        requestResourceData: values,
+      }));
+    });
   };
 
   const ColorPickerField = ({ name, label }: { name: keyof ThemeFormValues, label: string }) => {

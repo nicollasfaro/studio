@@ -2,9 +2,9 @@
 
 import { useState, ChangeEvent } from 'react';
 import Image from 'next/image';
-import { useFirestore, useCollection, useMemoFirebase, addDocumentNonBlocking, useFirebaseApp } from '@/firebase';
+import { useFirestore, useCollection, useMemoFirebase, useFirebaseApp } from '@/firebase';
 import { getStorage, ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
-import { collection, serverTimestamp } from 'firebase/firestore';
+import { collection, serverTimestamp, addDoc } from 'firebase/firestore';
 import {
   Card,
   CardHeader,
@@ -20,6 +20,9 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { Upload, Image as ImageIcon } from 'lucide-react';
 import type { GalleryImage } from '@/lib/types';
+import { errorEmitter } from '@/firebase/error-emitter';
+import { FirestorePermissionError } from '@/firebase/errors';
+
 
 export default function AdminGalleryPage() {
   const { toast } = useToast();
@@ -106,10 +109,9 @@ export default function AdminGalleryPage() {
           title: 'Erro no Upload',
           description: `Ocorreu um erro: ${error.code}. Verifique as regras de armazenamento e a conexão.`,
         });
-        resetForm();
+        setIsUploading(false);
       },
       () => {
-        // Upload successful, now get download URL and save to Firestore
         getDownloadURL(uploadTask.snapshot.ref)
           .then(downloadURL => {
             const docData = {
@@ -119,8 +121,8 @@ export default function AdminGalleryPage() {
               createdAt: serverTimestamp(),
             };
             
-            // IMPORTANT: Return the promise from addDocumentNonBlocking
-            return addDocumentNonBlocking(galleryImagesRef, docData);
+            // Return the promise from addDoc
+            return addDoc(galleryImagesRef, docData);
           })
           .then(() => {
             toast({
@@ -136,7 +138,13 @@ export default function AdminGalleryPage() {
                  title: 'Erro Pós-Upload',
                  description: 'A imagem foi enviada, mas houve um erro ao salvá-la na galeria. Verifique o console para detalhes.',
              });
-             resetForm();
+              const contextualError = new FirestorePermissionError({
+                path: galleryImagesRef.path,
+                operation: 'create',
+                requestResourceData: { description },
+              });
+              errorEmitter.emit('permission-error', contextualError);
+             setIsUploading(false); // Make sure to stop loading on error
           });
       }
     );

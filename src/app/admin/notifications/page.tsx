@@ -24,12 +24,14 @@ import {
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { useFirestore, useDoc, useMemoFirebase, setDocumentNonBlocking } from '@/firebase';
-import { doc } from 'firebase/firestore';
+import { useFirestore, useDoc, useMemoFirebase } from '@/firebase';
+import { doc, setDoc } from 'firebase/firestore';
 import { Mail, MessageSquare, Loader2 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Info } from 'lucide-react';
+import { errorEmitter } from '@/firebase/error-emitter';
+import { FirestorePermissionError } from '@/firebase/errors';
 
 
 const notificationSchema = z.object({
@@ -60,23 +62,27 @@ export default function AdminNotificationsPage() {
     }
   }, [configData, form]);
 
-  const onSubmit = async (values: NotificationFormValues) => {
+  const onSubmit = (values: NotificationFormValues) => {
     if (!configDocRef) return;
 
-    try {
-      setDocumentNonBlocking(configDocRef, values, { merge: true });
+    setDoc(configDocRef, values, { merge: true }).then(() => {
       toast({
         title: 'Configurações Salvas!',
         description: 'Suas preferências de notificação foram atualizadas.',
       });
-    } catch (error) {
+    }).catch(error => {
       console.error('Erro ao salvar as configurações:', error);
       toast({
         variant: 'destructive',
         title: 'Erro ao Salvar',
         description: 'Não foi possível salvar as configurações.',
       });
-    }
+      errorEmitter.emit('permission-error', new FirestorePermissionError({
+        path: configDocRef.path,
+        operation: 'update',
+        requestResourceData: values,
+      }));
+    });
   };
   
   if (isConfigLoading) {

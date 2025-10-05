@@ -46,8 +46,8 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
-import { useCollection, useFirestore, useMemoFirebase, addDocumentNonBlocking, deleteDocumentNonBlocking, setDocumentNonBlocking } from '@/firebase';
-import { collection, doc } from 'firebase/firestore';
+import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
+import { collection, doc, addDoc, deleteDoc, setDoc } from 'firebase/firestore';
 import type { Service, GalleryImage } from '@/lib/types';
 import { PlusCircle, Edit, Trash2 } from 'lucide-react';
 import {
@@ -57,6 +57,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { errorEmitter } from '@/firebase/error-emitter';
+import { FirestorePermissionError } from '@/firebase/errors';
 
 const serviceSchema = z.object({
   name: z.string().min(3, 'O nome deve ter pelo menos 3 caracteres.'),
@@ -112,54 +114,75 @@ export default function AdminServicesPage() {
 
   const isPriceFrom = form.watch('isPriceFrom');
 
-  const onSubmit = async (values: ServiceFormValues) => {
+  const onSubmit = (values: ServiceFormValues) => {
     if (!firestore || !servicesRef) return;
-    try {
+    
       if (isEditing) {
-        // Update existing service
         const serviceDocRef = doc(firestore, 'services', isEditing.id);
-        setDocumentNonBlocking(serviceDocRef, values, { merge: true });
-        toast({
-          title: 'Serviço Atualizado!',
-          description: `O serviço "${values.name}" foi atualizado com sucesso.`,
+        setDoc(serviceDocRef, values, { merge: true }).then(() => {
+            toast({
+              title: 'Serviço Atualizado!',
+              description: `O serviço "${values.name}" foi atualizado com sucesso.`,
+            });
+            handleCancelEdit();
+        }).catch(error => {
+            console.error('Erro ao atualizar serviço:', error);
+            toast({
+              variant: 'destructive',
+              title: 'Erro ao atualizar',
+              description: 'Não foi possível atualizar o serviço.',
+            });
+            errorEmitter.emit('permission-error', new FirestorePermissionError({
+                path: serviceDocRef.path,
+                operation: 'update',
+                requestResourceData: values,
+            }));
         });
       } else {
-        // Add new service
-        addDocumentNonBlocking(servicesRef, values);
-        toast({
-          title: 'Serviço Adicionado!',
-          description: `O serviço "${values.name}" foi adicionado com sucesso.`,
+        addDoc(servicesRef, values).then(() => {
+            toast({
+              title: 'Serviço Adicionado!',
+              description: `O serviço "${values.name}" foi adicionado com sucesso.`,
+            });
+            handleCancelEdit();
+        }).catch(error => {
+            console.error('Erro ao adicionar serviço:', error);
+            toast({
+              variant: 'destructive',
+              title: 'Erro ao salvar',
+              description: 'Não foi possível salvar o serviço. Tente novamente.',
+            });
+            errorEmitter.emit('permission-error', new FirestorePermissionError({
+                path: servicesRef.path,
+                operation: 'create',
+                requestResourceData: values,
+            }));
         });
       }
-      handleCancelEdit();
-    } catch (error) {
-      console.error('Erro ao salvar serviço:', error);
-      toast({
-        variant: 'destructive',
-        title: 'Erro ao salvar',
-        description: 'Não foi possível salvar o serviço. Tente novamente.',
-      });
-    }
   };
 
-  const handleDeleteService = async () => {
+  const handleDeleteService = () => {
     if (!showDeleteAlert || !firestore) return;
-    try {
+
         const serviceDocRef = doc(firestore, 'services', showDeleteAlert.id);
-        deleteDocumentNonBlocking(serviceDocRef);
-        toast({
-            title: 'Serviço Removido!',
-            description: `O serviço "${showDeleteAlert.name}" foi removido.`,
+        deleteDoc(serviceDocRef).then(() => {
+          toast({
+              title: 'Serviço Removido!',
+              description: `O serviço "${showDeleteAlert.name}" foi removido.`,
+          });
+          setShowDeleteAlert(null);
+        }).catch(error => {
+          console.error('Erro ao remover serviço:', error);
+          toast({
+              variant: 'destructive',
+              title: 'Erro ao remover',
+              description: 'Não foi possível remover o serviço.',
+          });
+          errorEmitter.emit('permission-error', new FirestorePermissionError({
+            path: serviceDocRef.path,
+            operation: 'delete',
+          }));
         });
-        setShowDeleteAlert(null);
-    } catch (error) {
-        console.error('Erro ao remover serviço:', error);
-        toast({
-            variant: 'destructive',
-            title: 'Erro ao remover',
-            description: 'Não foi possível remover o serviço.',
-        });
-    }
   };
 
   const handleEditClick = (service: Service) => {
@@ -438,5 +461,3 @@ export default function AdminServicesPage() {
     </div>
   );
 }
-
-    

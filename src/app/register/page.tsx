@@ -17,10 +17,12 @@ import {
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { useAuth, useFirestore, setDocumentNonBlocking } from '@/firebase';
+import { useAuth, useFirestore } from '@/firebase';
 import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
-import { doc } from 'firebase/firestore';
+import { doc, setDoc } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
+import { errorEmitter } from '@/firebase/error-emitter';
+import { FirestorePermissionError } from '@/firebase/errors';
 
 const formSchema = z
   .object({
@@ -60,12 +62,23 @@ export default function RegisterPage() {
         });
 
         const userDocRef = doc(firestore, 'users', user.uid);
-        setDocumentNonBlocking(userDocRef, {
+        const userData = {
             name: values.name,
             email: values.email,
             createdAt: new Date().toISOString(),
             isAdmin: false, // Default new users to not be admins
-        }, { merge: true });
+        };
+
+        // Use setDoc with .catch for error handling
+        setDoc(userDocRef, userData, { merge: true }).catch(error => {
+          console.error("Error writing user document:", error);
+          // Optionally emit a more specific error for debugging security rules
+          errorEmitter.emit('permission-error', new FirestorePermissionError({
+            path: userDocRef.path,
+            operation: 'create',
+            requestResourceData: userData
+          }));
+        });
       }
       
       toast({

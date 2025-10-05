@@ -44,8 +44,8 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
-import { useCollection, useFirestore, useMemoFirebase, addDocumentNonBlocking, deleteDocumentNonBlocking, setDocumentNonBlocking } from '@/firebase';
-import { collection, doc } from 'firebase/firestore';
+import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
+import { collection, doc, addDoc, deleteDoc, setDoc } from 'firebase/firestore';
 import type { Promotion, Service, GalleryImage } from '@/lib/types';
 import { PlusCircle, Edit, Trash2 } from 'lucide-react';
 import {
@@ -57,6 +57,8 @@ import {
 } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { errorEmitter } from '@/firebase/error-emitter';
+import { FirestorePermissionError } from '@/firebase/errors';
 
 const promotionSchema = z.object({
   name: z.string().min(3, 'O nome deve ter pelo menos 3 caracteres.'),
@@ -100,9 +102,9 @@ export default function AdminPromotionsPage() {
     },
   });
 
-  const onSubmit = async (values: PromotionFormValues) => {
+  const onSubmit = (values: PromotionFormValues) => {
     if (!firestore || !promotionsRef) return;
-    try {
+    
       const promotionData = {
           ...values,
           startDate: new Date(values.startDate).toISOString(),
@@ -111,47 +113,71 @@ export default function AdminPromotionsPage() {
 
       if (isEditing) {
         const promotionDocRef = doc(firestore, 'promotions', isEditing.id);
-        setDocumentNonBlocking(promotionDocRef, promotionData, { merge: true });
-        toast({
-          title: 'Promoção Atualizada!',
-          description: `A promoção "${values.name}" foi atualizada com sucesso.`,
+        setDoc(promotionDocRef, promotionData, { merge: true }).then(() => {
+          toast({
+            title: 'Promoção Atualizada!',
+            description: `A promoção "${values.name}" foi atualizada com sucesso.`,
+          });
+          handleCancelEdit();
+        }).catch(error => {
+          console.error('Erro ao atualizar promoção:', error);
+          toast({
+            variant: 'destructive',
+            title: 'Erro ao atualizar',
+            description: 'Não foi possível atualizar a promoção.',
+          });
+          errorEmitter.emit('permission-error', new FirestorePermissionError({
+            path: promotionDocRef.path,
+            operation: 'update',
+            requestResourceData: promotionData
+          }));
         });
+
       } else {
-        addDocumentNonBlocking(promotionsRef, promotionData);
-        toast({
-          title: 'Promoção Adicionada!',
-          description: `A promoção "${values.name}" foi adicionada com sucesso.`,
+        addDoc(promotionsRef, promotionData).then(() => {
+          toast({
+            title: 'Promoção Adicionada!',
+            description: `A promoção "${values.name}" foi adicionada com sucesso.`,
+          });
+          handleCancelEdit();
+        }).catch(error => {
+          console.error('Erro ao adicionar promoção:', error);
+          toast({
+            variant: 'destructive',
+            title: 'Erro ao adicionar',
+            description: 'Não foi possível adicionar a promoção.',
+          });
+           errorEmitter.emit('permission-error', new FirestorePermissionError({
+            path: promotionsRef.path,
+            operation: 'create',
+            requestResourceData: promotionData
+          }));
         });
       }
-      handleCancelEdit();
-    } catch (error) {
-      console.error('Erro ao salvar promoção:', error);
-      toast({
-        variant: 'destructive',
-        title: 'Erro ao salvar',
-        description: 'Não foi possível salvar a promoção. Tente novamente.',
-      });
-    }
   };
 
-  const handleDeletePromotion = async () => {
+  const handleDeletePromotion = () => {
     if (!showDeleteAlert || !firestore) return;
-    try {
+    
         const promotionDocRef = doc(firestore, 'promotions', showDeleteAlert.id);
-        deleteDocumentNonBlocking(promotionDocRef);
-        toast({
-            title: 'Promoção Removida!',
-            description: `A promoção "${showDeleteAlert.name}" foi removida.`,
+        deleteDoc(promotionDocRef).then(() => {
+          toast({
+              title: 'Promoção Removida!',
+              description: `A promoção "${showDeleteAlert.name}" foi removida.`,
+          });
+          setShowDeleteAlert(null);
+        }).catch(error => {
+          console.error('Erro ao remover promoção:', error);
+          toast({
+              variant: 'destructive',
+              title: 'Erro ao remover',
+              description: 'Não foi possível remover a promoção.',
+          });
+          errorEmitter.emit('permission-error', new FirestorePermissionError({
+            path: promotionDocRef.path,
+            operation: 'delete',
+          }));
         });
-        setShowDeleteAlert(null);
-    } catch (error) {
-        console.error('Erro ao remover promoção:', error);
-        toast({
-            variant: 'destructive',
-            title: 'Erro ao remover',
-            description: 'Não foi possível remover a promoção.',
-        });
-    }
   };
 
   const handleEditClick = (promotion: Promotion) => {
@@ -385,5 +411,3 @@ export default function AdminPromotionsPage() {
     </div>
   );
 }
-
-    

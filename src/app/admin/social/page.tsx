@@ -24,10 +24,12 @@ import {
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { useFirestore, useDoc, useMemoFirebase, setDocumentNonBlocking } from '@/firebase';
-import { doc } from 'firebase/firestore';
+import { useFirestore, useDoc, useMemoFirebase } from '@/firebase';
+import { doc, setDoc } from 'firebase/firestore';
 import { Facebook, Instagram, Twitter, Loader2 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
+import { errorEmitter } from '@/firebase/error-emitter';
+import { FirestorePermissionError } from '@/firebase/errors';
 
 const urlSchema = z.string().url('Por favor, insira uma URL válida.').or(z.literal(''));
 
@@ -61,23 +63,27 @@ export default function AdminSocialPage() {
     }
   }, [socialData, form]);
 
-  const onSubmit = async (values: SocialFormValues) => {
+  const onSubmit = (values: SocialFormValues) => {
     if (!socialDocRef) return;
 
-    try {
-      setDocumentNonBlocking(socialDocRef, values, { merge: true });
+    setDoc(socialDocRef, values, { merge: true }).then(() => {
       toast({
         title: 'Links Atualizados!',
         description: 'Os links das redes sociais foram salvos com sucesso.',
       });
-    } catch (error) {
+    }).catch(error => {
       console.error('Erro ao salvar os links:', error);
       toast({
         variant: 'destructive',
         title: 'Erro ao Salvar',
         description: 'Não foi possível salvar os links das redes sociais.',
       });
-    }
+      errorEmitter.emit('permission-error', new FirestorePermissionError({
+        path: socialDocRef.path,
+        operation: 'update',
+        requestResourceData: values,
+      }));
+    });
   };
   
   if (isSocialLoading) {
