@@ -1,3 +1,4 @@
+
 'use client';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -6,12 +7,13 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { ArrowRight, Sparkles } from 'lucide-react';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { Badge } from '@/components/ui/badge';
-import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
+import { useCollection, useFirestore, useMemoFirebase, useUser } from '@/firebase';
 import { collection } from 'firebase/firestore';
 import type { Service } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
 
 export default function Home() {
+  const { user } = useUser();
   const heroImage = PlaceHolderImages.find((img) => img.id === 'hero');
   const promotionImage = PlaceHolderImages.find((img) => img.id === 'promo1');
 
@@ -20,7 +22,9 @@ export default function Home() {
   const { data: services, isLoading } = useCollection<Omit<Service, 'id'>>(servicesCollectionRef);
 
   const featuredServices = services?.slice(0, 3) || [];
-
+  
+  const bookHref = user ? '/book' : '/login';
+  
   return (
     <div className="flex flex-col min-h-[100dvh]">
       <section className="relative w-full h-[60vh] md:h-[80vh]">
@@ -43,7 +47,7 @@ export default function Home() {
             Mime-se com nossos tratamentos de beleza de classe mundial e deixe seu brilho interior resplandecer.
           </p>
           <Button asChild size="lg" className="font-bold">
-            <Link href="/book">
+            <Link href={bookHref}>
               Agende um Horário <ArrowRight className="ml-2" />
             </Link>
           </Button>
