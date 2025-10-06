@@ -5,7 +5,7 @@ import { useMemo } from 'react';
 import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
 import { collection, where, query } from 'firebase/firestore';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import { Users, Scissors, Gift, DollarSign } from 'lucide-react';
+import { Users, Scissors, Gift, DollarSign, Hourglass } from 'lucide-react';
 import type { Service, User, Promotion, Appointment } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -34,7 +34,14 @@ export default function AdminDashboardPage({ isAdmin }: { isAdmin: boolean }) {
   const confirmedRevenue = useMemo(() => {
     if (!appointments) return 0;
     return appointments
-      .filter(apt => apt.status === 'confirmado')
+      .filter(apt => apt.status === 'confirmado' || apt.status === 'finalizado')
+      .reduce((sum, apt) => sum + (apt.finalPrice || 0), 0);
+  }, [appointments]);
+
+  const unconfirmedRevenue = useMemo(() => {
+    if (!appointments) return 0;
+    return appointments
+      .filter(apt => apt.status === 'Marcado')
       .reduce((sum, apt) => sum + (apt.finalPrice || 0), 0);
   }, [appointments]);
 
@@ -44,7 +51,7 @@ export default function AdminDashboardPage({ isAdmin }: { isAdmin: boolean }) {
   return (
     <div>
       <h2 className="text-2xl font-bold mb-6">Visão Geral</h2>
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total de Usuários</CardTitle>
@@ -86,7 +93,21 @@ export default function AdminDashboardPage({ isAdmin }: { isAdmin: boolean }) {
                     {confirmedRevenue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                 </div>
             )}
-            <p className="text-xs text-muted-foreground">Soma dos agendamentos confirmados</p>
+            <p className="text-xs text-muted-foreground">Soma dos agendamentos confirmados/finalizados</p>
+          </CardContent>
+        </Card>
+         <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Receita Pendente</CardTitle>
+            <Hourglass className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            {isLoadingAppointments ? <Skeleton className="h-8 w-1/2"/> : (
+                <div className="text-2xl font-bold">
+                    {unconfirmedRevenue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                </div>
+            )}
+            <p className="text-xs text-muted-foreground">Soma dos agendamentos marcados</p>
           </CardContent>
         </Card>
       </div>
