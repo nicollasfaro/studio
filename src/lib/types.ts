@@ -73,5 +73,10 @@ export type HeroBanner = {
   buttonText: string;
 };
     
+export type BusinessHours = {
+  startTime: string;
+  endTime: string;
+  workingDays: number[]; // 0 for Sunday, 1 for Monday, etc.
+}
 
     

@@ -22,12 +22,11 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { ArrowLeft, ArrowRight, PartyPopper, Loader2, Info, Upload } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
-import { format, startOfDay, endOfDay, addMinutes, parse } from 'date-fns';
+import { format, startOfDay, endOfDay, addMinutes, parse, getDay } from 'date-fns';
 import { useCollection, useDoc, useFirestore, useUser, useMemoFirebase, useFirebaseApp } from '@/firebase';
 import { collection, query, where, doc, addDoc, updateDoc } from 'firebase/firestore';
 import { getStorage, ref as storageRef, uploadString, getDownloadURL } from 'firebase/storage';
-import type { Service, Appointment, Promotion } from '@/lib/types';
-import { timeSlots as allTimeSlots } from '@/lib/data';
+import type { Service, Appointment, Promotion, BusinessHours } from '@/lib/types';
 import { ptBR } from 'date-fns/locale';
 import {
   AlertDialog,
@@ -78,6 +77,9 @@ export default function BookAppointmentPage() {
 
   const appointmentToRescheduleRef = useMemoFirebase(() => (firestore && rescheduleId ? doc(firestore, 'appointments', rescheduleId) : null), [firestore, rescheduleId]);
   const { data: appointmentToReschedule, isLoading: isLoadingReschedule } = useDoc<Appointment>(appointmentToRescheduleRef);
+
+  const businessHoursRef = useMemoFirebase(() => (firestore ? doc(firestore, 'config', 'businessHours') : null), [firestore]);
+  const { data: businessHours, isLoading: isLoadingBusinessHours } = useDoc<BusinessHours>(businessHoursRef);
 
   // Auto-fill user data if logged in
   useEffect(() => {
@@ -154,10 +156,27 @@ export default function BookAppointmentPage() {
   
   const { data: todaysAppointments, isLoading: isLoadingAppointments } = useCollection<Appointment>(appointmentsQuery);
 
+  // Generate time slots based on business hours
+  const timeSlots = useMemo(() => {
+    if (!businessHours) return [];
+    
+    const slots = [];
+    const { startTime, endTime } = businessHours;
+    let current = parse(startTime, 'HH:mm', new Date());
+    const end = parse(endTime, 'HH:mm', new Date());
+
+    while (current < end) {
+        slots.push({ time: format(current, 'HH:mm'), available: true });
+        current = addMinutes(current, 30); // Assuming 30 minute intervals, can be configured
+    }
+    return slots;
+  }, [businessHours]);
+
+
   // Memoize available time slots calculation
   const availableTimeSlots = useMemo(() => {
-    if (isLoadingAppointments || !todaysAppointments || !allServices) {
-      return allTimeSlots.map(slot => ({ ...slot, available: false }));
+    if (isLoadingAppointments || !todaysAppointments || !allServices || !timeSlots.length) {
+      return timeSlots.map(slot => ({ ...slot, available: false }));
     }
     
     const bookedSlots = new Set<string>();
@@ -174,7 +193,7 @@ export default function BookAppointmentPage() {
         const startTime = parse(format(new Date(apt.startTime), 'HH:mm'), 'HH:mm', new Date());
         const endTime = addMinutes(startTime, service.durationMinutes);
         
-        allTimeSlots.forEach(slot => {
+        timeSlots.forEach(slot => {
             const slotTime = parse(slot.time, 'HH:mm', new Date());
             if (slotTime >= startTime && slotTime < endTime) {
                 bookedSlots.add(slot.time);
@@ -182,12 +201,12 @@ export default function BookAppointmentPage() {
         });
     });
     
-    return allTimeSlots.map(slot => ({
+    return timeSlots.map(slot => ({
       ...slot,
       available: !bookedSlots.has(slot.time)
     }));
 
-  }, [todaysAppointments, allServices, isLoadingAppointments, rescheduleId]);
+  }, [todaysAppointments, allServices, isLoadingAppointments, rescheduleId, timeSlots]);
 
 
   const handleNextStep = () => {
@@ -327,6 +346,16 @@ export default function BookAppointmentPage() {
   const confirmationStep = currentService?.isPriceFrom ? 4 : 3;
   const successStep = totalSteps + 1;
 
+  const isDayDisabled = (day: Date) => {
+    const today = startOfDay(new Date());
+    if (day < today) return true;
+    if (businessHours && businessHours.workingDays) {
+        const dayOfWeek = getDay(day);
+        return !businessHours.workingDays.includes(dayOfWeek);
+    }
+    return true; // Disable all days if business hours are not loaded
+  }
+
   return (
     <div className="container mx-auto px-4 md:px-6 py-12">
       <Card className="max-w-4xl mx-auto shadow-xl">
@@ -433,18 +462,20 @@ export default function BookAppointmentPage() {
             <div className="grid md:grid-cols-2 gap-8">
               <div>
                 <h3 className="text-xl font-bold mb-4">Selecione uma Data</h3>
-                <Calendar
-                  mode="single"
-                  selected={date}
-                  onSelect={setDate}
-                  className="rounded-md border"
-                  disabled={(date) => date < new Date(new Date().setDate(new Date().getDate() - 1))}
-                  locale={ptBR}
-                />
+                {isLoadingBusinessHours ? <p>Carregando calendário...</p> : (
+                  <Calendar
+                    mode="single"
+                    selected={date}
+                    onSelect={setDate}
+                    className="rounded-md border"
+                    disabled={isDayDisabled}
+                    locale={ptBR}
+                  />
+                )}
               </div>
               <div>
                 <h3 className="text-xl font-bold mb-4">Selecione uma Hora</h3>
-                {isLoadingAppointments || isLoadingServices ? <p>Verificando horários disponíveis...</p> : (
+                {isLoadingAppointments || isLoadingServices || isLoadingBusinessHours ? <p>Verificando horários disponíveis...</p> : (
                   <div className="grid grid-cols-3 gap-2">
                     {availableTimeSlots.map((slot) => (
                       <Button
@@ -553,3 +584,5 @@ export default function BookAppointmentPage() {
     </div>
   );
 }
+
+    
