@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState } from 'react';
@@ -84,26 +83,19 @@ export default function AdminUsersPage({ isAdmin }: { isAdmin: boolean }) {
   };
 
   const handleNextPage = async () => {
-    if (!users || users.length === 0) return;
-    const lastUser = users[users.length - 1];
-
-    if (!firestore) return;
-    // We need to fetch the actual DocumentSnapshot for the last user.
-    // The user object from useCollection doesn't contain the snapshot.
-    const lastUserDocQuery = query(collection(firestore, "users"), where("id", "==", lastUser.id), limit(1));
-    const lastUserDocSnapshot = await getDocs(lastUserDocQuery);
-    const lastVisibleDoc = lastUserDocSnapshot.docs[0];
+    if (!users || users.length === 0 || !firestore) return;
+    const lastVisible = await getDocs(query(collection(firestore, 'users'), where('id', '==', users[users.length - 1].id), limit(1)));
     
-    if (lastVisibleDoc) {
-      setPaginationSnapshots(prev => [...prev, lastVisibleDoc]);
-      setPage(prev => prev + 1);
+    if (lastVisible.docs[0]) {
+        setPaginationSnapshots(prev => [...prev, lastVisible.docs[0]]);
+        setPage(prev => prev + 1);
     }
   };
 
-  const handlePrevPage = async () => {
-     if (page === 0) return;
-     setPage(prev => prev - 1);
-     // The snapshot for the previous page is already in the array
+  const handlePrevPage = () => {
+    if (page === 0) return;
+    setPage(prev => prev - 1);
+    setPaginationSnapshots(prev => prev.slice(0, -1));
   };
   
 

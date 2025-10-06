@@ -18,7 +18,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth, useFirestore } from '@/firebase';
-import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
+import { createUserWithEmailAndPassword, updateProfile, sendEmailVerification } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
 import { errorEmitter } from '@/firebase/error-emitter';
@@ -61,8 +61,12 @@ export default function RegisterPage() {
           displayName: values.name,
         });
 
+        // Send verification email
+        await sendEmailVerification(user);
+
         const userDocRef = doc(firestore, 'users', user.uid);
         const userData = {
+            id: user.uid,
             name: values.name,
             email: values.email,
             createdAt: new Date().toISOString(),
@@ -82,10 +86,11 @@ export default function RegisterPage() {
       }
       
       toast({
-        title: "Registro bem-sucedido",
-        description: "Sua conta foi criada.",
+        title: "Registro quase concluído!",
+        description: "Sua conta foi criada. Enviamos um e-mail de confirmação para você. Por favor, verifique sua caixa de entrada.",
+        duration: 9000, // Show toast for longer
       });
-      router.push('/');
+      router.push('/login');
     } catch (error: any) {
       console.error('Erro de registro:', error);
       let description = 'Ocorreu um erro durante o registro. Por favor, tente novamente.';
