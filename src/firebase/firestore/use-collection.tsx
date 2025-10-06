@@ -23,6 +23,7 @@ export interface UseCollectionResult<T> {
   data: WithId<T>[] | null; // Document data with ID, or null.
   isLoading: boolean;       // True if loading.
   error: FirestoreError | Error | null; // Error object, or null.
+  snapshots: DocumentData[] | null;
 }
 
 /* Internal implementation of Query:
@@ -58,6 +59,7 @@ export function useCollection<T = any>(
   type StateDataType = ResultItemType[] | null;
 
   const [data, setData] = useState<StateDataType>(null);
+  const [snapshots, setSnapshots] = useState<DocumentData[] | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<FirestoreError | Error | null>(null);
 
@@ -66,6 +68,7 @@ export function useCollection<T = any>(
       setData(null);
       setIsLoading(false);
       setError(null);
+      setSnapshots(null);
       return;
     }
 
@@ -77,10 +80,13 @@ export function useCollection<T = any>(
       memoizedTargetRefOrQuery,
       (snapshot: QuerySnapshot<DocumentData>) => {
         const results: ResultItemType[] = [];
+        const snapshotDocs: DocumentData[] = [];
         for (const doc of snapshot.docs) {
           results.push({ ...(doc.data() as T), id: doc.id });
+          snapshotDocs.push(doc);
         }
         setData(results);
+        setSnapshots(snapshotDocs);
         setError(null);
         setIsLoading(false);
       },
@@ -98,6 +104,7 @@ export function useCollection<T = any>(
 
         setError(contextualError)
         setData(null)
+        setSnapshots(null);
         setIsLoading(false)
 
         // trigger global error propagation
@@ -110,5 +117,7 @@ export function useCollection<T = any>(
   if(memoizedTargetRefOrQuery && !memoizedTargetRefOrQuery.__memo) {
     throw new Error(memoizedTargetRefOrQuery + ' was not properly memoized using useMemoFirebase');
   }
-  return { data, isLoading, error };
+  return { data, isLoading, error, snapshots };
 }
+
+    

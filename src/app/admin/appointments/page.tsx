@@ -29,13 +29,13 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { MoreHorizontal, CheckCircle, XCircle, Camera, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
-import { collection, query, orderBy, doc, updateDoc, limit, startAfter, getDocs, where, writeBatch, DocumentSnapshot } from 'firebase/firestore';
+import { collection, query, orderBy, doc, updateDoc, limit, startAfter, getDocs, where, writeBatch, DocumentSnapshot, endBefore, limitToLast } from 'firebase/firestore';
 import type { Appointment, Service } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
@@ -48,7 +48,7 @@ const APPOINTMENTS_PER_PAGE = 6;
 
 interface AppointmentsTableProps {
   services: (Omit<Service, 'id'> & { id: string })[];
-  appointments: Appointment[];
+  appointments: (Appointment & { doc: DocumentSnapshot })[];
   isLoading: boolean;
 }
 
@@ -114,7 +114,7 @@ function AppointmentsTable({ services, appointments, isLoading }: AppointmentsTa
       </TableHeader>
       <TableBody>
         {isLoading &&
-          Array.from({ length: 5 }).map((_, i) => (
+          Array.from({ length: APPOINTMENTS_PER_PAGE }).map((_, i) => (
             <TableRow key={i}>
               <TableCell><Skeleton className="h-4 w-[150px]" /></TableCell>
               <TableCell><Skeleton className="h-4 w-[150px]" /></TableCell>
@@ -201,7 +201,6 @@ function AppointmentsTable({ services, appointments, isLoading }: AppointmentsTa
 export default function AdminAppointmentsPage() {
   const firestore = useFirestore();
   const [filter, setFilter] = useState('upcoming');
-
   const [page, setPage] = useState(0);
   const [paginationSnapshots, setPaginationSnapshots] = useState<(DocumentSnapshot | null)[]>([null]);
   
@@ -209,24 +208,24 @@ export default function AdminAppointmentsPage() {
   const { data: services, isLoading: isLoadingServices } = useCollection<Service>(servicesRef);
 
   const appointmentsQuery = useMemoFirebase(() => {
-      if (!firestore) return null;
-      let q = query(collection(firestore, 'appointments'), orderBy('startTime', 'desc'));
+    if (!firestore) return null;
+    let q = query(collection(firestore, 'appointments'), orderBy('startTime', 'desc'));
 
-      const now = new Date();
-      if (filter === 'upcoming') {
-        q = query(q, where('startTime', '>=', now.toISOString()));
-      } else if (filter === 'history') {
-        q = query(q, where('startTime', '<', now.toISOString()));
-      }
+    const now = new Date();
+    if (filter === 'upcoming') {
+      q = query(q, where('startTime', '>=', now.toISOString()));
+    } else if (filter === 'history') {
+      q = query(q, where('startTime', '<', now.toISOString()));
+    }
 
-      if (page > 0 && paginationSnapshots[page]) {
-        return query(q, startAfter(paginationSnapshots[page]), limit(APPOINTMENTS_PER_PAGE));
-      }
-
-      return query(q, limit(APPOINTMENTS_PER_PAGE));
+    if (page > 0 && paginationSnapshots[page]) {
+      return query(q, startAfter(paginationSnapshots[page]), limit(APPOINTMENTS_PER_PAGE));
+    }
+    
+    return query(q, limit(APPOINTMENTS_PER_PAGE));
   }, [firestore, filter, page, paginationSnapshots]);
 
-  const { data: paginatedAppointments, isLoading: isLoadingAppointments } = useCollection<Appointment>(appointmentsQuery);
+  const { data: paginatedAppointments, isLoading: isLoadingAppointments, snapshots } = useCollection<Appointment>(appointmentsQuery);
 
   useEffect(() => {
     if (!firestore || !paginatedAppointments) return;
@@ -236,20 +235,22 @@ export default function AdminAppointmentsPage() {
     if (unviewedAppointments.length > 0) {
       const batch = writeBatch(firestore);
       unviewedAppointments.forEach(apt => {
-        const appointmentRef = doc(firestore, 'appointments', apt.id);
-        batch.update(appointmentRef, { viewedByAdmin: true });
+        if (apt.id) { // Ensure apt.id is not undefined
+          const appointmentRef = doc(firestore, 'appointments', apt.id);
+          batch.update(appointmentRef, { viewedByAdmin: true });
+        }
       });
       batch.commit().catch(console.error);
     }
   }, [paginatedAppointments, firestore]);
   
-  const handleNextPage = async () => {
-    if (!paginatedAppointments || paginatedAppointments.length === 0 || !firestore) return;
-    const lastVisible = await getDocs(query(collection(firestore, 'appointments'), where('id', '==', paginatedAppointments[paginatedAppointments.length - 1].id), limit(1)));
+  const handleNextPage = () => {
+    if (!snapshots || snapshots.length === 0) return;
     
-    if (lastVisible.docs[0]) {
-        setPaginationSnapshots(prev => [...prev, lastVisible.docs[0]]);
-        setPage(prev => prev + 1);
+    const lastVisible = snapshots[snapshots.length - 1];
+    if (lastVisible) {
+      setPaginationSnapshots(prev => [...prev, lastVisible]);
+      setPage(prev => prev + 1);
     }
   };
 
@@ -258,7 +259,6 @@ export default function AdminAppointmentsPage() {
     setPage(prev => prev - 1);
     setPaginationSnapshots(prev => prev.slice(0, -1));
   };
-
 
   const isLoading = isLoadingServices || isLoadingAppointments;
 
@@ -315,3 +315,5 @@ export default function AdminAppointmentsPage() {
     </Card>
   );
 }
+
+    
