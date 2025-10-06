@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useMemo, useState, useEffect } from 'react';
@@ -45,7 +44,7 @@ import Image from 'next/image';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 
-const APPOINTMENTS_PER_PAGE = 10;
+const APPOINTMENTS_PER_PAGE = 6;
 
 interface AppointmentsTableProps {
   services: (Omit<Service, 'id'> & { id: string })[];
@@ -151,7 +150,7 @@ function AppointmentsTable({ services, appointments, isLoading }: AppointmentsTa
                         <Image
                             src={apt.hairPhotoUrl}
                             alt={`Referência para ${apt.clientName}`}
-                            layout="fill"
+                            fill
                             objectFit="contain"
                             className="rounded-md"
                         />

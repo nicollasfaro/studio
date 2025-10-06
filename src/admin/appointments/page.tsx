@@ -44,7 +44,7 @@ import Image from 'next/image';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 
-const APPOINTMENTS_PER_PAGE = 10;
+const APPOINTMENTS_PER_PAGE = 6;
 
 interface AppointmentsTableProps {
   services: (Omit<Service, 'id'> & { id: string })[];
