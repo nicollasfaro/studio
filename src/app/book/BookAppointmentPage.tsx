@@ -175,11 +175,12 @@ export default function BookAppointmentPage() {
 
   // Memoize available time slots calculation
   const availableTimeSlots = useMemo(() => {
-    if (isLoadingAppointments || !todaysAppointments || !allServices || !timeSlots.length) {
+    if (isLoadingAppointments || !todaysAppointments || !allServices || !timeSlots.length || !businessHours || !currentService) {
       return timeSlots.map(slot => ({ ...slot, available: false }));
     }
     
     const bookedSlots = new Set<string>();
+    const closingTime = parse(businessHours.endTime, 'HH:mm', new Date());
 
     todaysAppointments.forEach(apt => {
         // When rescheduling, ignore the appointment being rescheduled from conflict checking
@@ -201,12 +202,18 @@ export default function BookAppointmentPage() {
         });
     });
     
-    return timeSlots.map(slot => ({
-      ...slot,
-      available: !bookedSlots.has(slot.time)
-    }));
+    return timeSlots.map(slot => {
+      const slotTime = parse(slot.time, 'HH:mm', new Date());
+      const slotEndTime = addMinutes(slotTime, currentService.durationMinutes);
+      const isAvailable = !bookedSlots.has(slot.time) && slotEndTime <= closingTime;
 
-  }, [todaysAppointments, allServices, isLoadingAppointments, rescheduleId, timeSlots]);
+      return {
+        ...slot,
+        available: isAvailable
+      }
+    });
+
+  }, [todaysAppointments, allServices, isLoadingAppointments, rescheduleId, timeSlots, businessHours, currentService]);
 
 
   const handleNextStep = () => {
@@ -475,7 +482,7 @@ export default function BookAppointmentPage() {
               </div>
               <div>
                 <h3 className="text-xl font-bold mb-4">Selecione uma Hora</h3>
-                {isLoadingAppointments || isLoadingServices || isLoadingBusinessHours ? <p>Verificando horários disponíveis...</p> : (
+                {(isLoadingAppointments || isLoadingServices || isLoadingBusinessHours || !currentService) ? <p>Verificando horários disponíveis...</p> : (
                   <div className="grid grid-cols-3 gap-2">
                     {availableTimeSlots.map((slot) => (
                       <Button
