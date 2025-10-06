@@ -52,7 +52,7 @@ export default function BookAppointmentPage() {
 
   const [step, setStep] = useState(1);
   const [selectedServiceId, setSelectedServiceId] = useState<string | undefined>(serviceQueryParam || undefined);
-  const [date, setDate] = useState<Date | undefined>(new Date());
+  const [date, setDate] = useState<Date | undefined>(undefined);
   const [selectedTime, setSelectedTime] = useState<string | undefined>();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -155,6 +155,26 @@ export default function BookAppointmentPage() {
   }, [firestore, date]);
   
   const { data: todaysAppointments, isLoading: isLoadingAppointments } = useCollection<Appointment>(appointmentsQuery);
+
+  const isDayDisabled = (day: Date) => {
+    const today = startOfDay(new Date());
+    if (day < today) return true;
+    if (businessHours && businessHours.workingDays) {
+        const dayOfWeek = getDay(day);
+        return !businessHours.workingDays.includes(dayOfWeek);
+    }
+    return true; // Disable all days if business hours are not loaded
+  }
+
+  // Set initial date only if today is a valid working day
+  useEffect(() => {
+      if (!date && businessHours) {
+        const today = new Date();
+        if (!isDayDisabled(today)) {
+          setDate(today);
+        }
+      }
+  }, [businessHours, date, isDayDisabled]);
 
   // Generate time slots based on business hours
   const timeSlots = useMemo(() => {
@@ -307,8 +327,8 @@ export default function BookAppointmentPage() {
           clientName: name,
           clientEmail: email,
           finalPrice: finalPrice,
-          hairLength: hairLength,
-          hairPhotoUrl: finalHairPhotoUrl
+          ...(hairLength && { hairLength: hairLength }),
+          ...(finalHairPhotoUrl && { hairPhotoUrl: finalHairPhotoUrl }),
       };
 
       if (rescheduleId && appointmentToRescheduleRef) {
@@ -334,8 +354,6 @@ export default function BookAppointmentPage() {
         console.error("Booking Error:", error);
         toast({ title: 'Erro ao agendar', description: error.message || 'Não foi possível salvar o agendamento.', variant: 'destructive' });
         
-        // This is a generic error emitter, you might want to be more specific
-        // based on where the error occurred (upload vs. firestore write)
         errorEmitter.emit('permission-error', new FirestorePermissionError({
           path: `appointments`,
           operation: 'create',
@@ -353,15 +371,6 @@ export default function BookAppointmentPage() {
   const confirmationStep = currentService?.isPriceFrom ? 4 : 3;
   const successStep = totalSteps + 1;
 
-  const isDayDisabled = (day: Date) => {
-    const today = startOfDay(new Date());
-    if (day < today) return true;
-    if (businessHours && businessHours.workingDays) {
-        const dayOfWeek = getDay(day);
-        return !businessHours.workingDays.includes(dayOfWeek);
-    }
-    return true; // Disable all days if business hours are not loaded
-  }
 
   return (
     <div className="container mx-auto px-4 md:px-6 py-12">
@@ -591,5 +600,3 @@ export default function BookAppointmentPage() {
     </div>
   );
 }
-
-    
