@@ -147,6 +147,7 @@ export default function ProfilePage() {
   };
 
   const isLoading = isAuthLoading || isUserDataLoading;
+  const userPhoto = userData?.photoURL || user?.photoURL;
 
   if (isLoading || !user) {
     return (
@@ -188,18 +189,20 @@ export default function ProfilePage() {
           <Card className="shadow-lg">
             <CardHeader className="items-center text-center p-6">
               <Avatar className="w-24 h-24 mb-4">
-                {user.photoURL && <AvatarImage src={user.photoURL} alt={user.displayName || 'Usuário'} />}
+                {userPhoto && <AvatarImage src={userPhoto} alt={user.displayName || 'Usuário'} />}
                 <AvatarFallback>
                   <User className="w-12 h-12" />
                 </AvatarFallback>
               </Avatar>
-              <CardTitle className="font-headline text-2xl">{user.displayName || 'Usuário'}</CardTitle>
+              <CardTitle className="font-headline text-2xl">{userData?.name || user.displayName || 'Usuário'}</CardTitle>
               <CardDescription>{user.email}</CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-2">
-              <Button variant="outline" className="w-full" disabled>
-                <Edit className="mr-2 h-4 w-4" />
-                Editar Perfil
+              <Button variant="outline" className="w-full" asChild>
+                <Link href="/profile/edit">
+                  <Edit className="mr-2 h-4 w-4" />
+                  Editar Perfil
+                </Link>
               </Button>
               <Button variant="destructive" className="w-full" onClick={handleLogout}>
                 <LogOut className="mr-2 h-4 w-4" />

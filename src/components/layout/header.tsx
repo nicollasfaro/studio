@@ -14,6 +14,7 @@ import {
   UserPlus,
   LogOut,
   Shield,
+  Edit,
 } from 'lucide-react';
 import { signOut } from 'firebase/auth';
 
@@ -77,6 +78,7 @@ export function Header() {
 
 
   const isLoading = isUserDataLoading;
+  const userPhoto = userData?.photoURL || user?.photoURL;
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-primary/20 bg-primary shadow-sm">
@@ -127,7 +129,7 @@ export function Header() {
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="relative h-10 w-10 rounded-full">
               <Avatar className="h-10 w-10">
-                {user?.photoURL && <AvatarImage src={user.photoURL} alt={user.displayName || 'User profile'} />}
+                {userPhoto && <AvatarImage src={userPhoto} alt={user?.displayName || 'User profile'} />}
                 <AvatarFallback>
                   <User className="text-primary" />
                 </AvatarFallback>
@@ -136,7 +138,7 @@ export function Header() {
           </DropdownMenuTrigger>
           <DropdownMenuContent className="w-56" align="end">
             <DropdownMenuLabel>
-              {user ? user.displayName || 'Minha Conta' : 'Convidado'}
+              {user ? (userData?.name || user.displayName) : 'Convidado'}
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             {isLoading ? (
@@ -155,6 +157,12 @@ export function Header() {
                   <Link href="/profile">
                     <User className="mr-2 h-4 w-4" />
                     <span>Perfil</span>
+                  </Link>
+                </DropdownMenuItem>
+                 <DropdownMenuItem asChild>
+                  <Link href="/profile/edit">
+                    <Edit className="mr-2 h-4 w-4" />
+                    <span>Editar Perfil</span>
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>

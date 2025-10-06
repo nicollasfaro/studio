@@ -28,6 +28,27 @@
         "isAdmin": {
           "type": "boolean",
           "description": "Flag to indicate if the user is an administrator."
+        },
+        "photoURL": {
+            "type": "string",
+            "format": "uri",
+            "description": "URL of the user's profile picture."
+        },
+        "address": {
+          "type": "string",
+          "description": "The user's street address."
+        },
+        "city": {
+          "type": "string",
+          "description": "The user's city."
+        },
+        "state": {
+          "type": "string",
+          "description": "The user's state or province."
+        },
+        "zipCode": {
+          "type": "string",
+          "description": "The user's postal or zip code."
         }
       },
       "required": ["id", "name", "email", "createdAt"]

@@ -51,6 +51,11 @@ export type User = {
     email: string;
     createdAt: string;
     isAdmin?: boolean;
+    address?: string;
+    city?: string;
+    state?: string;
+    zipCode?: string;
+    photoURL?: string;
 }
 
 export type SocialMediaLinks = {
