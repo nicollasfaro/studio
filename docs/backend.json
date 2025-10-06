@@ -262,6 +262,24 @@
         "viewedByAdmin": {
             "type": "boolean",
             "description": "Flag to indicate if an admin has viewed the appointment."
+        },
+        "contestStatus": {
+          "type": "string",
+          "enum": ["pending", "accepted", "rejected"],
+          "description": "Status of a price contestation by the admin."
+        },
+        "contestReason": {
+          "type": "string",
+          "description": "The reason provided by the admin for the contestation."
+        },
+        "contestedHairLength": {
+          "type": "string",
+          "enum": ["curto", "medio", "longo"],
+          "description": "The correct hair length as contested by the admin."
+        },
+        "contestedPrice": {
+          "type": "number",
+          "description": "The new price proposed by the admin based on the contested hair length."
         }
       },
       "required": [

@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
@@ -6,10 +5,9 @@ import { useRouter } from 'next/navigation';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Switch } from '@/components/ui/switch';
-import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -31,7 +29,7 @@ import { collection, query, where, orderBy, doc, updateDoc } from 'firebase/fire
 import { signOut } from 'firebase/auth';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { User, Edit, LogOut, Calendar, Bell, MoreVertical, Trash2, Repeat } from 'lucide-react';
+import { User, Edit, LogOut, Calendar, Bell, MoreVertical, Trash2, Repeat, AlertCircle, Check, X } from 'lucide-react';
 import type { Appointment, Service } from '@/lib/types';
 import Link from 'next/link';
 import { useUserData } from '@/hooks/use-user-data';
@@ -42,6 +40,7 @@ import NotificationSubscriber from '@/components/NotificationSubscriber';
 
 interface AppointmentWithService extends Appointment {
   serviceName?: string;
+  service?: Service;
 }
 
 export default function ProfilePage() {
@@ -67,36 +66,27 @@ export default function ProfilePage() {
     if (isUserDataLoading || !firestore || !user?.uid) {
       return null;
     }
-    const isAdmin = userData?.isAdmin ?? false;
-    const baseQuery = collection(firestore, 'appointments');
-    
-    return isAdmin 
-      ? baseQuery
-      : query(baseQuery, where('clientId', '==', user.uid));
-  }, [firestore, user?.uid, userData, isUserDataLoading]);
+    return query(collection(firestore, 'appointments'), where('clientId', '==', user.uid));
+  }, [firestore, user?.uid, isUserDataLoading]);
   
-  const { data: allAppointments, isLoading: isLoadingAppointments } = useCollection<Appointment>(appointmentsQuery);
+  const { data: allUserAppointments, isLoading: isLoadingAppointments } = useCollection<Appointment>(appointmentsQuery);
 
-  const mapAndFilterAppointments = (appointments: Appointment[] | null): AppointmentWithService[] => {
-    if (!appointments || !services || !user?.uid) return [];
-    
-    const isAdmin = userData?.isAdmin ?? false;
-    
-    return appointments
-      .filter(apt => isAdmin ? apt.clientId === user.uid : true) 
-      .map(apt => ({
-        ...apt,
-        serviceName: services.find(s => s.id === apt.serviceId)?.name || 'Serviço Desconhecido',
-      }));
-  };
-
-  const allUserAppointments = mapAndFilterAppointments(allAppointments);
+  const appointmentsWithServices = useMemo<AppointmentWithService[]>(() => {
+    if (!allUserAppointments || !services) return [];
+    return allUserAppointments.map(apt => ({
+      ...apt,
+      service: services.find(s => s.id === apt.serviceId),
+      serviceName: services.find(s => s.id === apt.serviceId)?.name || 'Serviço Desconhecido',
+    }));
+  }, [allUserAppointments, services]);
   
-  const upcomingAppointments = allUserAppointments.filter(apt => new Date(apt.startTime) >= new Date() && apt.status !== 'cancelado');
-  upcomingAppointments.sort((a,b) => new Date(a.startTime).getTime() - new Date(a.startTime).getTime());
+  const upcomingAppointments = appointmentsWithServices
+    .filter(apt => new Date(apt.startTime) >= new Date() && apt.status !== 'cancelado')
+    .sort((a,b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
   
-  const pastAppointments = allUserAppointments.filter(apt => new Date(apt.startTime) < new Date() || apt.status === 'cancelado');
-  pastAppointments.sort((a,b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
+  const pastAppointments = appointmentsWithServices
+    .filter(apt => new Date(apt.startTime) < new Date() || apt.status === 'cancelado')
+    .sort((a,b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
 
 
   const handleLogout = async () => {
@@ -108,10 +98,10 @@ export default function ProfilePage() {
     }
   };
 
-  const handleCancelAppointment = () => {
-    if (!appointmentToCancel || !firestore) return;
+  const handleCancelAppointment = (appointment: Appointment | null) => {
+    if (!appointment || !firestore) return;
 
-    const appointmentRef = doc(firestore, 'appointments', appointmentToCancel.id);
+    const appointmentRef = doc(firestore, 'appointments', appointment.id);
     updateDoc(appointmentRef, { status: 'cancelado' }).then(() => {
       toast({
         title: 'Agendamento Cancelado',
@@ -131,6 +121,40 @@ export default function ProfilePage() {
       }));
     });
   };
+
+  const handleContestResponse = (appointment: Appointment, accepted: boolean) => {
+    if (!firestore) return;
+    const appointmentRef = doc(firestore, 'appointments', appointment.id);
+    
+    let updateData = {};
+    if (accepted) {
+      updateData = {
+        status: 'Marcado',
+        contestStatus: 'accepted',
+        finalPrice: appointment.contestedPrice,
+        hairLength: appointment.contestedHairLength,
+      };
+    } else {
+      updateData = {
+        status: 'cancelado',
+        contestStatus: 'rejected',
+      };
+    }
+
+    updateDoc(appointmentRef, updateData).then(() => {
+      toast({
+        title: 'Resposta Enviada!',
+        description: `Sua resposta à contestação foi registrada.`,
+      });
+    }).catch(error => {
+      toast({ variant: 'destructive', title: 'Erro', description: 'Não foi possível processar sua resposta.' });
+      errorEmitter.emit('permission-error', new FirestorePermissionError({
+        path: appointmentRef.path,
+        operation: 'update',
+        requestResourceData: updateData,
+      }));
+    });
+  };
   
   const getBadgeVariant = (status: Appointment['status']) => {
     switch (status) {
@@ -141,6 +165,7 @@ export default function ProfilePage() {
       case 'finalizado':
         return 'outline';
       case 'cancelado':
+      case 'contestado':
         return 'destructive';
       default:
         return 'secondary';
@@ -228,35 +253,54 @@ export default function ProfilePage() {
                 ) : upcomingAppointments.length > 0 ? (
                   <ul className="space-y-4">
                     {upcomingAppointments.map((apt) => (
-                      <li key={apt.id} className="flex items-center justify-between p-4 bg-secondary/30 rounded-lg">
-                        <div className="flex-1">
-                          <p className="font-semibold">{apt.serviceName}</p>
-                          <p className="text-sm text-muted-foreground">
-                            {format(new Date(apt.startTime), "EEEE, d 'de' MMM 'às' HH:mm", { locale: ptBR })}
-                          </p>
-                           <Badge variant={getBadgeVariant(apt.status)} className="capitalize mt-2">
-                            {apt.status}
-                          </Badge>
+                      <li key={apt.id} className="p-4 bg-secondary/30 rounded-lg">
+                         {apt.contestStatus === 'pending' && (
+                            <Alert variant="destructive" className="mb-4 bg-amber-50 border-amber-200">
+                              <AlertCircle className="h-4 w-4 text-amber-600" />
+                              <AlertTitle className="text-amber-800 font-semibold">Contestação de Valor</AlertTitle>
+                              <AlertDescription className="text-amber-700">
+                                O salão contestou o valor do seu agendamento.
+                                <p className="mt-2 font-semibold">Motivo: <span className="font-normal">{apt.contestReason}</span></p>
+                                <p className="font-semibold">Novo Valor Proposto: <span className="font-normal">R${apt.contestedPrice?.toFixed(2)}</span></p>
+                                 <div className="flex gap-2 mt-3">
+                                  <Button size="sm" onClick={() => handleContestResponse(apt, true)}><Check className="mr-1 h-4 w-4"/> Aceitar Novo Valor</Button>
+                                  <Button size="sm" variant="destructive" onClick={() => handleContestResponse(apt, false)}><X className="mr-1 h-4 w-4" /> Recusar e Cancelar</Button>
+                                </div>
+                              </AlertDescription>
+                            </Alert>
+                         )}
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1">
+                            <p className="font-semibold">{apt.serviceName}</p>
+                            <p className="text-sm text-muted-foreground">
+                              {format(new Date(apt.startTime), "EEEE, d 'de' MMM 'às' HH:mm", { locale: ptBR })}
+                            </p>
+                             <Badge variant={getBadgeVariant(apt.status)} className="capitalize mt-2">
+                              {apt.status === 'contestado' ? 'Contestado' : apt.status}
+                            </Badge>
+                          </div>
+                          {apt.status !== 'contestado' && (
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon">
+                                  <MoreVertical className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem asChild disabled={apt.status !== 'Marcado'}>
+                                  <Link href={`/book?remarcarId=${apt.id}`}>
+                                    <Repeat className="mr-2 h-4 w-4" />
+                                    Remarcar
+                                  </Link>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => setAppointmentToCancel(apt)} className="text-destructive focus:text-destructive" disabled={apt.status !== 'Marcado'}>
+                                  <Trash2 className="mr-2 h-4 w-4" />
+                                  Cancelar
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          )}
                         </div>
-                         <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon">
-                              <MoreVertical className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                             <DropdownMenuItem asChild>
-                               <Link href={`/book?remarcarId=${apt.id}`}>
-                                <Repeat className="mr-2 h-4 w-4" />
-                                Remarcar
-                               </Link>
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => setAppointmentToCancel(apt)} className="text-destructive focus:text-destructive">
-                              <Trash2 className="mr-2 h-4 w-4" />
-                              Cancelar
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
                       </li>
                     ))}
                   </ul>
@@ -331,7 +375,7 @@ export default function ProfilePage() {
                 </AlertDialogHeader>
                 <AlertDialogFooter>
                     <AlertDialogCancel onClick={() => setAppointmentToCancel(null)}>Voltar</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleCancelAppointment} className="bg-destructive hover:bg-destructive/90">Sim, cancelar</AlertDialogAction>
+                    <AlertDialogAction onClick={() => handleCancelAppointment(appointmentToCancel)} className="bg-destructive hover:bg-destructive/90">Sim, cancelar</AlertDialogAction>
                 </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>

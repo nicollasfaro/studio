@@ -31,13 +31,17 @@ export type Appointment = {
   serviceId: string;
   startTime: string;
   endTime: string;
-  status: 'Marcado' | 'confirmado' | 'cancelado' | 'finalizado';
+  status: 'Marcado' | 'confirmado' | 'cancelado' | 'finalizado' | 'contestado';
   clientName: string;
   clientEmail: string;
   hairLength?: 'curto' | 'medio' | 'longo';
   hairPhotoUrl?: string | null;
   finalPrice?: number;
   viewedByAdmin?: boolean;
+  contestStatus?: 'pending' | 'accepted' | 'rejected';
+  contestReason?: string;
+  contestedHairLength?: 'curto' | 'medio' | 'longo';
+  contestedPrice?: number;
 };
 
 export type TimeSlot = {
