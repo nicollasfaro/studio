@@ -1,5 +1,5 @@
 
-import * as functions from "firebase-functions";
+import {onDocumentCreated} from "firebase-functions/v2/firestore";
 import * as admin from "firebase-admin";
 
 // Inicializa o Firebase Admin SDK.
@@ -7,20 +7,20 @@ import * as admin from "firebase-admin";
 admin.initializeApp();
 
 /**
- * Cloud Function que é acionada na criação de um novo documento de promoção.
+ * Cloud Function (v2) que é acionada na criação de um novo documento de promoção.
  * Ela envia uma notificação push para todos os usuários que se inscreveram.
  */
-export const sendPromotionNotification = functions.firestore
-  .document("promotions/{promotionId}")
-  .onCreate(async (snapshot) => {
-    // Pega os dados da nova promoção.
-    const promotionData = snapshot.data();
-
-    if (!promotionData) {
-      console.log("Nenhum dado na promoção, encerrando a função.");
-      return null;
+export const sendPromotionNotification = onDocumentCreated(
+  "promotions/{promotionId}",
+  async (event) => {
+    // Pega os dados do evento.
+    const snapshot = event.data;
+    if (!snapshot) {
+      console.log("Nenhum dado no evento, encerrando a função.");
+      return;
     }
 
+    const promotionData = snapshot.data();
     const {name, description} = promotionData;
 
     console.log(`Nova promoção: "${name}". Enviando notificações.`);
@@ -40,13 +40,13 @@ export const sendPromotionNotification = functions.firestore
 
     if (tokens.length === 0) {
       console.log("Nenhum usuário inscrito para receber notificações.");
-      return null;
+      return;
     }
 
     console.log(`Encontrados ${tokens.length} tokens para notificar.`);
 
     // 3. Montar a mensagem da notificação.
-    const payload: admin.messaging.MessagingPayload = {
+    const payload = {
       notification: {
         title: `🎉 Nova Promoção: ${name}!`,
         body: description,
@@ -65,7 +65,6 @@ export const sendPromotionNotification = functions.firestore
         const error = result.error;
         if (error) {
           console.error("Falha ao enviar para token:", tokens[index], error);
-          // Se o erro for 'unregistered', o token é inválido.
           if (
             error.code === "messaging/invalid-registration-token" ||
             error.code === "messaging/registration-token-not-registered"
@@ -77,6 +76,5 @@ export const sendPromotionNotification = functions.firestore
     } catch (error) {
       console.error("Erro ao enviar notificações:", error);
     }
-
-    return null;
-  });
+  },
+);
