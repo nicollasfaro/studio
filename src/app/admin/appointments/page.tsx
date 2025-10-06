@@ -1,6 +1,10 @@
 'use client';
 
 import { useMemo, useState, useEffect } from 'react';
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
+
 import {
   Card,
   CardHeader,
@@ -21,21 +25,27 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator
 } from '@/components/ui/dropdown-menu';
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
+  DialogFooter,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { MoreHorizontal, CheckCircle, XCircle, Camera, ChevronLeft, ChevronRight } from 'lucide-react';
+import { MoreHorizontal, CheckCircle, XCircle, Camera, ChevronLeft, ChevronRight, AlertTriangle, MessageSquare } from 'lucide-react';
 import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
-import { collection, query, orderBy, doc, updateDoc, limit, startAfter, getDocs, where, writeBatch, DocumentSnapshot, endBefore, limitToLast } from 'firebase/firestore';
+import { collection, query, orderBy, doc, updateDoc, limit, startAfter, where, writeBatch, DocumentSnapshot } from 'firebase/firestore';
 import type { Appointment, Service } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
@@ -46,25 +56,156 @@ import { FirestorePermissionError } from '@/firebase/errors';
 
 const APPOINTMENTS_PER_PAGE = 6;
 
-interface AppointmentsTableProps {
-  services: (Omit<Service, 'id'> & { id: string })[];
-  appointments: (Appointment & { doc: DocumentSnapshot })[];
-  isLoading: boolean;
+const contestSchema = z.object({
+  contestReason: z.string().min(10, { message: "O motivo deve ter pelo menos 10 caracteres." }),
+  contestedHairLength: z.enum(["curto", "medio", "longo"], { required_error: "Selecione o comprimento correto." }),
+});
+
+type ContestFormValues = z.infer<typeof contestSchema>;
+
+function ContestDialog({ appointment, service, onOpenChange }: { appointment: Appointment, service: Service | undefined, onOpenChange: (open: boolean) => void }) {
+  const firestore = useFirestore();
+  const { toast } = useToast();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  const form = useForm<ContestFormValues>({
+    resolver: zodResolver(contestSchema),
+    defaultValues: {
+      contestReason: '',
+      contestedHairLength: appointment.hairLength
+    }
+  });
+  
+  const contestedLength = form.watch('contestedHairLength');
+  const contestedPrice = useMemo(() => {
+    if (!service || !service.isPriceFrom || !contestedLength) return service?.price;
+    const prices = {
+      curto: service.priceShortHair,
+      medio: service.priceMediumHair,
+      longo: service.priceLongHair,
+    };
+    return prices[contestedLength];
+  }, [contestedLength, service]);
+
+  const onSubmit = async (values: ContestFormValues) => {
+    if (!firestore || !appointment.id) return;
+    setIsSubmitting(true);
+
+    const appointmentRef = doc(firestore, 'appointments', appointment.id);
+    const updateData = {
+      status: 'contestado',
+      contestStatus: 'pending',
+      contestReason: values.contestReason,
+      contestedHairLength: values.contestedHairLength,
+      contestedPrice: contestedPrice,
+    };
+
+    try {
+      await updateDoc(appointmentRef, updateData);
+      toast({
+        title: 'Agendamento Contestado!',
+        description: 'A contestação foi enviada para o cliente.',
+      });
+      form.reset();
+      onOpenChange(false);
+    } catch (error) {
+      console.error("Error contesting appointment:", error);
+      toast({
+        variant: 'destructive',
+        title: 'Erro ao contestar',
+        description: 'Não foi possível enviar a contestação.',
+      });
+      errorEmitter.emit('permission-error', new FirestorePermissionError({
+        path: appointmentRef.path,
+        operation: 'update',
+        requestResourceData: updateData,
+      }));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <DialogContent className="max-w-lg">
+      <DialogHeader>
+        <DialogTitle>Contestar Agendamento</DialogTitle>
+        <DialogDescription>
+          Explique o motivo da contestação e selecione o comprimento correto do cabelo. O cliente será notificado para aceitar ou recusar.
+        </DialogDescription>
+      </DialogHeader>
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          <FormField
+            control={form.control}
+            name="contestedHairLength"
+            render={({ field }) => (
+              <FormItem className="space-y-3">
+                <FormLabel>Comprimento do Cabelo Correto</FormLabel>
+                <FormControl>
+                  <RadioGroup
+                    onValueChange={field.onChange}
+                    defaultValue={field.value}
+                    className="flex flex-col space-y-1"
+                  >
+                    <FormItem className="flex items-center space-x-3 space-y-0">
+                      <FormControl><RadioGroupItem value="curto" /></FormControl>
+                      <FormLabel className="font-normal">Curto (R${service?.priceShortHair?.toFixed(2)})</FormLabel>
+                    </FormItem>
+                    <FormItem className="flex items-center space-x-3 space-y-0">
+                      <FormControl><RadioGroupItem value="medio" /></FormControl>
+                      <FormLabel className="font-normal">Médio (R${service?.priceMediumHair?.toFixed(2)})</FormLabel>
+                    </FormItem>
+                    <FormItem className="flex items-center space-x-3 space-y-0">
+                      <FormControl><RadioGroupItem value="longo" /></FormControl>
+                      <FormLabel className="font-normal">Longo (R${service?.priceLongHair?.toFixed(2)})</FormLabel>
+                    </FormItem>
+                  </RadioGroup>
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+           <FormField
+            control={form.control}
+            name="contestReason"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Motivo da Contestação</FormLabel>
+                <FormControl>
+                  <Textarea placeholder="Ex: A foto de referência mostra um cabelo médio, não curto." {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <div className="p-4 bg-secondary rounded-md">
+            <p className="font-semibold">Novo Valor Proposto: <span className="text-primary">R${contestedPrice?.toFixed(2)}</span></p>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? "Enviando..." : "Enviar Contestação"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </Form>
+    </DialogContent>
+  );
 }
 
 function AppointmentsTable({ services, appointments, isLoading }: AppointmentsTableProps) {
   const firestore = useFirestore();
   const { toast } = useToast();
+  const [dialogState, setDialogState] = useState<{ isOpen: boolean; appointment: Appointment | null }>({ isOpen: false, appointment: null });
 
   const getServiceDetails = (serviceId: string) => {
-    const service = services.find(s => s.id === serviceId);
-    return service || { name: 'Serviço não encontrado', price: 0 };
+    return services.find(s => s.id === serviceId);
   };
 
   const handleStatusChange = (appointment: Appointment, newStatus: 'confirmado' | 'cancelado' | 'finalizado') => {
     if (!firestore || !appointment.id) return;
     const appointmentRef = doc(firestore, 'appointments', appointment.id);
-    const updateData = { status: newStatus };
+    const updateData = { status: newStatus, contestStatus: null }; // Clear contest status on manual change
 
     updateDoc(appointmentRef, updateData).then(() => {
       toast({
@@ -96,111 +237,147 @@ function AppointmentsTable({ services, appointments, isLoading }: AppointmentsTa
         return 'outline';
       case 'cancelado':
         return 'destructive';
+      case 'contestado':
+        return 'default';
       default:
         return 'secondary';
     }
   };
 
+  const getBadgeStyle = (status: Appointment['status']) => {
+     if (status === 'contestado') {
+        return { backgroundColor: 'hsl(var(--accent-hsl))', color: 'hsl(var(--accent-foreground))' };
+     }
+     return {};
+  }
+
+
   return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>Cliente</TableHead>
-          <TableHead>Serviço</TableHead>
-          <TableHead>Data e Hora</TableHead>
-          <TableHead>Status</TableHead>
-          <TableHead className="text-right">Ações</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {isLoading &&
-          Array.from({ length: APPOINTMENTS_PER_PAGE }).map((_, i) => (
-            <TableRow key={i}>
-              <TableCell><Skeleton className="h-4 w-[150px]" /></TableCell>
-              <TableCell><Skeleton className="h-4 w-[150px]" /></TableCell>
-              <TableCell><Skeleton className="h-4 w-[200px]" /></TableCell>
-              <TableCell><Skeleton className="h-8 w-[100px]" /></TableCell>
-              <TableCell className="text-right"><Skeleton className="h-8 w-8 ml-auto" /></TableCell>
-            </TableRow>
-          ))}
-        {!isLoading && appointments.length === 0 && (
-            <TableRow>
-                <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
-                    Nenhum agendamento encontrado para este filtro.
-                </TableCell>
-            </TableRow>
-        )}
-        {!isLoading && appointments?.map((apt) => (
-          <TableRow key={apt.id} className={apt.viewedByAdmin === false ? 'bg-secondary/50' : ''}>
-            <TableCell>
-              <div className="flex items-center gap-2">
-                <div className="font-medium">{apt.clientName}</div>
-                {apt.hairPhotoUrl && (
-                  <Dialog>
-                    <DialogTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-6 w-6">
-                        <Camera className="h-4 w-4 text-muted-foreground" />
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent className="max-w-md">
-                      <DialogHeader>
-                        <DialogTitle>Foto de Referência do Cabelo</DialogTitle>
-                      </DialogHeader>
-                      <div className="mt-4 relative aspect-square">
-                        <Image
-                            src={apt.hairPhotoUrl}
-                            alt={`Referência para ${apt.clientName}`}
-                            fill
-                            objectFit="contain"
-                            className="rounded-md"
-                        />
-                      </div>
-                    </DialogContent>
-                  </Dialog>
-                )}
-              </div>
-              <div className="text-sm text-muted-foreground">{apt.clientEmail}</div>
-            </TableCell>
-            <TableCell>{getServiceDetails(apt.serviceId).name}</TableCell>
-            <TableCell>{format(new Date(apt.startTime), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}</TableCell>
-            <TableCell>
-              <Badge variant={getBadgeVariant(apt.status)} className="capitalize">
-                {apt.status}
-              </Badge>
-            </TableCell>
-            <TableCell className="text-right">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon">
-                    <MoreHorizontal className="h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={() => handleStatusChange(apt, 'confirmado')} disabled={apt.status === 'confirmado' || apt.status === 'finalizado' || apt.status === 'cancelado'}>
-                    <CheckCircle className="mr-2 h-4 w-4 text-green-500" />
-                    Confirmar
-                  </DropdownMenuItem>
-                   <DropdownMenuItem onClick={() => handleStatusChange(apt, 'finalizado')} disabled={apt.status === 'finalizado' || apt.status === 'cancelado'}>
-                    <CheckCircle className="mr-2 h-4 w-4 text-blue-500" />
-                    Finalizar
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleStatusChange(apt, 'cancelado')} disabled={apt.status === 'cancelado' || apt.status === 'finalizado'}>
-                    <XCircle className="mr-2 h-4 w-4 text-red-500" />
-                    Cancelar
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </TableCell>
+    <>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Cliente</TableHead>
+            <TableHead>Serviço</TableHead>
+            <TableHead>Data e Hora</TableHead>
+            <TableHead>Status</TableHead>
+            <TableHead className="text-right">Ações</TableHead>
           </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+        </TableHeader>
+        <TableBody>
+          {isLoading &&
+            Array.from({ length: APPOINTMENTS_PER_PAGE }).map((_, i) => (
+              <TableRow key={i}>
+                <TableCell><Skeleton className="h-4 w-[150px]" /></TableCell>
+                <TableCell><Skeleton className="h-4 w-[150px]" /></TableCell>
+                <TableCell><Skeleton className="h-4 w-[200px]" /></TableCell>
+                <TableCell><Skeleton className="h-8 w-[100px]" /></TableCell>
+                <TableCell className="text-right"><Skeleton className="h-8 w-8 ml-auto" /></TableCell>
+              </TableRow>
+            ))}
+          {!isLoading && appointments.length === 0 && (
+              <TableRow>
+                  <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
+                      Nenhum agendamento encontrado para este filtro.
+                  </TableCell>
+              </TableRow>
+          )}
+          {!isLoading && appointments?.map((apt) => {
+            const service = getServiceDetails(apt.serviceId);
+            const canContest = service?.isPriceFrom && apt.hairPhotoUrl && apt.status === 'Marcado';
+
+            return (
+            <TableRow key={apt.id} className={apt.viewedByAdmin === false ? 'bg-secondary/50' : ''}>
+              <TableCell>
+                <div className="flex items-center gap-2">
+                  <div className="font-medium">{apt.clientName}</div>
+                  {apt.hairPhotoUrl && (
+                    <Dialog>
+                      <DialogTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-6 w-6">
+                          <Camera className="h-4 w-4 text-muted-foreground" />
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent className="max-w-md">
+                        <DialogHeader>
+                          <DialogTitle>Foto de Referência do Cabelo</DialogTitle>
+                        </DialogHeader>
+                        <div className="mt-4 relative aspect-square">
+                          <Image
+                              src={apt.hairPhotoUrl}
+                              alt={`Referência para ${apt.clientName}`}
+                              fill
+                              style={{objectFit:"contain"}}
+                              className="rounded-md"
+                          />
+                        </div>
+                      </DialogContent>
+                    </Dialog>
+                  )}
+                </div>
+                <div className="text-sm text-muted-foreground">{apt.clientEmail}</div>
+              </TableCell>
+              <TableCell>{service?.name}</TableCell>
+              <TableCell>{format(new Date(apt.startTime), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}</TableCell>
+              <TableCell>
+                <Badge variant={getBadgeVariant(apt.status)} style={getBadgeStyle(apt.status)} className="capitalize">
+                  {apt.status === 'contestado' ? 'Aguardando Cliente' : apt.status}
+                </Badge>
+              </TableCell>
+              <TableCell className="text-right">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon">
+                      <MoreHorizontal className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => handleStatusChange(apt, 'confirmado')} disabled={apt.status === 'confirmado' || apt.status === 'finalizado' || apt.status === 'cancelado'}>
+                      <CheckCircle className="mr-2 h-4 w-4 text-green-500" />
+                      Confirmar
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleStatusChange(apt, 'finalizado')} disabled={apt.status === 'finalizado' || apt.status === 'cancelado'}>
+                      <CheckCircle className="mr-2 h-4 w-4 text-blue-500" />
+                      Finalizar
+                    </DropdownMenuItem>
+                    {canContest && (
+                      <>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onClick={() => setDialogState({ isOpen: true, appointment: apt })}>
+                          <AlertTriangle className="mr-2 h-4 w-4 text-amber-500" />
+                          Contestar Valor
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                      </>
+                    )}
+                    <DropdownMenuItem onClick={() => handleStatusChange(apt, 'cancelado')} disabled={apt.status === 'cancelado' || apt.status === 'finalizado'}>
+                      <XCircle className="mr-2 h-4 w-4 text-red-500" />
+                      Cancelar
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </TableCell>
+            </TableRow>
+          )})}
+        </TableBody>
+      </Table>
+      <Dialog open={dialogState.isOpen} onOpenChange={(isOpen) => setDialogState({ isOpen, appointment: isOpen ? dialogState.appointment : null })}>
+        {dialogState.appointment && (
+          <ContestDialog 
+            appointment={dialogState.appointment} 
+            service={getServiceDetails(dialogState.appointment.serviceId)}
+            onOpenChange={(isOpen) => setDialogState({ isOpen, appointment: isOpen ? dialogState.appointment : null })}
+          />
+        )}
+      </Dialog>
+    </>
   )
 }
 
 export default function AdminAppointmentsPage() {
   const firestore = useFirestore();
   const [filter, setFilter] = useState('upcoming');
+
   const [page, setPage] = useState(0);
   const [paginationSnapshots, setPaginationSnapshots] = useState<(DocumentSnapshot | null)[]>([null]);
   
@@ -221,11 +398,12 @@ export default function AdminAppointmentsPage() {
     if (page > 0 && paginationSnapshots[page]) {
       return query(q, startAfter(paginationSnapshots[page]), limit(APPOINTMENTS_PER_PAGE));
     }
-    
-    return query(q, limit(APPOINTMENTS_PER_PAGE));
-  }, [firestore, filter, page, paginationSnapshots]);
 
-  const { data: paginatedAppointments, isLoading: isLoadingAppointments, snapshots } = useCollection<Appointment>(appointmentsQuery);
+    return query(q, limit(APPOINTMENTS_PER_PAGE));
+}, [firestore, filter, page, paginationSnapshots]);
+
+const { data: paginatedAppointments, isLoading: isLoadingAppointments, snapshots } = useCollection<Appointment>(appointmentsQuery);
+
 
   useEffect(() => {
     if (!firestore || !paginatedAppointments) return;
@@ -259,6 +437,7 @@ export default function AdminAppointmentsPage() {
     setPage(prev => prev - 1);
     setPaginationSnapshots(prev => prev.slice(0, -1));
   };
+
 
   const isLoading = isLoadingServices || isLoadingAppointments;
 
@@ -315,5 +494,3 @@ export default function AdminAppointmentsPage() {
     </Card>
   );
 }
-
-    
