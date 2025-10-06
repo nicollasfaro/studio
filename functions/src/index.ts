@@ -7,8 +7,9 @@ import * as admin from "firebase-admin";
 admin.initializeApp();
 
 /**
- * Cloud Function (v2) que é acionada na criação de um novo documento de promoção.
- * Ela envia uma notificação push para todos os usuários que se inscreveram.
+ * Cloud Function (v2) que é acionada na criação de um novo documento de
+ * promoção. Ela envia uma notificação push para todos os usuários que se
+ * inscreveram.
  */
 export const sendPromotionNotification = onDocumentCreated(
   "promotions/{promotionId}",
