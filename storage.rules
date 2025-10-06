@@ -1,23 +1,43 @@
+
 rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
-    // Regras para a galeria de imagens
-    match /gallery/{allPaths=**} {
-      // Qualquer pessoa pode ler as imagens (necessário para exibi-las no site).
-      allow read;
-      // Apenas usuários autenticados (administradores) podem enviar.
-      // A segurança real é feita na aplicação, que só mostra a página para admins.
-      allow write: if request.auth != null;
+    
+    // Helper function to check for admin role
+    function isAdmin() {
+      return exists(/databases/(default)/documents/users/$(request.auth.uid)) && 
+             get(/databases/(default)/documents/users/$(request.auth.uid)).data.isAdmin == true;
     }
 
-    // Regras para fotos de referência de agendamentos
+    // Helper function to check if the user is signed in
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Gallery images can be read by anyone, but only written by admins.
+    match /gallery/{fileName} {
+      allow read: if true;
+      allow write: if isSignedIn() && isAdmin();
+    }
+
+    // Profile images can be read by anyone.
+    // A user can only write to their own profile image path.
+    match /profile-images/{userId} {
+      allow read: if true;
+      allow write: if isSignedIn() && request.auth.uid == userId;
+    }
+    
+    // Appointment hair reference photos can be written by the user creating the appointment.
+    // They can be read by admins to check the reference.
     match /appointments/{fileName} {
-       // Qualquer pessoa pode ler as imagens (o admin precisa ver a referência).
-      allow read;
-      // Permite que um usuário autenticado escreva um arquivo se o nome do arquivo começar com seu UID.
-      // Isso impede que um usuário envie arquivos em nome de outro.
-      allow write: if request.auth != null && request.auth.uid == fileName.split('_')[0];
+      allow read: if isSignedIn() && isAdmin();
+      allow write: if isSignedIn(); // Allow any authenticated user to upload a photo for their appointment
+    }
+
+    // Default deny all other paths
+    match /{allPaths=**} {
+      allow read, write: if false;
     }
   }
 }
