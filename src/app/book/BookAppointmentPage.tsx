@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect, useMemo, ChangeEvent } from 'react';
@@ -25,7 +24,6 @@ import { cn } from '@/lib/utils';
 import { format, startOfDay, endOfDay, addMinutes, parse, getDay } from 'date-fns';
 import { useCollection, useDoc, useFirestore, useUser, useMemoFirebase, useFirebaseApp } from '@/firebase';
 import { collection, query, where, doc, addDoc, updateDoc } from 'firebase/firestore';
-import { getStorage, ref as storageRef, uploadString, getDownloadURL } from 'firebase/storage';
 import type { Service, Appointment, Promotion, BusinessHours } from '@/lib/types';
 import { ptBR } from 'date-fns/locale';
 import {
@@ -66,8 +64,6 @@ export default function BookAppointmentPage() {
   const [finalPrice, setFinalPrice] = useState<number | undefined>();
 
   const firestore = useFirestore();
-  const app = useFirebaseApp();
-  const storage = getStorage(app);
   const { user, isUserLoading } = useUser();
   const servicesCollectionRef = useMemoFirebase(() => (firestore ? collection(firestore, 'services') : null), [firestore]);
   const { data: allServices, isLoading: isLoadingServices } = useCollection<Service>(servicesCollectionRef);
@@ -169,9 +165,14 @@ export default function BookAppointmentPage() {
   // Set initial date only if today is a valid working day
   useEffect(() => {
       if (!date && businessHours) {
-        const today = new Date();
-        if (!isDayDisabled(today)) {
-          setDate(today);
+        let checkDate = new Date();
+        let attempts = 0;
+        while(isDayDisabled(checkDate) && attempts < 7) {
+            checkDate.setDate(checkDate.getDate() + 1);
+            attempts++;
+        }
+        if (!isDayDisabled(checkDate)) {
+           setDate(checkDate);
         }
       }
   }, [businessHours, date]);
@@ -263,6 +264,14 @@ export default function BookAppointmentPage() {
   const handlePhotoUpload = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
+      if (file.size > 5 * 1024 * 1024) { // 5MB
+        toast({
+            variant: 'destructive',
+            title: 'Arquivo muito grande',
+            description: 'A imagem deve ter no máximo 5MB.',
+        });
+        return;
+      }
       const reader = new FileReader();
       reader.onloadend = () => {
         setHairPhotoDataUrl(reader.result as string);
@@ -274,9 +283,8 @@ export default function BookAppointmentPage() {
 
   const handleBooking = async () => {
     setIsBooking(true);
-    const dateStep = currentService?.isPriceFrom ? 3 : 2;
-    
-    if (!selectedServiceId || !name || !email || (step === dateStep && (!date || !selectedTime)) ) {
+
+    if (!selectedServiceId || !name || !email || !date || !selectedTime) {
       toast({ title: 'Por favor, preencha todos os campos.', variant: 'destructive' });
       setIsBooking(false);
       return;
@@ -295,31 +303,19 @@ export default function BookAppointmentPage() {
     }
 
     const serviceDetails = allServices?.find(s => s.id === selectedServiceId);
-    if (!serviceDetails || !date || !selectedTime) {
-        toast({ title: 'Detalhes do agendamento incompletos.', variant: 'destructive' });
+    if (!serviceDetails) {
+        toast({ title: 'Detalhes do serviço não encontrados.', variant: 'destructive' });
         setIsBooking(false);
         return;
     }
 
     try {
-      let finalHairPhotoUrl: string | null = null;
-      if (hairPhotoDataUrl && hairPhotoDataUrl.startsWith('data:image')) {
-          const fileName = `appointments/${user.uid}_${new Date().getTime()}.jpg`;
-          const imageRef = storageRef(storage, fileName);
-          
-          // 'data_url' is the correct string format specifier for uploadString
-          const snapshot = await uploadString(imageRef, hairPhotoDataUrl, 'data_url');
-          finalHairPhotoUrl = await getDownloadURL(snapshot.ref);
-      } else {
-        finalHairPhotoUrl = hairPhotoDataUrl; // Keep existing URL if rescheduling without new photo
-      }
-      
       const [hours, minutes] = selectedTime.split(':').map(Number);
       const startTime = new Date(date);
       startTime.setHours(hours, minutes, 0, 0);
-      const endTime = new Date(startTime.getTime() + serviceDetails.durationMinutes * 60000);
-
-      const appointmentData: Partial<Appointment> = {
+      const endTime = addMinutes(startTime, serviceDetails.durationMinutes);
+      
+      const appointmentData: Omit<Appointment, 'id'> = {
           clientId: user.uid,
           serviceId: selectedServiceId,
           startTime: startTime.toISOString(),
@@ -328,9 +324,9 @@ export default function BookAppointmentPage() {
           clientName: name,
           clientEmail: email,
           finalPrice: finalPrice,
-          viewedByAdmin: false, // Set as not viewed by admin initially
-          ...(hairLength && { hairLength: hairLength }),
-          ...(finalHairPhotoUrl && { hairPhotoUrl: finalHairPhotoUrl }),
+          viewedByAdmin: false,
+          hairLength: hairLength,
+          hairPhotoUrl: hairPhotoDataUrl,
       };
 
       if (rescheduleId && appointmentToRescheduleRef) {
@@ -343,13 +339,12 @@ export default function BookAppointmentPage() {
 
       } else {
           const appointmentsRef = collection(firestore, 'appointments');
-          const docRef = await addDoc(appointmentsRef, appointmentData)
+          await addDoc(appointmentsRef, appointmentData)
           toast({
             title: 'Agendamento Solicitado!',
             description: `Estamos ansiosos para vê-lo em ${format(date, 'PPP', { locale: ptBR })} às ${selectedTime}. Aguarde a confirmação do Salão!`,
           });
-          const successStep = totalSteps + 1;
-          setStep(successStep);
+          setStep(totalSteps + 1);
       }
 
     } catch (error: any) {
@@ -359,7 +354,7 @@ export default function BookAppointmentPage() {
         errorEmitter.emit('permission-error', new FirestorePermissionError({
           path: `appointments`,
           operation: 'create',
-          requestResourceData: { serviceId: selectedServiceId },
+          requestResourceData: { serviceId: selectedServiceId, clientId: user.uid },
         }));
     } finally {
         setIsBooking(false);
@@ -462,7 +457,7 @@ export default function BookAppointmentPage() {
                   <h3 className="text-xl font-bold mb-4">Anexe uma foto de referência</h3>
                    <Label htmlFor="hair-photo-upload" className="flex flex-col items-center justify-center w-full h-48 border-2 border-dashed rounded-lg cursor-pointer hover:bg-secondary/50">
                         {hairPhotoDataUrl ? (
-                            <Image src={hairPhotoDataUrl} alt="Pré-visualização do cabelo" width={192} height={192} className="h-full w-auto object-contain rounded-lg" />
+                            <Image src={hairPhotoDataUrl} alt="Pré-visualização do cabelo" width={192} height={192} className="h-full w-auto object-contain rounded-lg p-2" />
                         ) : (
                             <div className="flex flex-col items-center justify-center pt-5 pb-6">
                                 <Upload className="w-10 h-10 mb-3 text-muted-foreground" />

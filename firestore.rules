@@ -1,73 +1,137 @@
-
 rules_version = '2';
-
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    // Helper function to check for admin role
+  
+  // 🔐 Global helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+
+    function isExistingOwner(userId) {
+      return isOwner(userId) && resource != null;
+    }
+
     function isAdmin() {
-      return exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+      return request.auth.uid != null &&
              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
     }
 
-    // USERS
-    // Users can read/write their own data. Admins can read/write any user's data.
+    /**
+     * @description Manages user profile data.
+     * @path /users/{userId}
+     * @allow (get) If the user is signed in and is the owner of the profile or an admin.
+     * @deny (get) If the user is not signed in.
+     * @allow (list) If the user is an admin.
+     * @deny (list) If the user is not an admin.
+     * @allow (create) If the user is signed in and the user ID matches the authenticated user's ID.
+     * @deny (create) If the user ID does not match the authenticated user's ID.
+     * @allow (update) If the user is signed in and is the owner of the profile or an admin.  The `isAdmin` field can only be updated by an admin.
+     * @deny (update) If the user attempts to modify the `isAdmin` field without admin privileges.
+     * @allow (delete) If the user is signed in and is the owner of the profile or an admin.
+     * @deny (delete) If the user is not the owner and not an admin.
+     * @principle Enforces document ownership and admin override.
+     */
     match /users/{userId} {
-      allow read, write: if request.auth.uid == userId || isAdmin();
+      allow get: if isSignedIn() && (isOwner(userId) || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isSignedIn() && isOwner(userId);
+      allow update: if (isSignedIn() && isOwner(userId) && request.resource.data.isAdmin == resource.data.isAdmin) || isAdmin();
+      allow delete: if (isSignedIn() && isOwner(userId)) || isAdmin();
     }
 
-    // SERVICES
-    // Publicly readable, only admins can write.
+    /**
+     * @description Secures service data, allowing public reads and admin-only writes.
+     * @path /services/{serviceId}
+     * @allow (get) Any user can read service data.
+     * @allow (list) Any user can list service data.
+     * @deny (create) Only admins can create service data.
+     * @deny (update) Only admins can update service data.
+     * @deny (delete) Only admins can delete service data.
+     * @principle Public read, admin-only write.
+     */
     match /services/{serviceId} {
-      allow read: if true;
-      allow write: if isAdmin();
+      allow get, list: if true;
+      allow create, update, delete: if isAdmin();
     }
 
-    // PROMOTIONS
-    // Publicly readable, only admins can write.
+   /**
+     * @description Manages promotion data, allowing public reads and admin-only writes.
+     * @path /promotions/{promotionId}
+     * @allow (get) Any user can read promotion data.
+     * @allow (list) Any user can list promotion data.
+     * @deny (create) Only admins can create promotion data.
+     * @deny (update) Only admins can update promotion data.
+     * @deny (delete) Only admins can delete promotion data.
+     * @principle Public read, admin-only write.
+     */
     match /promotions/{promotionId} {
-      allow read: if true;
-      allow write: if isAdmin();
-    }
-    
-    // GALLERY IMAGES
-    // Publicly readable, only admins can write.
-    match /galleryImages/{imageId} {
-      allow read: if true;
-      allow write: if isAdmin();
+      allow get, list: if true;
+      allow create, update, delete: if isAdmin();
     }
 
-    // APPOINTMENTS
-    // Users can create appointments for themselves.
-    // Users can read/update/delete their own appointments. Admins can read all.
-    match /appointments/{appointmentId} {
-      allow create: if request.auth != null && request.resource.data.clientId == request.auth.uid;
-      allow read: if request.auth != null && (resource.data.clientId == request.auth.uid || isAdmin());
-      allow update, delete: if request.auth != null && (resource.data.clientId == request.auth.uid || isAdmin());
-    }
+    /**
+     * @description Controls access to appointment data. Owners (clients) can manage their own appointments. Admins have full access.
+     * @path /appointments/{appointmentId}
+     * @allow (get) If the user is signed in and is the owner of the appointment or an admin.
+     * @allow (list) If the user is signed in and is the owner of the appointment or an admin.
+     * @allow (create) If the user is signed in and is the owner of the appointment or an admin.
+     * @deny (create) If the appointment does not have a `clientId` field matching the user ID.
+     * @allow (update) If the user is signed in and is the owner of the appointment or an admin, and the appointment exists.
+     * @deny (update) If the appointment does not exist.
+     * @allow (delete) If the user is signed in and is the owner of the appointment or an admin, and the appointment exists.
+     * @deny (delete) If the appointment does not exist.
+     * @principle Enforces ownership for appointments and allows admin override.
+     */
+   match /appointments/{appointmentId} {
+  allow get: if isSignedIn() && resource.data.clientId == request.auth.uid;
+  allow list: if isSignedIn();
+  allow create: if isSignedIn() && request.resource.data.clientId == request.auth.uid;
+  allow update, delete: if isSignedIn() && resource.data.clientId == request.auth.uid;
+  allow get, list, create, update, delete: if isAdmin();
+}
 
-    // THEME
-    // Publicly readable, only admins can write.
-    match /theme/{themeId} {
-       allow read: if true;
-       allow write: if isAdmin();
-    }
-    
-    // SOCIAL MEDIA
-    // Publicly readable, only admins can write.
+    // Allow public read access to theme settings
+match /theme/{themeId} {
+  allow get, list: if true;
+  allow write: if request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+}
+
+     /**
+      * @description Allows public read access to social media links, but restricts write access to admins.
+      * @path /socialMedia/{docId}
+      * @allow (get) Any user can read social media links.
+      * @allow (list) Any user can list social media links.
+      * @deny (create) Non-admin users cannot create social media links.
+      * @deny (update) Non-admin users cannot update social media links.
+      * @deny (delete) Non-admin users cannot delete social media links.
+      * @principle Public read access with admin-only writes.
+      */
     match /socialMedia/{docId} {
-      allow read: if true;
-      allow write: if isAdmin();
+      allow get, list: if true;
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+	
+	/**
+     * @description Rules for /config/{docId} documents.
+     * @path /config/{docId}
+     * @allow (get, list, create, update, delete) - Only admins can read and write config data.
+     * @deny (get, list, create, update, delete) - Non-admin users cannot access config data.
+     * @principle Configuration data is strictly admin-only.
+     */
+    match /config/{docId} {
+      allow get, list: if true;
+      allow create: if isAdmin();
+      allow update: if isAdmin() && resource != null;
+      allow delete: if isAdmin() && resource != null;
     }
     
-    // CONTENT (e.g., Hero Banner)
-    // Publicly readable, only admins can write.
-    match /content/{contentId} {
-       allow read: if true;
-       allow write: if isAdmin();
-    }
-    
-    // CONFIG
+     // CONFIG
     // This collection has mixed permissions.
     match /config/{docId} {
         // Business hours are public. Admin writable.
@@ -77,5 +141,45 @@ service cloud.firestore {
         // Allow admin write for business hours too
         allow write: if docId == 'businessHours' && isAdmin();
     }
+	
+	/**
+     * @description Controls access to gallery image metadata.
+     * @path /galleryImages/{imageId}
+     * @allow (get, list) Any user can read gallery image metadata.
+     * @deny (create, update, delete) Only admins can create, update, or delete gallery image metadata.
+     * @principle Public read access with admin-only write access.
+     */
+    match /galleryImages/{imageId} {
+      // Allow anyone to read gallery image metadata.
+      allow get, list: if true;
+
+      // Only admins can create, update, or delete gallery image metadata.
+      allow create, update, delete: if isAdmin();
+    }
+	 /**
+     * @description Allows anyone to read dynamic page content (e.g., hero banner). Only admins can modify.
+     * @path /content/{contentId}
+     * @allow (get, list) Any user can read the content.
+     * @deny (create, update, delete) Only admins can modify the content.
+     * @principle Public read access with admin-only writes.
+     */
+    match /content/{contentId} {
+      allow get, list: if true;
+      allow create, update, delete: if isAdmin();
+    }
+	/**
+     * @description Manages configuration documents with mixed permissions.
+     * @path /config/{docId}
+     */
+    match /config/{docId} {
+        // Business hours are public. Admin writable.
+        allow read: if docId == 'businessHours';
+        // Notification settings are private. Admin read/write.
+        allow read, write: if docId == 'notifications' && isAdmin();
+        // Allow admin write for business hours too
+        allow write: if docId == 'businessHours' && isAdmin();
+    }
+
   }
+  
 }

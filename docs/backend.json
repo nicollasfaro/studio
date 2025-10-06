@@ -252,8 +252,8 @@
         },
         "hairPhotoUrl": {
             "type": "string",
-            "format": "uri",
-            "description": "URL of the uploaded hair reference photo."
+            "contentEncoding": "base64",
+            "description": "Base64 encoded Data URI of the uploaded hair reference photo."
         },
         "finalPrice": {
             "type": "number",

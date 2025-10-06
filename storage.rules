@@ -1,43 +1,37 @@
-
 rules_version = '2';
-
 service firebase.storage {
   match /b/{bucket}/o {
-    
-    // Helper function to check for admin role
-    function isAdmin() {
-      return exists(/databases/(default)/documents/users/$(request.auth.uid)) && 
-             get(/databases/(default)/documents/users/$(request.auth.uid)).data.isAdmin == true;
-    }
 
-    // Helper function to check if the user is signed in
+    // Helpers
     function isSignedIn() {
       return request.auth != null;
     }
 
-    // Gallery images can be read by anyone, but only written by admins.
-    match /gallery/{fileName} {
-      allow read: if true;
-      allow write: if isSignedIn() && isAdmin();
+    function isAdmin() {
+      return isSignedIn() &&
+             exists(/databases/(default)/documents/users/$(request.auth.uid)) &&
+             get(/databases/(default)/documents/users/$(request.auth.uid)).data.isAdmin == true;
     }
 
-    // Profile images can be read by anyone.
-    // A user can only write to their own profile image path.
+    // 📂 Galeria - leitura pública, escrita só por admin
+    match /gallery/{fileName} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // 📂 Imagem de perfil
     match /profile-images/{userId} {
       allow read: if true;
       allow write: if isSignedIn() && request.auth.uid == userId;
     }
-    
-    // Appointment hair reference photos can be written by the user creating the appointment.
-    // They can be read by admins to check the reference.
-    match /appointments/{fileName} {
-      allow read: if isSignedIn() && isAdmin();
-      allow write: if isSignedIn(); // Allow any authenticated user to upload a photo for their appointment
-    }
 
-    // Default deny all other paths
-    match /{allPaths=**} {
-      allow read, write: if false;
+    // 📂 Fotos de agendamento
+    match /appointments/{allPaths=**} {
+      // Usuário só pode salvar/ler se o caminho do arquivo começar com o UID dele
+      allow read, write: if isSignedIn() && request.resource.name.matches('^projects/_/buckets/[^/]+/objects/appointments/' + request.auth.uid + '.*');
+
+      // Admin pode tudo
+      allow read, write: if isAdmin();
     }
   }
 }
