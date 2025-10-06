@@ -95,12 +95,14 @@ export default function AdminLayout({
             </SidebarMenuItem>
             <SidebarMenuItem>
               <SidebarMenuButton href="/admin/appointments" leftIcon={<Calendar />}>
-                <span>Agendamentos</span>
-                 {newAppointmentsCount > 0 && pathname !== '/admin/appointments' && (
-                    <span className="ml-2 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs text-white">
-                      {newAppointmentsCount}
-                    </span>
-                )}
+                <span style={{ display: 'flex', alignItems: 'center' }}>
+                  <span>Agendamentos</span>
+                  {newAppointmentsCount > 0 && pathname !== '/admin/appointments' && (
+                      <span className="ml-2 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs text-white">
+                        {newAppointmentsCount}
+                      </span>
+                  )}
+                </span>
               </SidebarMenuButton>
             </SidebarMenuItem>
              <SidebarMenuItem>
