@@ -37,6 +37,7 @@ export type Appointment = {
   hairLength?: 'curto' | 'medio' | 'longo';
   hairPhotoUrl?: string | null;
   finalPrice?: number;
+  viewedByAdmin?: boolean;
 };
 
 export type TimeSlot = {

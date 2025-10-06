@@ -1,12 +1,13 @@
 
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import {
   Card,
   CardHeader,
   CardTitle,
-  CardContent
+  CardContent,
+  CardFooter,
 } from '@/components/ui/card';
 import {
   Table,
@@ -33,9 +34,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { MoreHorizontal, CheckCircle, XCircle, Camera } from 'lucide-react';
+import { MoreHorizontal, CheckCircle, XCircle, Camera, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
-import { collection, query, orderBy, doc, updateDoc } from 'firebase/firestore';
+import { collection, query, orderBy, doc, updateDoc, limit, startAfter, getDocs, where, writeBatch, DocumentSnapshot } from 'firebase/firestore';
 import type { Appointment, Service } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
@@ -44,6 +45,7 @@ import Image from 'next/image';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 
+const APPOINTMENTS_PER_PAGE = 10;
 
 interface AppointmentsTableProps {
   services: (Omit<Service, 'id'> & { id: string })[];
@@ -130,7 +132,7 @@ function AppointmentsTable({ services, appointments, isLoading }: AppointmentsTa
             </TableRow>
         )}
         {!isLoading && appointments?.map((apt) => (
-          <TableRow key={apt.id}>
+          <TableRow key={apt.id} className={apt.viewedByAdmin === false ? 'bg-secondary/50' : ''}>
             <TableCell>
               <div className="flex items-center gap-2">
                 <div className="font-medium">{apt.clientName}</div>
@@ -200,30 +202,64 @@ function AppointmentsTable({ services, appointments, isLoading }: AppointmentsTa
 export default function AdminAppointmentsPage() {
   const firestore = useFirestore();
   const [filter, setFilter] = useState('upcoming');
+
+  const [page, setPage] = useState(0);
+  const [paginationSnapshots, setPaginationSnapshots] = useState<(DocumentSnapshot | null)[]>([null]);
   
   const servicesRef = useMemoFirebase(() => (firestore ? collection(firestore, 'services') : null), [firestore]);
   const { data: services, isLoading: isLoadingServices } = useCollection<Service>(servicesRef);
 
-  const appointmentsQuery = useMemoFirebase(
-    () => (firestore ? query(collection(firestore, 'appointments'), orderBy('startTime', 'desc')) : null),
-    [firestore]
-  );
-  
-  const { data: allAppointments, isLoading: isLoadingAppointments } = useCollection<Appointment>(appointmentsQuery);
-  
-  const filteredAppointments = useMemo(() => {
-    if (!allAppointments) return [];
-    const now = new Date();
-    switch (filter) {
-        case 'upcoming':
-            return allAppointments.filter(apt => new Date(apt.startTime) >= now && (apt.status === 'Marcado' || apt.status === 'confirmado'));
-        case 'history':
-            return allAppointments.filter(apt => new Date(apt.startTime) < now || apt.status === 'finalizado' || apt.status === 'cancelado');
-        case 'all':
-        default:
-            return allAppointments;
+  const appointmentsQuery = useMemoFirebase(() => {
+      if (!firestore) return null;
+      let q = query(collection(firestore, 'appointments'), orderBy('startTime', 'desc'));
+
+      const now = new Date();
+      if (filter === 'upcoming') {
+        q = query(q, where('startTime', '>=', now.toISOString()));
+      } else if (filter === 'history') {
+        q = query(q, where('startTime', '<', now.toISOString()));
+      }
+
+      if (page > 0 && paginationSnapshots[page]) {
+        return query(q, startAfter(paginationSnapshots[page]), limit(APPOINTMENTS_PER_PAGE));
+      }
+
+      return query(q, limit(APPOINTMENTS_PER_PAGE));
+  }, [firestore, filter, page, paginationSnapshots]);
+
+  const { data: paginatedAppointments, isLoading: isLoadingAppointments } = useCollection<Appointment>(appointmentsQuery);
+
+  useEffect(() => {
+    if (!firestore || !paginatedAppointments) return;
+
+    const unviewedAppointments = paginatedAppointments.filter(apt => apt.viewedByAdmin === false);
+
+    if (unviewedAppointments.length > 0) {
+      const batch = writeBatch(firestore);
+      unviewedAppointments.forEach(apt => {
+        const appointmentRef = doc(firestore, 'appointments', apt.id);
+        batch.update(appointmentRef, { viewedByAdmin: true });
+      });
+      batch.commit().catch(console.error);
     }
-  }, [allAppointments, filter]);
+  }, [paginatedAppointments, firestore]);
+  
+  const handleNextPage = async () => {
+    if (!paginatedAppointments || paginatedAppointments.length === 0 || !firestore) return;
+    const lastVisible = await getDocs(query(collection(firestore, 'appointments'), where('id', '==', paginatedAppointments[paginatedAppointments.length - 1].id), limit(1)));
+    
+    if (lastVisible.docs[0]) {
+        setPaginationSnapshots(prev => [...prev, lastVisible.docs[0]]);
+        setPage(prev => prev + 1);
+    }
+  };
+
+  const handlePrevPage = () => {
+    if (page === 0) return;
+    setPage(prev => prev - 1);
+    setPaginationSnapshots(prev => prev.slice(0, -1));
+  };
+
 
   const isLoading = isLoadingServices || isLoadingAppointments;
 
@@ -231,7 +267,7 @@ export default function AdminAppointmentsPage() {
     <Card>
       <CardHeader className="flex-row items-center justify-between">
         <CardTitle>Gerenciamento de Agendamentos</CardTitle>
-        <Tabs defaultValue={filter} onValueChange={setFilter} className="w-auto">
+        <Tabs defaultValue={filter} onValueChange={(value) => { setFilter(value); setPage(0); setPaginationSnapshots([null]); }} className="w-auto">
           <TabsList>
             <TabsTrigger value="upcoming">Próximos</TabsTrigger>
             <TabsTrigger value="history">Histórico</TabsTrigger>
@@ -247,13 +283,36 @@ export default function AdminAppointmentsPage() {
             <Skeleton className="h-20 w-full" />
           </div>
         ) : services ? (
-          <AppointmentsTable services={services} appointments={filteredAppointments} isLoading={isLoadingAppointments} />
+          <AppointmentsTable services={services} appointments={paginatedAppointments || []} isLoading={isLoadingAppointments} />
         ) : (
            <p className="py-8 text-center text-muted-foreground">
             Não foi possível carregar os serviços necessários.
           </p>
         )}
       </CardContent>
+      <CardFooter className="flex items-center justify-end space-x-2 py-4">
+          <span className="text-sm text-muted-foreground">
+            Página {page + 1}
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handlePrevPage}
+            disabled={page === 0 || isLoading}
+          >
+            <ChevronLeft className="h-4 w-4 mr-1" />
+            Anterior
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleNextPage}
+            disabled={!paginatedAppointments || paginatedAppointments.length < APPOINTMENTS_PER_PAGE || isLoading}
+          >
+            Próximo
+            <ChevronRight className="h-4 w-4 ml-1" />
+          </Button>
+        </CardFooter>
     </Card>
   );
 }

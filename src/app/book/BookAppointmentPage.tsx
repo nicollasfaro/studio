@@ -174,7 +174,7 @@ export default function BookAppointmentPage() {
           setDate(today);
         }
       }
-  }, [businessHours, date, isDayDisabled]);
+  }, [businessHours, date]);
 
   // Generate time slots based on business hours
   const timeSlots = useMemo(() => {
@@ -225,6 +225,7 @@ export default function BookAppointmentPage() {
     return timeSlots.map(slot => {
       const slotTime = parse(slot.time, 'HH:mm', new Date());
       const slotEndTime = addMinutes(slotTime, currentService.durationMinutes);
+      // A slot is available if it's not in the booked set AND if the service fits before closing time.
       const isAvailable = !bookedSlots.has(slot.time) && slotEndTime <= closingTime;
 
       return {
@@ -327,6 +328,7 @@ export default function BookAppointmentPage() {
           clientName: name,
           clientEmail: email,
           finalPrice: finalPrice,
+          viewedByAdmin: false, // Set as not viewed by admin initially
           ...(hairLength && { hairLength: hairLength }),
           ...(finalHairPhotoUrl && { hairPhotoUrl: finalHairPhotoUrl }),
       };
@@ -341,7 +343,7 @@ export default function BookAppointmentPage() {
 
       } else {
           const appointmentsRef = collection(firestore, 'appointments');
-          await addDoc(appointmentsRef, appointmentData)
+          const docRef = await addDoc(appointmentsRef, appointmentData)
           toast({
             title: 'Agendamento Solicitado!',
             description: `Estamos ansiosos para vê-lo em ${format(date, 'PPP', { locale: ptBR })} às ${selectedTime}. Aguarde a confirmação do Salão!`,

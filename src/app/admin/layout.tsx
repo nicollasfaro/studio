@@ -2,13 +2,17 @@
 'use client';
 
 import React from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { Skeleton } from '@/components/ui/skeleton';
-import { SidebarProvider, Sidebar, SidebarTrigger, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarContent, SidebarHeader, SidebarInset } from '@/components/ui/sidebar';
+import { SidebarProvider, Sidebar, SidebarTrigger, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarContent, SidebarHeader, SidebarInset, SidebarMenuBadge } from '@/components/ui/sidebar';
 import { Logo } from '@/components/logo';
 import { LayoutDashboard, Users, Calendar, Scissors, Gift, Palette, Share2, Bell, Image, Home, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useUserData } from '@/hooks/use-user-data';
+import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
+import { collection, query, where } from 'firebase/firestore';
+import type { Appointment } from '@/lib/types';
+
 
 export default function AdminLayout({
   children,
@@ -16,9 +20,19 @@ export default function AdminLayout({
   children: React.ReactNode;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
   const { userData, isLoading } = useUserData();
+  const firestore = useFirestore();
 
   const isAdmin = userData?.isAdmin ?? false;
+
+  const newAppointmentsQuery = useMemoFirebase(
+    () => (firestore && isAdmin ? query(collection(firestore, 'appointments'), where('viewedByAdmin', '==', false)) : null),
+    [firestore, isAdmin]
+  );
+  const { data: newAppointments } = useCollection<Appointment>(newAppointmentsQuery);
+  const newAppointmentsCount = newAppointments?.length || 0;
+
 
   if (isLoading) {
     return (
@@ -82,6 +96,9 @@ export default function AdminLayout({
             <SidebarMenuItem>
               <SidebarMenuButton href="/admin/appointments" leftIcon={<Calendar />}>
                 Agendamentos
+                 {newAppointmentsCount > 0 && pathname !== '/admin/appointments' && (
+                    <SidebarMenuBadge>{newAppointmentsCount}</SidebarMenuBadge>
+                )}
               </SidebarMenuButton>
             </SidebarMenuItem>
              <SidebarMenuItem>
