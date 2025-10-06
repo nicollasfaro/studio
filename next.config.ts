@@ -40,6 +40,7 @@ const nextConfig: NextConfig = {
   },
   env: {
     FIREBASE_STORAGE_BUCKET: firebaseConfig.storageBucket,
+    NEXT_PUBLIC_FIREBASE_VAPID_KEY: 'BBRa-dKPSiO1eQ5L2H3C8dKl2jP6vO7cQ5xG3Y8aF1hB3n8eQ5wK2sV9oB1mN5rY9zE8jL6kP4oJ2d',
   }
 };
 
