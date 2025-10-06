@@ -38,6 +38,7 @@ import { useUserData } from '@/hooks/use-user-data';
 import { useToast } from '@/hooks/use-toast';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
+import NotificationSubscriber from '@/components/NotificationSubscriber';
 
 interface AppointmentWithService extends Appointment {
   serviceName?: string;
@@ -300,30 +301,27 @@ export default function ProfilePage() {
             </Card>
 
             <Card className="shadow-lg">
-              <CardHeader>
-                <CardTitle className="font-headline flex items-center gap-2">
-                  <Bell className="text-primary" />
-                  Configurações de Notificação
-                </CardTitle>
-                <CardDescription>Gerencie como nos comunicamos com você.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-center justify-between p-4 border rounded-lg">
-                  <Label htmlFor="promo-notifications" className="flex flex-col gap-1">
-                    <span className="font-semibold">Notificações Promocionais</span>
-                    <span className="text-sm text-muted-foreground">Receba atualizações sobre ofertas especiais e novos serviços.</span>
-                  </Label>
-                  <Switch id="promo-notifications" defaultChecked />
-                </div>
-                <div className="flex items-center justify-between p-4 border rounded-lg">
-                  <Label htmlFor="reminder-notifications" className="flex flex-col gap-1">
-                    <span className="font-semibold">Lembretes de Agendamento</span>
-                     <span className="text-sm text-muted-foreground">Receba lembretes para seus próximos agendamentos.</span>
-                  </Label>
-                  <Switch id="reminder-notifications" defaultChecked />
-                </div>
-              </CardContent>
+                <CardHeader>
+                    <CardTitle className="font-headline flex items-center gap-2">
+                    <Bell className="text-primary" />
+                    Configurações de Notificação
+                    </CardTitle>
+                    <CardDescription>Gerencie como nos comunicamos com você.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    <NotificationSubscriber
+                        feature="promotional"
+                        title="Notificações Promocionais"
+                        description="Receba atualizações sobre ofertas especiais e novos serviços."
+                    />
+                    <NotificationSubscriber
+                        feature="reminders"
+                        title="Lembretes de Agendamento"
+                        description="Receba lembretes para seus próximos agendamentos."
+                    />
+                </CardContent>
             </Card>
+
             <AlertDialogContent>
                 <AlertDialogHeader>
                     <AlertDialogTitle>Você tem certeza?</AlertDialogTitle>

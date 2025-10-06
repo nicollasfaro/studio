@@ -1,3 +1,4 @@
+
 'use client';
 
 import { firebaseConfig } from '@/firebase/config';
@@ -5,6 +6,7 @@ import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore'
 import { getStorage } from 'firebase/storage';
+import { getMessaging } from 'firebase/messaging';
 
 // IMPORTANT: DO NOT MODIFY THIS FUNCTION
 export function initializeFirebase() {
@@ -34,12 +36,24 @@ export function initializeFirebase() {
 }
 
 export function getSdks(firebaseApp: FirebaseApp) {
-  return {
+  const sdks: {
+    firebaseApp: FirebaseApp;
+    auth: ReturnType<typeof getAuth>;
+    firestore: ReturnType<typeof getFirestore>;
+    storage: ReturnType<typeof getStorage>;
+    messaging?: ReturnType<typeof getMessaging>;
+  } = {
     firebaseApp,
     auth: getAuth(firebaseApp),
     firestore: getFirestore(firebaseApp),
     storage: getStorage(firebaseApp),
   };
+
+  if (typeof window !== 'undefined') {
+    sdks.messaging = getMessaging(firebaseApp);
+  }
+  
+  return sdks;
 }
 
 export * from './provider';
@@ -49,3 +63,4 @@ export * from './firestore/use-doc';
 export * from '@/hooks/use-user-data';
 export * from './errors';
 export * from './error-emitter';
+

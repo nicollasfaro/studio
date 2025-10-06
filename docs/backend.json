@@ -49,6 +49,13 @@
         "zipCode": {
           "type": "string",
           "description": "The user's postal or zip code."
+        },
+        "fcmTokens": {
+          "type": "array",
+          "description": "An array of Firebase Cloud Messaging tokens for sending push notifications.",
+          "items": {
+            "type": "string"
+          }
         }
       },
       "required": ["id", "name", "email", "createdAt"]

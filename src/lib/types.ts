@@ -56,6 +56,7 @@ export type User = {
     state?: string;
     zipCode?: string;
     photoURL?: string;
+    fcmTokens?: string[];
 }
 
 export type SocialMediaLinks = {
