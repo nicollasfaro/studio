@@ -3,7 +3,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import React, { useRef, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   Menu,
   Scissors,
@@ -52,6 +52,8 @@ export function Header() {
   const { userData, isLoading: isUserDataLoading } = useUserData();
   const isAdmin = userData?.isAdmin ?? false;
 
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
   const handleLogout = async () => {
     try {
       await signOut(auth);
@@ -84,7 +86,7 @@ export function Header() {
     <header className="sticky top-0 z-50 w-full border-b border-primary/20 bg-primary shadow-sm">
       <div className="container flex h-16 items-center justify-between px-4 md:px-6">
         <div className="flex items-center gap-4">
-          <Sheet>
+          <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
             <SheetTrigger asChild>
               <Button variant="ghost" size="icon" className="md:hidden text-primary-foreground hover:bg-primary/80 hover:text-primary-foreground">
                 <Menu className="h-6 w-6" />
@@ -97,6 +99,7 @@ export function Header() {
                   <Link
                     key={href}
                     href={href}
+                    onClick={() => setMobileMenuOpen(false)}
                     className={cn(
                       'flex items-center gap-4 px-2.5 text-muted-foreground hover:text-foreground',
                       pathname === href && 'text-foreground'
