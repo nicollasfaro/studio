@@ -1,9 +1,14 @@
+
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 import Link from 'next/link';
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, User, signInWithRedirect, getRedirectResult } from 'firebase/auth';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -18,12 +23,12 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth, useFirestore } from '@/firebase';
-import { signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, User } from 'firebase/auth';
-import { useRouter } from 'next/navigation';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { Separator } from '@/components/ui/separator';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
+import { useIsMobile } from '@/hooks/use-mobile';
+import { Loader2 } from 'lucide-react';
+
 
 const formSchema = z.object({
   email: z.string().email({ message: 'Endereço de e-mail inválido.' }),
@@ -46,6 +51,9 @@ export default function LoginPage() {
   const auth = useAuth();
   const firestore = useFirestore();
   const router = useRouter();
+  const isMobile = useIsMobile();
+  const [isProcessingGoogleLogin, setIsProcessingGoogleLogin] = useState(false);
+
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -59,19 +67,67 @@ export default function LoginPage() {
       const userDocRef = doc(firestore, 'users', user.uid);
       const userDoc = await getDoc(userDocRef);
 
-      if (userDoc.exists() && userDoc.data()?.isAdmin) {
+      // Create user document if it doesn't exist (for social logins)
+      if (!userDoc.exists()) {
+        const userData = {
+            id: user.uid,
+            name: user.displayName,
+            email: user.email,
+            createdAt: new Date().toISOString(),
+            isAdmin: false,
+            photoURL: user.photoURL,
+            providerId: user.providerData[0]?.providerId || 'google.com',
+        };
+        await setDoc(userDocRef, userData, { merge: true }).catch(error => {
+          console.error("Error writing user document after social sign-in:", error);
+          errorEmitter.emit('permission-error', new FirestorePermissionError({
+            path: userDocRef.path,
+            operation: 'create',
+            requestResourceData: userData
+          }));
+          // Throw error to be caught by the calling function's catch block
+          throw error;
+        });
+      }
+      
+      const updatedUserDoc = userDoc.exists() ? userDoc.data() : await (await getDoc(userDocRef)).data();
+      
+      if (updatedUserDoc?.isAdmin) {
         router.push('/admin');
       } else {
         router.push('/');
       }
+
+      toast({
+        title: 'Login bem-sucedido',
+        description: 'Bem-vindo(a) de volta!',
+      });
     } else {
        router.push('/');
     }
-    toast({
-      title: 'Login bem-sucedido',
-      description: 'Bem-vindo(a) de volta!',
-    });
   };
+
+  useEffect(() => {
+    setIsProcessingGoogleLogin(true);
+    getRedirectResult(auth)
+      .then((result) => {
+        if (result) {
+          handleSuccessfulLogin(result.user);
+        }
+      })
+      .catch((error) => {
+        console.error('Google Redirect Login Error:', error);
+        toast({
+          variant: 'destructive',
+          title: 'Falha no login com Google',
+          description: 'Não foi possível completar o login. Tente novamente.',
+        });
+      })
+      .finally(() => {
+        setIsProcessingGoogleLogin(false);
+      });
+  }, [auth]);
+
 
   const onEmailSubmit = async (values: z.infer<typeof formSchema>) => {
     try {
@@ -88,53 +144,42 @@ export default function LoginPage() {
   };
 
   const onGoogleSubmit = async () => {
-    try {
-        const provider = new GoogleAuthProvider();
+    const provider = new GoogleAuthProvider();
+    setIsProcessingGoogleLogin(true);
+  
+    if (isMobile) {
+      // Use redirect for mobile devices
+      await signInWithRedirect(auth, provider);
+      // The rest of the logic is handled by the `getRedirectResult` useEffect
+    } else {
+      // Use popup for desktop devices
+      try {
         const result = await signInWithPopup(auth, provider);
-        const user = result.user;
-
-        const userDocRef = doc(firestore, 'users', user.uid);
-        const userDocSnap = await getDoc(userDocRef);
-
-        // If user doesn't exist, create a new document
-        if (!userDocSnap.exists()) {
-            const userData = {
-                id: user.uid,
-                name: user.displayName,
-                email: user.email,
-                createdAt: new Date().toISOString(),
-                isAdmin: false,
-                photoURL: user.photoURL,
-                providerId: result.providerId,
-            };
-            await setDoc(userDocRef, userData, { merge: true }).catch(error => {
-              console.error("Error writing user document after Google sign-in:", error);
-              errorEmitter.emit('permission-error', new FirestorePermissionError({
-                path: userDocRef.path,
-                operation: 'create',
-                requestResourceData: userData
-              }));
+        await handleSuccessfulLogin(result.user);
+      } catch (error: any) {
+        // Don't show an error toast if the user simply closes the popup
+        if (error.code !== 'auth/popup-closed-by-user') {
+            console.error('Erro de login com Google:', error);
+            toast({
+                variant: 'destructive',
+                title: 'Falha no login com Google',
+                description: 'Não foi possível fazer o login. Tente novamente mais tarde.',
             });
         }
-        
-        await handleSuccessfulLogin(user);
-
-    } catch (error: any) {
-      // Don't show an error toast if the user simply closes the popup
-      if (error.code === 'auth/popup-closed-by-user') {
-          return;
+      } finally {
+        setIsProcessingGoogleLogin(false);
       }
-      console.error('Erro de login com Google:', error);
-      toast({
-        variant: 'destructive',
-        title: 'Falha no login com Google',
-        description: 'Não foi possível fazer o login. Tente novamente mais tarde.',
-      });
     }
   };
 
   return (
     <div className="flex items-center justify-center min-h-[calc(100vh-14rem)] py-12 px-4">
+      {isProcessingGoogleLogin && (
+          <div className="absolute inset-0 bg-background/80 flex flex-col items-center justify-center z-10">
+              <Loader2 className="h-10 w-10 animate-spin text-primary" />
+              <p className="mt-4 text-muted-foreground">Processando login com o Google...</p>
+          </div>
+      )}
       <Card className="w-full max-w-md shadow-2xl">
         <CardHeader className="text-center">
           <CardTitle className="text-3xl font-headline">Bem-vindo de Volta!</CardTitle>
@@ -184,7 +229,7 @@ export default function LoginPage() {
             </div>
           </div>
           
-          <Button variant="outline" className="w-full" onClick={onGoogleSubmit}>
+          <Button variant="outline" className="w-full" onClick={onGoogleSubmit} disabled={isProcessingGoogleLogin}>
             <GoogleIcon />
             <span className="ml-2">Entrar com o Google</span>
           </Button>
