@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useMemo, ChangeEvent } from 'react';
@@ -325,9 +326,12 @@ export default function BookAppointmentPage() {
           clientEmail: email,
           finalPrice: finalPrice,
           viewedByAdmin: false,
-          hairLength: hairLength,
-          hairPhotoUrl: hairPhotoDataUrl,
       };
+
+      if (serviceDetails.isPriceFrom) {
+        appointmentData.hairLength = hairLength;
+        appointmentData.hairPhotoUrl = hairPhotoDataUrl;
+      }
 
       if (rescheduleId && appointmentToRescheduleRef) {
           await updateDoc(appointmentToRescheduleRef, appointmentData)
