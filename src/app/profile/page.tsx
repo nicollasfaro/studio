@@ -152,11 +152,12 @@ export default function ProfilePage() {
   const { data: services, isLoading: isLoadingServices } = useCollection<Service>(servicesRef);
 
   const appointmentsQuery = useMemoFirebase(() => {
-    if (isUserDataLoading || !firestore || !user?.uid) {
+    if (!firestore || !user?.uid) {
       return null;
     }
+    // This query is now secure and aligns with Firestore rules
     return query(collection(firestore, 'appointments'), where('clientId', '==', user.uid));
-  }, [firestore, user?.uid, isUserDataLoading]);
+  }, [firestore, user?.uid]);
   
   const { data: allUserAppointments, isLoading: isLoadingAppointments } = useCollection<Appointment>(appointmentsQuery);
 
@@ -498,5 +499,3 @@ export default function ProfilePage() {
     </div>
   );
 }
-
-    
