@@ -73,7 +73,7 @@ function ChatDialog({ appointmentId, clientName, serviceName }: { appointmentId:
     const firestore = useFirestore();
     const [newMessage, setNewMessage] = useState('');
     const [isSending, setIsSending] = useState(false);
-    const scrollAreaRef = useRef<HTMLDivElement>(null);
+    const scrollAreaViewportRef = useRef<HTMLDivElement>(null);
     const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
     const appointmentRef = useMemoFirebase(() => firestore ? doc(firestore, 'appointments', appointmentId) : null, [firestore, appointmentId]);
@@ -118,8 +118,9 @@ function ChatDialog({ appointmentId, clientName, serviceName }: { appointmentId:
 
 
     useEffect(() => {
-        if (scrollAreaRef.current) {
-            scrollAreaRef.current.scrollTop = scrollAreaRef.current.scrollHeight;
+        const viewport = scrollAreaViewportRef.current;
+        if (viewport) {
+            viewport.scrollTop = viewport.scrollHeight;
         }
     }, [messages, appointmentData?.clientTyping]);
 
@@ -156,8 +157,8 @@ function ChatDialog({ appointmentId, clientName, serviceName }: { appointmentId:
                     Conversa sobre o agendamento de {serviceName}
                 </DialogDescription>
             </DialogHeader>
-            <ScrollArea className="flex-1 px-6">
-                 <div className="space-y-4 py-4" ref={scrollAreaRef}>
+            <ScrollArea ref={scrollAreaViewportRef as any} className="flex-1 px-6">
+                 <div className="space-y-4 py-4">
                     {isLoadingMessages && <p>Carregando mensagens...</p>}
                     {messages?.map((msg, index) => (
                         <div key={msg.id || index} className={cn("flex items-end gap-2", msg.senderId === 'admin' ? "justify-end" : "justify-start")}>
@@ -747,3 +748,5 @@ const { data: paginatedAppointments, isLoading: isLoadingAppointments, snapshots
     </Card>
   );
 }
+
+    
