@@ -136,8 +136,10 @@ export const sendAppointmentStatusNotification = onDocumentWritten(
 
     console.log(`Preparando para enviar mensagem para ${whatsappNumber}: "${messageBody}"`);
 
-    // Aqui você integraria com uma API de WhatsApp (ex: Twilio, Zenvia, etc.)
-    // Exemplo de como seria a lógica de envio:
+    // ** INTEGRAÇÃO REAL DA API DO WHATSAPP AQUI **
+    // O código abaixo é uma simulação. Você precisará substituí-lo pela
+    // chamada real à sua API de preferência (ex: Twilio, Zenvia, etc.).
+    // Exemplo com uma função fictícia `sendWhatsAppMessage`:
     try {
       // await sendWhatsAppMessage(whatsappMessage);
       console.log("Simulação: Mensagem de WhatsApp enviada com sucesso.", whatsappMessage);
@@ -146,3 +148,4 @@ export const sendAppointmentStatusNotification = onDocumentWritten(
     }
   },
 );
+
