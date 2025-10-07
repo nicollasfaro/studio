@@ -1,5 +1,6 @@
 
 
+
 export type Service = {
   id: string;
   name: string;
@@ -42,7 +43,18 @@ export type Appointment = {
   contestReason?: string;
   contestedHairLength?: 'curto' | 'medio' | 'longo';
   contestedPrice?: number;
+  serviceName?: string; // Added for convenience in UI components
 };
+
+export type ChatMessage = {
+    id: string;
+    appointmentId: string;
+    senderId: string; // user.uid or 'admin'
+    senderName: string;
+    text: string;
+    timestamp: any; // Use 'any' for serverTimestamp() compatibility
+    isRead: boolean;
+}
 
 export type TimeSlot = {
   time: string;
@@ -89,5 +101,7 @@ export type BusinessHours = {
   endTime: string;
   workingDays: number[]; // 0 for Sunday, 1 for Monday, etc.
 }
+
+    
 
     

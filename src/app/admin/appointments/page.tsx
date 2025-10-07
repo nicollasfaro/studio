@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect, useRef } from 'react';
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -39,20 +39,23 @@ import {
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Input } from "@/components/ui/input";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { MoreHorizontal, CheckCircle, XCircle, Camera, ChevronLeft, ChevronRight, AlertTriangle, MessageSquare, Loader2 } from 'lucide-react';
-import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
-import { collection, query, orderBy, doc, updateDoc, limit, startAfter, where, writeBatch, DocumentSnapshot } from 'firebase/firestore';
-import type { Appointment, Service } from '@/lib/types';
+import { MoreHorizontal, CheckCircle, XCircle, Camera, ChevronLeft, ChevronRight, AlertTriangle, MessageSquare, Loader2, Send } from 'lucide-react';
+import { useCollection, useFirestore, useMemoFirebase, useUserData } from '@/firebase';
+import { collection, query, orderBy, doc, updateDoc, limit, startAfter, where, writeBatch, DocumentSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
+import type { Appointment, Service, ChatMessage } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import Image from 'next/image';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
+import { cn } from '@/lib/utils';
 
 const APPOINTMENTS_PER_PAGE = 6;
 
@@ -62,6 +65,85 @@ const contestSchema = z.object({
 });
 
 type ContestFormValues = z.infer<typeof contestSchema>;
+
+function ChatDialog({ appointment, onOpenChange }: { appointment: Appointment, onOpenChange: (open: boolean) => void }) {
+    const firestore = useFirestore();
+    const { userData } = useUserData();
+    const [newMessage, setNewMessage] = useState('');
+    const [isSending, setIsSending] = useState(false);
+    const scrollAreaRef = useRef<HTMLDivElement>(null);
+
+    const messagesRef = useMemoFirebase(
+        () => firestore ? query(collection(firestore, 'appointments', appointment.id, 'messages'), orderBy('timestamp', 'asc')) : null,
+        [firestore, appointment.id]
+    );
+    const { data: messages, isLoading: isLoadingMessages } = useCollection<ChatMessage>(messagesRef);
+
+    useEffect(() => {
+        if (scrollAreaRef.current) {
+            scrollAreaRef.current.scrollTop = scrollAreaRef.current.scrollHeight;
+        }
+    }, [messages]);
+
+    const handleSendMessage = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!newMessage.trim() || !firestore || !userData) return;
+
+        setIsSending(true);
+        const messageData: Omit<ChatMessage, 'id'> = {
+            appointmentId: appointment.id,
+            senderId: 'admin',
+            senderName: 'Admin',
+            text: newMessage.trim(),
+            timestamp: serverTimestamp(),
+            isRead: false,
+        };
+
+        try {
+            await addDoc(collection(firestore, 'appointments', appointment.id, 'messages'), messageData);
+            setNewMessage('');
+        } catch (error) {
+            console.error("Error sending message:", error);
+        } finally {
+            setIsSending(false);
+        }
+    };
+
+    return (
+        <DialogContent className="max-w-lg flex flex-col h-[70vh]">
+            <DialogHeader>
+                <DialogTitle>Chat com {appointment.clientName}</DialogTitle>
+                <DialogDescription>
+                    Conversa sobre o agendamento de {appointment.serviceName}
+                </DialogDescription>
+            </DialogHeader>
+            <ScrollArea className="flex-1 pr-4 -mr-4" ref={scrollAreaRef}>
+                 <div className="space-y-4">
+                    {isLoadingMessages && <p>Carregando mensagens...</p>}
+                    {messages?.map((msg) => (
+                        <div key={msg.id} className={cn("flex items-end gap-2", msg.senderId === 'admin' ? "justify-end" : "justify-start")}>
+                           <div className={cn("max-w-xs rounded-lg px-3 py-2", msg.senderId === 'admin' ? "bg-primary text-primary-foreground" : "bg-muted")}>
+                                <p className="text-sm">{msg.text}</p>
+                                <p className="text-xs opacity-70 mt-1 text-right">{format(new Date(msg.timestamp.toDate()), 'HH:mm')}</p>
+                           </div>
+                        </div>
+                    ))}
+                </div>
+            </ScrollArea>
+            <form onSubmit={handleSendMessage} className="flex items-center gap-2 pt-4 border-t">
+                <Input
+                    value={newMessage}
+                    onChange={(e) => setNewMessage(e.target.value)}
+                    placeholder="Digite sua mensagem..."
+                    disabled={isSending}
+                />
+                <Button type="submit" size="icon" disabled={isSending || !newMessage.trim()}>
+                    {isSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                </Button>
+            </form>
+        </DialogContent>
+    );
+}
 
 function ContestDialog({ appointment, service, onOpenChange }: { appointment: Appointment, service: Service | undefined, onOpenChange: (open: boolean) => void }) {
   const firestore = useFirestore();
@@ -197,7 +279,8 @@ function ContestDialog({ appointment, service, onOpenChange }: { appointment: Ap
 function AppointmentsTable({ services, appointments, isLoading }: AppointmentsTableProps) {
   const firestore = useFirestore();
   const { toast } = useToast();
-  const [dialogState, setDialogState] = useState<{ isOpen: boolean; appointment: Appointment | null }>({ isOpen: false, appointment: null });
+  const [contestDialogState, setContestDialogState] = useState<{ isOpen: boolean; appointment: Appointment | null }>({ isOpen: false, appointment: null });
+  const [chatDialogState, setChatDialogState] = useState<{ isOpen: boolean; appointment: Appointment | null }>({ isOpen: false, appointment: null });
   const [updatingStatusId, setUpdatingStatusId] = useState<string | null>(null);
 
   const getServiceDetails = (serviceId: string) => {
@@ -290,6 +373,7 @@ function AppointmentsTable({ services, appointments, isLoading }: AppointmentsTa
           {!isLoading && appointments?.map((apt) => {
             const service = getServiceDetails(apt.serviceId);
             const canContest = service?.isPriceFrom && apt.hairPhotoUrl && apt.status === 'Marcado';
+            const canChat = apt.status === 'confirmado';
             const isUpdating = updatingStatusId === apt.id;
 
             return (
@@ -341,6 +425,12 @@ function AppointmentsTable({ services, appointments, isLoading }: AppointmentsTa
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
+                      {canChat && (
+                          <DropdownMenuItem onClick={() => setChatDialogState({ isOpen: true, appointment: apt })}>
+                            <MessageSquare className="mr-2 h-4 w-4 text-blue-500" />
+                            Conversar
+                          </DropdownMenuItem>
+                      )}
                       <DropdownMenuItem onClick={() => handleStatusChange(apt, 'confirmado')} disabled={apt.status === 'confirmado' || apt.status === 'finalizado' || apt.status === 'cancelado'}>
                         <CheckCircle className="mr-2 h-4 w-4 text-green-500" />
                         Confirmar
@@ -352,7 +442,7 @@ function AppointmentsTable({ services, appointments, isLoading }: AppointmentsTa
                       {canContest && (
                         <>
                           <DropdownMenuSeparator />
-                          <DropdownMenuItem onClick={() => setDialogState({ isOpen: true, appointment: apt })}>
+                          <DropdownMenuItem onClick={() => setContestDialogState({ isOpen: true, appointment: apt })}>
                             <AlertTriangle className="mr-2 h-4 w-4 text-amber-500" />
                             Contestar Valor
                           </DropdownMenuItem>
@@ -371,12 +461,20 @@ function AppointmentsTable({ services, appointments, isLoading }: AppointmentsTa
           )})}
         </TableBody>
       </Table>
-      <Dialog open={dialogState.isOpen} onOpenChange={(isOpen) => setDialogState({ isOpen, appointment: isOpen ? dialogState.appointment : null })}>
-        {dialogState.appointment && (
+      <Dialog open={contestDialogState.isOpen} onOpenChange={(isOpen) => setContestDialogState({ isOpen, appointment: isOpen ? contestDialogState.appointment : null })}>
+        {contestDialogState.appointment && (
           <ContestDialog 
-            appointment={dialogState.appointment} 
-            service={getServiceDetails(dialogState.appointment.serviceId)}
-            onOpenChange={(isOpen) => setDialogState({ isOpen, appointment: isOpen ? dialogState.appointment : null })}
+            appointment={contestDialogState.appointment} 
+            service={getServiceDetails(contestDialogState.appointment.serviceId)}
+            onOpenChange={(isOpen) => setContestDialogState({ isOpen, appointment: isOpen ? contestDialogState.appointment : null })}
+          />
+        )}
+      </Dialog>
+      <Dialog open={chatDialogState.isOpen} onOpenChange={(isOpen) => setChatDialogState({ isOpen, appointment: isOpen ? chatDialogState.appointment : null })}>
+        {chatDialogState.appointment && (
+          <ChatDialog 
+            appointment={chatDialogState.appointment} 
+            onOpenChange={(isOpen) => setChatDialogState({ isOpen, appointment: isOpen ? chatDialogState.appointment : null })}
           />
         )}
       </Dialog>
@@ -504,3 +602,5 @@ const { data: paginatedAppointments, isLoading: isLoadingAppointments, snapshots
     </Card>
   );
 }
+
+    

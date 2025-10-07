@@ -1,4 +1,5 @@
 
+
 {
   "entities": {
     "User": {
@@ -291,6 +292,51 @@
         "status"
       ]
     },
+    "ChatMessage": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "ChatMessage",
+      "type": "object",
+      "description": "Represents a single chat message within an appointment's conversation.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the chat message."
+        },
+        "appointmentId": {
+          "type": "string",
+          "description": "ID of the appointment this message belongs to."
+        },
+        "senderId": {
+          "type": "string",
+          "description": "The UID of the sending user, or 'admin' for an administrator."
+        },
+        "senderName": {
+          "type": "string",
+          "description": "The display name of the sender."
+        },
+        "text": {
+          "type": "string",
+          "description": "The content of the message."
+        },
+        "timestamp": {
+          "type": "string",
+          "description": "The ISO 8601 timestamp of when the message was sent.",
+          "format": "date-time"
+        },
+        "isRead": {
+          "type": "boolean",
+          "description": "Flag to indicate if the message has been read by the recipient."
+        }
+      },
+      "required": [
+        "id",
+        "appointmentId",
+        "senderId",
+        "senderName",
+        "text",
+        "timestamp"
+      ]
+    },
     "ThemeSettings": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "ThemeSettings",
@@ -520,6 +566,24 @@
               "name": "appointmentId",
               "description": "The unique identifier of the appointment document."
             }
+          ],
+          "subcollections": [
+            {
+                "path": "/messages/{messageId}",
+                "definition": {
+                    "entityName": "ChatMessage",
+                    "schema": {
+                        "$ref": "#/backend/entities/ChatMessage"
+                    },
+                    "description": "Stores chat messages for a specific appointment. Readable/writable by the client and admins.",
+                    "params": [
+                        {
+                            "name": "messageId",
+                            "description": "The unique identifier for the chat message."
+                        }
+                    ]
+                }
+            }
           ]
         }
       },
@@ -604,6 +668,8 @@
         }
       }
     ],
-    "reasoning": "The Firestore structure is designed to support Thainnes Cuba Ciuldin's core features with a focus on security, scalability, and ease of debugging. It follows the principles of Authorization Independence, Structural Segregation, and Access Modeling.  \n\n*   **Users (Private Data with Admin Override):** User data is stored in a top-level `/users/{userId}` collection. This allows users to manage their own profile information while enabling administrators to have oversight.\n*   **Services (Public Data):** Services are stored in a single collection `/services/{serviceId}`. This allows for easy listing and retrieval of all available services.\n*   **Promotions (Public Data with Service References):** Promotions are stored in a single collection `/promotions/{promotionId}`.  Each promotion document contains an array `serviceIds` referencing the services to which the promotion applies.  This allows for easy listing and retrieval of all promotions.\n*   **Appointments (Centralized with Ownership):** Appointments are stored in a single, top-level `/appointments/{appointmentId}` collection. This simplifies queries for administrators who need to view all appointments. Each appointment document contains a `clientId` field to link it to the user who created it, ensuring data ownership can still be enforced in security rules. This is more efficient for admin-level queries than nesting appointments under each user.\n*   **Theme (Public Data, Admin Writable):** Theme settings are stored in a single document `/theme/global` for easy public access, allowing the app to load visual styles dynamically for all users, while write access is restricted to administrators.\n*   **Social Media (Public Data, Admin Writable):** Social media links are stored in a single document `/socialMedia/links` for easy public access, allowing the app to display them in the footer dynamically, while write access is restricted to administrators.\n* **Config (Private, Admin-only & Publicly Readable):** A `/config` collection stores general application settings. The document `/config/notifications` holds the contact details for sending admin alerts and is only readable/writable by admins. The new document `/config/businessHours` will store the business operating hours and will be publicly readable but only admin writable.\n* **Gallery Images (Public Data, Admin Writable):** A new top-level collection `/galleryImages/{imageId}` is added to store metadata about uploaded images, such as their Firebase Storage URL and a description. This allows the images to be publicly read by the application for use in services and promotions, while restricting write access to administrators.\n* **Content (Public Data, Admin Writable):** A new `/content` collection is added to store general, dynamic content for the site. The document `/content/heroBanner` holds the data for the home page's main banner, allowing it to be easily edited by an admin.\n\n**Authorization Independence:**\n\n*   Authorization Independence is achieved by avoiding `get()` calls in the security rules where possible. Client data is secured via path-based rules under `/users/{userId}`. Admin access is handled by checking a flag on the user's own document.\n\n**QAPs (Rules are not Filters):**\n\n*   The structure enables secure `list` operations by segregating data based on access requirements. Public data (services, promotions, theme, socialMedia, galleryImages, content) resides in dedicated collections. The centralized `/appointments` collection allows admins to `list` all documents, while individual user queries are filtered by `where('clientId', '==', uid)` on the client-side, which is then enforced by security rules."
+    "reasoning": "The Firestore structure is designed to support Thainnes Cuba Ciuldin's core features with a focus on security, scalability, and ease of debugging. It follows the principles of Authorization Independence, Structural Segregation, and Access Modeling.  \n\n*   **Users (Private Data with Admin Override):** User data is stored in a top-level `/users/{userId}` collection. This allows users to manage their own profile information while enabling administrators to have oversight.\n*   **Services (Public Data):** Services are stored in a single collection `/services/{serviceId}`. This allows for easy listing and retrieval of all available services.\n*   **Promotions (Public Data with Service References):** Promotions are stored in a single collection `/promotions/{promotionId}`.  Each promotion document contains an array `serviceIds` referencing the services to which the promotion applies.  This allows for easy listing and retrieval of all promotions.\n*   **Appointments (Centralized with Ownership):** Appointments are stored in a single, top-level `/appointments/{appointmentId}` collection. This simplifies queries for administrators who need to view all appointments. Each appointment document contains a `clientId` field to link it to the user who created it, ensuring data ownership can still be enforced in security rules. This is more efficient for admin-level queries than nesting appointments under each user.\n* **Chat Messages (Subcollection):** A new subcollection `/appointments/{appointmentId}/messages/{messageId}` is added to store chat messages related to a specific appointment. This keeps conversations organized and directly tied to their context. Security rules ensure only the appointment's client and admins can access these messages.\n*   **Theme (Public Data, Admin Writable):** Theme settings are stored in a single document `/theme/global` for easy public access, allowing the app to load visual styles dynamically for all users, while write access is restricted to administrators.\n*   **Social Media (Public Data, Admin Writable):** Social media links are stored in a single document `/socialMedia/links` for easy public access, allowing the app to display them in the footer dynamically, while write access is restricted to administrators.\n* **Config (Private, Admin-only & Publicly Readable):** A `/config` collection stores general application settings. The document `/config/notifications` holds the contact details for sending admin alerts and is only readable/writable by admins. The new document `/config/businessHours` will store the business operating hours and will be publicly readable but only admin writable.\n* **Gallery Images (Public Data, Admin Writable):** A new top-level collection `/galleryImages/{imageId}` is added to store metadata about uploaded images, such as their Firebase Storage URL and a description. This allows the images to be publicly read by the application for use in services and promotions, while restricting write access to administrators.\n* **Content (Public Data, Admin Writable):** A new `/content` collection is added to store general, dynamic content for the site. The document `/content/heroBanner` holds the data for the home page's main banner, allowing it to be easily edited by an admin.\n\n**Authorization Independence:**\n\n*   Authorization Independence is achieved by avoiding `get()` calls in the security rules where possible. Client data is secured via path-based rules under `/users/{userId}`. Admin access is handled by checking a flag on the user's own document.\n\n**QAPs (Rules are not Filters):**\n\n*   The structure enables secure `list` operations by segregating data based on access requirements. Public data (services, promotions, theme, socialMedia, galleryImages, content) resides in dedicated collections. The centralized `/appointments` collection allows admins to `list` all documents, while individual user queries are filtered by `where('clientId', '==', uid)` on the client-side, which is then enforced by security rules."
   }
 }
+
+    
