@@ -289,6 +289,14 @@
         "clientTyping": {
           "type": "boolean",
           "description": "Flag to indicate if the client is currently typing a message."
+        },
+        "hasUnreadAdminMessage": {
+          "type": "boolean",
+          "description": "Flag to indicate if there is a new message from the client for the admin."
+        },
+        "hasUnreadClientMessage": {
+            "type": "boolean",
+            "description": "Flag to indicate if there is a new message from the admin for the client."
         }
       },
       "required": [
@@ -344,6 +352,23 @@
         "text",
         "timestamp"
       ]
+    },
+    "WhatsAppMessage": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "WhatsAppMessage",
+      "type": "object",
+      "description": "Represents a message to be sent via a WhatsApp API.",
+      "properties": {
+        "to": {
+          "type": "string",
+          "description": "The recipient's phone number, including country code (e.g., 5511999998888)."
+        },
+        "body": {
+          "type": "string",
+          "description": "The text content of the message."
+        }
+      },
+      "required": ["to", "body"]
     },
     "ThemeSettings": {
       "$schema": "http://json-schema.org/draft-07/schema#",

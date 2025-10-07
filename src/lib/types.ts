@@ -2,6 +2,7 @@
 
 
 
+
 export type Service = {
   id: string;
   name: string;
@@ -47,6 +48,8 @@ export type Appointment = {
   serviceName?: string; // Added for convenience in UI components
   adminTyping?: boolean;
   clientTyping?: boolean;
+  hasUnreadAdminMessage?: boolean;
+  hasUnreadClientMessage?: boolean;
 };
 
 export type ChatMessage = {
@@ -57,6 +60,11 @@ export type ChatMessage = {
     text: string;
     timestamp: any; // Use 'any' for serverTimestamp() compatibility
     isRead: boolean;
+}
+
+export type WhatsAppMessage = {
+  to: string;
+  body: string;
 }
 
 export type TimeSlot = {
