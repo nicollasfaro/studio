@@ -1,12 +1,14 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
+import { Input } from "@/components/ui/input";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import {
   DropdownMenu,
@@ -24,23 +26,161 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { useAuth, useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, query, where, orderBy, doc, updateDoc } from 'firebase/firestore';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { useAuth, useUser, useFirestore, useCollection, useDoc, useMemoFirebase } from '@/firebase';
+import { collection, query, where, orderBy, doc, updateDoc, addDoc, serverTimestamp, writeBatch } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { User, Edit, LogOut, Calendar, Bell, MoreVertical, Trash2, Repeat, AlertCircle, Check, X } from 'lucide-react';
-import type { Appointment, Service } from '@/lib/types';
+import { User, Edit, LogOut, Calendar, Bell, MoreVertical, Trash2, Repeat, AlertCircle, Check, X, MessageSquare, Send, Loader2 } from 'lucide-react';
+import type { Appointment, Service, ChatMessage } from '@/lib/types';
 import Link from 'next/link';
 import { useUserData } from '@/hooks/use-user-data';
 import { useToast } from '@/hooks/use-toast';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 import NotificationSubscriber from '@/components/NotificationSubscriber';
+import { cn } from '@/lib/utils';
+import debounce from 'lodash.debounce';
+
 
 interface AppointmentWithService extends Appointment {
   serviceName?: string;
   service?: Service;
+}
+
+function ChatDialog({ appointmentId, user, onOpenChange }: { appointmentId: string, user: NonNullable<ReturnType<typeof useUser>['user']>, onOpenChange: (open: boolean) => void }) {
+    const firestore = useFirestore();
+    const [newMessage, setNewMessage] = useState('');
+    const [isSending, setIsSending] = useState(false);
+    const scrollAreaRef = useRef<HTMLDivElement>(null);
+    
+    const appointmentRef = useMemoFirebase(() => firestore ? doc(firestore, 'appointments', appointmentId) : null, [firestore, appointmentId]);
+    const { data: appointmentData } = useDoc<Appointment>(appointmentRef);
+
+    const messagesRef = useMemoFirebase(
+        () => firestore ? query(collection(firestore, 'appointments', appointmentId, 'messages'), orderBy('timestamp', 'asc')) : null,
+        [firestore, appointmentId]
+    );
+    const { data: messages, isLoading: isLoadingMessages } = useCollection<ChatMessage>(messagesRef);
+
+     // Marcar mensagens como lidas
+    useEffect(() => {
+        if (!firestore || !messages || messages.length === 0) return;
+        
+        const batch = writeBatch(firestore);
+        const unreadMessages = messages.filter(msg => msg.senderId === 'admin' && !msg.isRead);
+
+        if (unreadMessages.length > 0) {
+            unreadMessages.forEach(msg => {
+                const msgRef = doc(firestore, 'appointments', appointmentId, 'messages', msg.id);
+                batch.update(msgRef, { isRead: true });
+            });
+            batch.commit().catch(console.error);
+        }
+
+    }, [messages, firestore, appointmentId]);
+
+
+    // Lógica de "digitando..."
+    const updateTypingStatus = useCallback(debounce((isTyping: boolean) => {
+        if (appointmentRef) {
+            updateDoc(appointmentRef, { clientTyping: isTyping });
+        }
+    }, 500), [appointmentRef]);
+
+    useEffect(() => {
+        updateTypingStatus(newMessage.trim().length > 0);
+        return () => {
+            updateTypingStatus.cancel();
+        };
+    }, [newMessage, updateTypingStatus]);
+
+     useEffect(() => {
+        if (scrollAreaRef.current) {
+            scrollAreaRef.current.scrollTop = scrollAreaRef.current.scrollHeight;
+        }
+    }, [messages, appointmentData?.adminTyping]);
+
+    const handleSendMessage = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!newMessage.trim() || !firestore || !user) return;
+
+        setIsSending(true);
+        const messageData: Omit<ChatMessage, 'id'> = {
+            appointmentId: appointmentId,
+            senderId: user.uid,
+            senderName: user.displayName || 'Cliente',
+            text: newMessage.trim(),
+            timestamp: serverTimestamp(),
+            isRead: false,
+        };
+
+        try {
+            await addDoc(collection(firestore, 'appointments', appointmentId, 'messages'), messageData);
+            setNewMessage('');
+            updateTypingStatus(false);
+        } catch (error) {
+            console.error("Error sending message:", error);
+        } finally {
+            setIsSending(false);
+        }
+    };
+
+    return (
+        <DialogContent className="max-w-lg flex flex-col h-[70vh]">
+            <DialogHeader>
+                <DialogTitle>Chat com o Salão</DialogTitle>
+                <DialogDescription>
+                    Conversa sobre seu agendamento de {appointmentData?.serviceName}
+                </DialogDescription>
+            </DialogHeader>
+            <ScrollArea className="flex-1 pr-4 -mr-4" ref={scrollAreaRef}>
+                 <div className="space-y-4 py-4">
+                    {isLoadingMessages && <p>Carregando mensagens...</p>}
+                    {messages?.map((msg, index) => (
+                        <div key={msg.id || index} className={cn("flex items-end gap-2", msg.senderId === user.uid ? "justify-end" : "justify-start")}>
+                           <div className={cn("max-w-xs rounded-lg px-3 py-2", msg.senderId === user.uid ? "bg-primary text-primary-foreground" : "bg-muted")}>
+                                <p className="text-sm break-words">{msg.text}</p>
+                                <div className="flex items-center justify-end gap-1 mt-1">
+                                    <p className="text-xs opacity-70">{msg.timestamp ? format(new Date(msg.timestamp?.toDate()), 'HH:mm') : ''}</p>
+                                     {msg.senderId === user.uid && (
+                                        msg.isRead ? 
+                                        <Check size={16} className="text-blue-400" /> :
+                                        <Check size={16} className="opacity-70" />
+                                    )}
+                                </div>
+                           </div>
+                        </div>
+                    ))}
+                    {appointmentData?.adminTyping && (
+                         <div className="flex items-end gap-2 justify-start">
+                           <div className="max-w-xs rounded-lg px-3 py-2 bg-muted">
+                                <p className="text-sm italic">Digitando...</p>
+                           </div>
+                        </div>
+                    )}
+                </div>
+            </ScrollArea>
+            <form onSubmit={handleSendMessage} className="flex items-center gap-2 pt-4 border-t">
+                <Input
+                    value={newMessage}
+                    onChange={(e) => setNewMessage(e.target.value)}
+                    placeholder="Digite sua mensagem..."
+                    disabled={isSending}
+                />
+                <Button type="submit" size="icon" disabled={isSending || !newMessage.trim()}>
+                    {isSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                </Button>
+            </form>
+        </DialogContent>
+    );
 }
 
 export default function ProfilePage() {
@@ -52,6 +192,7 @@ export default function ProfilePage() {
   const { toast } = useToast();
 
   const [appointmentToCancel, setAppointmentToCancel] = useState<Appointment | null>(null);
+  const [chatDialogState, setChatDialogState] = useState<{ isOpen: boolean; appointmentId: string | null }>({ isOpen: false, appointmentId: null });
 
   useEffect(() => {
     if (!isAuthLoading && !user) {
@@ -63,11 +204,12 @@ export default function ProfilePage() {
   const { data: services, isLoading: isLoadingServices } = useCollection<Service>(servicesRef);
 
   const appointmentsQuery = useMemoFirebase(() => {
-    if (isUserDataLoading || !firestore || !user?.uid) {
+    if (!firestore || !user?.uid) {
       return null;
     }
+    // This query is now secure and aligns with Firestore rules
     return query(collection(firestore, 'appointments'), where('clientId', '==', user.uid));
-  }, [firestore, user?.uid, isUserDataLoading]);
+  }, [firestore, user?.uid]);
   
   const { data: allUserAppointments, isLoading: isLoadingAppointments } = useCollection<Appointment>(appointmentsQuery);
 
@@ -81,11 +223,11 @@ export default function ProfilePage() {
   }, [allUserAppointments, services]);
   
   const upcomingAppointments = appointmentsWithServices
-    .filter(apt => new Date(apt.startTime) >= new Date() && apt.status !== 'cancelado')
+    .filter(apt => new Date(apt.startTime) >= new Date() && apt.status !== 'cancelado' && apt.status !== 'finalizado')
     .sort((a,b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
   
   const pastAppointments = appointmentsWithServices
-    .filter(apt => new Date(apt.startTime) < new Date() || apt.status === 'cancelado')
+    .filter(apt => new Date(apt.startTime) < new Date() || apt.status === 'cancelado' || apt.status === 'finalizado')
     .sort((a,b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
 
 
@@ -165,12 +307,21 @@ export default function ProfilePage() {
       case 'finalizado':
         return 'outline';
       case 'cancelado':
-      case 'contestado':
         return 'destructive';
+      case 'contestado':
+          return 'default';
       default:
         return 'secondary';
     }
   };
+
+  const getBadgeStyle = (status: Appointment['status']) => {
+     if (status === 'contestado') {
+        return { backgroundColor: 'hsl(var(--accent-hsl))', color: 'hsl(var(--accent-foreground))' };
+     }
+     return {};
+  }
+
 
   const isLoading = isAuthLoading || isUserDataLoading;
   const userPhoto = userData?.photoURL || user?.photoURL;
@@ -275,31 +426,38 @@ export default function ProfilePage() {
                             <p className="text-sm text-muted-foreground">
                               {format(new Date(apt.startTime), "EEEE, d 'de' MMM 'às' HH:mm", { locale: ptBR })}
                             </p>
-                             <Badge variant={getBadgeVariant(apt.status)} className="capitalize mt-2">
-                              {apt.status === 'contestado' ? 'Contestado' : apt.status}
+                             <Badge variant={getBadgeVariant(apt.status)} style={getBadgeStyle(apt.status)} className="capitalize mt-2">
+                              {apt.status === 'contestado' ? 'Aguardando sua resposta' : apt.status}
                             </Badge>
                           </div>
-                          {apt.status !== 'contestado' && (
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon">
-                                  <MoreVertical className="h-4 w-4" />
+                          <div className="flex items-center">
+                            {apt.status === 'confirmado' && (
+                                <Button variant="ghost" size="icon" onClick={() => setChatDialogState({ isOpen: true, appointmentId: apt.id })}>
+                                    <MessageSquare className="h-5 w-5 text-blue-500" />
                                 </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuItem asChild disabled={apt.status !== 'Marcado'}>
-                                  <Link href={`/book?remarcarId=${apt.id}`}>
-                                    <Repeat className="mr-2 h-4 w-4" />
-                                    Remarcar
-                                  </Link>
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => setAppointmentToCancel(apt)} className="text-destructive focus:text-destructive" disabled={apt.status !== 'Marcado'}>
-                                  <Trash2 className="mr-2 h-4 w-4" />
-                                  Cancelar
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          )}
+                            )}
+                            {apt.status !== 'contestado' && (
+                                <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" size="icon">
+                                    <MoreVertical className="h-4 w-4" />
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                    <DropdownMenuItem asChild disabled={apt.status !== 'Marcado'}>
+                                    <Link href={`/book?remarcarId=${apt.id}`}>
+                                        <Repeat className="mr-2 h-4 w-4" />
+                                        Remarcar
+                                    </Link>
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => setAppointmentToCancel(apt)} className="text-destructive focus:text-destructive" disabled={apt.status !== 'Marcado'}>
+                                    <Trash2 className="mr-2 h-4 w-4" />
+                                    Cancelar
+                                    </DropdownMenuItem>
+                                </DropdownMenuContent>
+                                </DropdownMenu>
+                            )}
+                          </div>
                         </div>
                       </li>
                     ))}
@@ -378,6 +536,15 @@ export default function ProfilePage() {
                     <AlertDialogAction onClick={() => handleCancelAppointment(appointmentToCancel)} className="bg-destructive hover:bg-destructive/90">Sim, cancelar</AlertDialogAction>
                 </AlertDialogFooter>
             </AlertDialogContent>
+             <Dialog open={chatDialogState.isOpen} onOpenChange={(isOpen) => setChatDialogState({ isOpen, appointmentId: isOpen ? chatDialogState.appointmentId : null })}>
+                {chatDialogState.appointmentId && (
+                <ChatDialog 
+                    appointmentId={chatDialogState.appointmentId}
+                    user={user}
+                    onOpenChange={(isOpen) => setChatDialogState({ isOpen, appointmentId: isOpen ? chatDialogState.appointmentId : null })}
+                />
+                )}
+            </Dialog>
           </AlertDialog>
         </div>
       </div>

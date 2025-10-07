@@ -1,9 +1,10 @@
 'use client';
 
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect, useRef, useCallback } from 'react';
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
+import debounce from 'lodash.debounce';
 
 import {
   Card,
@@ -39,20 +40,23 @@ import {
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Input } from "@/components/ui/input";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { MoreHorizontal, CheckCircle, XCircle, Camera, ChevronLeft, ChevronRight, AlertTriangle, MessageSquare, Loader2 } from 'lucide-react';
-import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
-import { collection, query, orderBy, doc, updateDoc, limit, startAfter, where, writeBatch, DocumentSnapshot } from 'firebase/firestore';
-import type { Appointment, Service } from '@/lib/types';
+import { MoreHorizontal, CheckCircle, XCircle, Camera, ChevronLeft, ChevronRight, AlertTriangle, MessageSquare, Loader2, Send, Check } from 'lucide-react';
+import { useCollection, useDoc, useFirestore, useMemoFirebase, useUserData } from '@/firebase';
+import { collection, query, orderBy, doc, updateDoc, limit, startAfter, where, writeBatch, DocumentSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
+import type { Appointment, Service, ChatMessage } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import Image from 'next/image';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
+import { cn } from '@/lib/utils';
 
 const APPOINTMENTS_PER_PAGE = 6;
 
@@ -62,6 +66,135 @@ const contestSchema = z.object({
 });
 
 type ContestFormValues = z.infer<typeof contestSchema>;
+
+function ChatDialog({ appointmentId, clientName, serviceName }: { appointmentId: string, clientName: string, serviceName?: string }) {
+    const firestore = useFirestore();
+    const [newMessage, setNewMessage] = useState('');
+    const [isSending, setIsSending] = useState(false);
+    const scrollAreaRef = useRef<HTMLDivElement>(null);
+    const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+    const appointmentRef = useMemoFirebase(() => firestore ? doc(firestore, 'appointments', appointmentId) : null, [firestore, appointmentId]);
+    const { data: appointmentData } = useDoc<Appointment>(appointmentRef);
+
+    const messagesRef = useMemoFirebase(
+        () => firestore ? query(collection(firestore, 'appointments', appointmentId, 'messages'), orderBy('timestamp', 'asc')) : null,
+        [firestore, appointmentId]
+    );
+    const { data: messages, isLoading: isLoadingMessages } = useCollection<ChatMessage>(messagesRef);
+    
+    // Marcar mensagens como lidas
+    useEffect(() => {
+        if (!firestore || !messages || messages.length === 0) return;
+        
+        const batch = writeBatch(firestore);
+        const unreadMessages = messages.filter(msg => msg.senderId !== 'admin' && !msg.isRead);
+
+        if (unreadMessages.length > 0) {
+            unreadMessages.forEach(msg => {
+                const msgRef = doc(firestore, 'appointments', appointmentId, 'messages', msg.id);
+                batch.update(msgRef, { isRead: true });
+            });
+            batch.commit().catch(console.error);
+        }
+
+    }, [messages, firestore, appointmentId]);
+
+    // Lógica de "digitando..."
+    const updateTypingStatus = useCallback(debounce((isTyping: boolean) => {
+        if (appointmentRef) {
+            updateDoc(appointmentRef, { adminTyping: isTyping });
+        }
+    }, 500), [appointmentRef]);
+
+    useEffect(() => {
+        updateTypingStatus(newMessage.trim().length > 0);
+        return () => {
+            updateTypingStatus.cancel();
+        };
+    }, [newMessage, updateTypingStatus]);
+
+
+    useEffect(() => {
+        if (scrollAreaRef.current) {
+            scrollAreaRef.current.scrollTop = scrollAreaRef.current.scrollHeight;
+        }
+    }, [messages, appointmentData?.clientTyping]);
+
+    const handleSendMessage = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!newMessage.trim() || !firestore) return;
+
+        setIsSending(true);
+        const messageData: Omit<ChatMessage, 'id'> = {
+            appointmentId: appointmentId,
+            senderId: 'admin',
+            senderName: 'Admin',
+            text: newMessage.trim(),
+            timestamp: serverTimestamp(),
+            isRead: false,
+        };
+
+        try {
+            await addDoc(collection(firestore, 'appointments', appointmentId, 'messages'), messageData);
+            setNewMessage('');
+            updateTypingStatus(false);
+        } catch (error) {
+            console.error("Error sending message:", error);
+        } finally {
+            setIsSending(false);
+        }
+    };
+
+    return (
+        <DialogContent className="max-w-lg flex flex-col h-[70vh]">
+            <DialogHeader>
+                <DialogTitle>Chat com {clientName}</DialogTitle>
+                <DialogDescription>
+                    Conversa sobre o agendamento de {serviceName}
+                </DialogDescription>
+            </DialogHeader>
+            <ScrollArea className="flex-1 pr-4 -mr-4" ref={scrollAreaRef}>
+                 <div className="space-y-4 py-4">
+                    {isLoadingMessages && <p>Carregando mensagens...</p>}
+                    {messages?.map((msg, index) => (
+                        <div key={msg.id || index} className={cn("flex items-end gap-2", msg.senderId === 'admin' ? "justify-end" : "justify-start")}>
+                           <div className={cn("max-w-xs rounded-lg px-3 py-2", msg.senderId === 'admin' ? "bg-primary text-primary-foreground" : "bg-muted")}>
+                                <p className="text-sm break-words">{msg.text}</p>
+                                <div className="flex items-center justify-end gap-1 mt-1">
+                                    <p className="text-xs opacity-70">{msg.timestamp ? format(new Date(msg.timestamp?.toDate()), 'HH:mm') : ''}</p>
+                                    {msg.senderId === 'admin' && (
+                                        msg.isRead ? 
+                                        <Check size={16} className="text-blue-400" /> :
+                                        <Check size={16} className="opacity-70" />
+                                    )}
+                                </div>
+                           </div>
+                        </div>
+                    ))}
+                    {appointmentData?.clientTyping && (
+                         <div className="flex items-end gap-2 justify-start">
+                           <div className="max-w-xs rounded-lg px-3 py-2 bg-muted">
+                                <p className="text-sm italic">Digitando...</p>
+                           </div>
+                        </div>
+                    )}
+                </div>
+            </ScrollArea>
+            <form onSubmit={handleSendMessage} className="flex items-center gap-2 pt-4 border-t">
+                <Input
+                    value={newMessage}
+                    onChange={(e) => setNewMessage(e.target.value)}
+                    placeholder="Digite sua mensagem..."
+                    disabled={isSending}
+                />
+                <Button type="submit" size="icon" disabled={isSending || !newMessage.trim()}>
+                    {isSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                </Button>
+            </form>
+        </DialogContent>
+    );
+}
 
 function ContestDialog({ appointment, service, onOpenChange }: { appointment: Appointment, service: Service | undefined, onOpenChange: (open: boolean) => void }) {
   const firestore = useFirestore();
@@ -194,10 +327,17 @@ function ContestDialog({ appointment, service, onOpenChange }: { appointment: Ap
   );
 }
 
+interface AppointmentsTableProps {
+  services: (Omit<Service, 'id'> & { id: string })[];
+  appointments: Appointment[];
+  isLoading: boolean;
+}
+
 function AppointmentsTable({ services, appointments, isLoading }: AppointmentsTableProps) {
   const firestore = useFirestore();
   const { toast } = useToast();
-  const [dialogState, setDialogState] = useState<{ isOpen: boolean; appointment: Appointment | null }>({ isOpen: false, appointment: null });
+  const [contestDialogState, setContestDialogState] = useState<{ isOpen: boolean; appointment: Appointment | null }>({ isOpen: false, appointment: null });
+  const [chatDialogState, setChatDialogState] = useState<{ isOpen: boolean; appointment: Appointment | null }>({ isOpen: false, appointment: null });
   const [updatingStatusId, setUpdatingStatusId] = useState<string | null>(null);
 
   const getServiceDetails = (serviceId: string) => {
@@ -290,6 +430,7 @@ function AppointmentsTable({ services, appointments, isLoading }: AppointmentsTa
           {!isLoading && appointments?.map((apt) => {
             const service = getServiceDetails(apt.serviceId);
             const canContest = service?.isPriceFrom && apt.hairPhotoUrl && apt.status === 'Marcado';
+            const canChat = apt.status === 'confirmado';
             const isUpdating = updatingStatusId === apt.id;
 
             return (
@@ -341,6 +482,12 @@ function AppointmentsTable({ services, appointments, isLoading }: AppointmentsTa
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
+                      {canChat && (
+                          <DropdownMenuItem onClick={() => setChatDialogState({ isOpen: true, appointment: apt })}>
+                            <MessageSquare className="mr-2 h-4 w-4 text-blue-500" />
+                            Conversar
+                          </DropdownMenuItem>
+                      )}
                       <DropdownMenuItem onClick={() => handleStatusChange(apt, 'confirmado')} disabled={apt.status === 'confirmado' || apt.status === 'finalizado' || apt.status === 'cancelado'}>
                         <CheckCircle className="mr-2 h-4 w-4 text-green-500" />
                         Confirmar
@@ -352,7 +499,7 @@ function AppointmentsTable({ services, appointments, isLoading }: AppointmentsTa
                       {canContest && (
                         <>
                           <DropdownMenuSeparator />
-                          <DropdownMenuItem onClick={() => setDialogState({ isOpen: true, appointment: apt })}>
+                          <DropdownMenuItem onClick={() => setContestDialogState({ isOpen: true, appointment: apt })}>
                             <AlertTriangle className="mr-2 h-4 w-4 text-amber-500" />
                             Contestar Valor
                           </DropdownMenuItem>
@@ -371,12 +518,21 @@ function AppointmentsTable({ services, appointments, isLoading }: AppointmentsTa
           )})}
         </TableBody>
       </Table>
-      <Dialog open={dialogState.isOpen} onOpenChange={(isOpen) => setDialogState({ isOpen, appointment: isOpen ? dialogState.appointment : null })}>
-        {dialogState.appointment && (
+      <Dialog open={contestDialogState.isOpen} onOpenChange={(isOpen) => setContestDialogState({ isOpen, appointment: isOpen ? contestDialogState.appointment : null })}>
+        {contestDialogState.appointment && (
           <ContestDialog 
-            appointment={dialogState.appointment} 
-            service={getServiceDetails(dialogState.appointment.serviceId)}
-            onOpenChange={(isOpen) => setDialogState({ isOpen, appointment: isOpen ? dialogState.appointment : null })}
+            appointment={contestDialogState.appointment} 
+            service={getServiceDetails(contestDialogState.appointment.serviceId)}
+            onOpenChange={(isOpen) => setContestDialogState({ isOpen, appointment: isOpen ? contestDialogState.appointment : null })}
+          />
+        )}
+      </Dialog>
+      <Dialog open={chatDialogState.isOpen} onOpenChange={(isOpen) => setChatDialogState({ isOpen, appointment: isOpen ? chatDialogState.appointment : null })}>
+        {chatDialogState.appointment && (
+          <ChatDialog 
+            appointmentId={chatDialogState.appointment.id}
+            clientName={chatDialogState.appointment.clientName}
+            serviceName={getServiceDetails(chatDialogState.appointment.serviceId)?.name}
           />
         )}
       </Dialog>
