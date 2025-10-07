@@ -46,9 +46,9 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { MoreHorizontal, CheckCircle, XCircle, Camera, ChevronLeft, ChevronRight, AlertTriangle, MessageSquare, Loader2, Send, Check } from 'lucide-react';
+import { MoreHorizontal, CheckCircle, XCircle, Camera, ChevronLeft, ChevronRight, AlertTriangle, MessageSquare, Loader2, Send, Check, Fingerprint } from 'lucide-react';
 import { useCollection, useDoc, useFirestore, useMemoFirebase, useUserData } from '@/firebase';
-import { collection, query, orderBy, doc, updateDoc, limit, startAfter, where, writeBatch, DocumentSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, orderBy, doc, updateDoc, limit, startAfter, where, writeBatch, DocumentSnapshot, addDoc, serverTimestamp, isSignInWithWebAuthnSupported, signInWithWebAuthn, linkWithPasskey } from 'firebase/firestore';
 import type { Appointment, Service, ChatMessage } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
@@ -58,6 +58,7 @@ import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { signOut } from 'firebase/auth';
 
 const APPOINTMENTS_PER_PAGE = 6;
 
@@ -148,14 +149,14 @@ function ChatDialog({ appointmentId, clientName, serviceName }: { appointmentId:
     };
 
     return (
-        <DialogContent className="max-w-lg flex flex-col h-[70vh]">
-            <DialogHeader>
+        <DialogContent className="p-0 w-[95vw] md:max-w-lg flex flex-col h-[90vh] md:h-[70vh] rounded-lg">
+            <DialogHeader className="p-6 pb-0">
                 <DialogTitle>Chat com {clientName}</DialogTitle>
                 <DialogDescription>
                     Conversa sobre o agendamento de {serviceName}
                 </DialogDescription>
             </DialogHeader>
-            <ScrollArea className="flex-1 pr-4 -mr-4" ref={scrollAreaRef}>
+            <ScrollArea className="flex-1 px-6">
                  <div className="space-y-4 py-4">
                     {isLoadingMessages && <p>Carregando mensagens...</p>}
                     {messages?.map((msg, index) => (
@@ -182,7 +183,7 @@ function ChatDialog({ appointmentId, clientName, serviceName }: { appointmentId:
                     )}
                 </div>
             </ScrollArea>
-            <form onSubmit={handleSendMessage} className="flex items-center gap-2 pt-4 border-t">
+            <form onSubmit={handleSendMessage} className="flex items-center gap-2 p-6 pt-4 border-t">
                 <Input
                     value={newMessage}
                     onChange={(e) => setNewMessage(e.target.value)}
