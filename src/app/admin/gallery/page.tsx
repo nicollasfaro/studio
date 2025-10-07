@@ -302,28 +302,31 @@ export default function AdminGalleryPage() {
             <CardTitle>Galeria de Imagens</CardTitle>
             <CardDescription>Imagens disponíveis para uso no site.</CardDescription>
           </div>
-          {isMobile ? (
-             <Button variant="default" size="sm" onClick={() => setView('form')}>
-                <Upload className="mr-2 h-4 w-4" />
-                Enviar
-             </Button>
-          ) : selectionMode ? (
-             <div className="flex items-center gap-2">
-                <Button variant="destructive" onClick={() => setShowDeleteAlert(true)} disabled={selectedImages.length === 0 || isDeleting}>
-                   {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
-                  Excluir ({selectedImages.length})
+          <div className="flex items-center gap-2">
+            {isMobile ? (
+                <Button variant="default" size="sm" onClick={() => setView('form')}>
+                    <Upload className="mr-2 h-4 w-4" />
+                    Enviar
                 </Button>
-                <Button variant="outline" onClick={handleCancelSelection} disabled={isDeleting}>
-                  <X className="mr-2 h-4 w-4" />
-                  Cancelar
+            ) : null}
+            {selectionMode ? (
+                <div className="flex items-center gap-2">
+                    <Button variant="destructive" onClick={() => setShowDeleteAlert(true)} disabled={selectedImages.length === 0 || isDeleting}>
+                        {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+                        Excluir ({selectedImages.length})
+                    </Button>
+                    <Button variant="outline" onClick={handleCancelSelection} disabled={isDeleting}>
+                        <X className="mr-2 h-4 w-4" />
+                        Cancelar
+                    </Button>
+                </div>
+            ) : (
+                <Button variant="outline" onClick={() => setSelectionMode(true)} disabled={!images || images.length === 0}>
+                    <GripVertical className="mr-2 h-4 w-4" />
+                    Selecionar
                 </Button>
-             </div>
-          ) : (
-            <Button variant="outline" onClick={() => setSelectionMode(true)} disabled={!images || images.length === 0}>
-                <GripVertical className="mr-2 h-4 w-4" />
-                Selecionar
-            </Button>
-          )}
+            )}
+          </div>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
@@ -414,5 +417,3 @@ export default function AdminGalleryPage() {
     </div>
   );
 }
-
-    
