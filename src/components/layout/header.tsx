@@ -79,13 +79,6 @@ export function Header() {
   const isLoading = isUserDataLoading;
   const userPhoto = userData?.photoURL || user?.photoURL;
   
-  // Persist the last known user photo URL to prevent flickering on logout
-  const lastUserPhotoRef = useRef(userPhoto);
-  useEffect(() => {
-    if (userPhoto) {
-      lastUserPhotoRef.current = userPhoto;
-    }
-  }, [userPhoto]);
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-primary/20 bg-primary shadow-sm">
@@ -136,7 +129,7 @@ export function Header() {
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="relative h-10 w-10 rounded-full">
               <Avatar className="h-10 w-10">
-                <AvatarImage src={user ? userPhoto : lastUserPhotoRef.current} alt={user?.displayName || 'User profile'} />
+                <AvatarImage src={userPhoto || undefined} alt={user?.displayName || 'User profile'} />
                 <AvatarFallback>
                   <User className="text-primary" />
                 </AvatarFallback>
