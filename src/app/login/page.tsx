@@ -52,7 +52,7 @@ export default function LoginPage() {
   const firestore = useFirestore();
   const router = useRouter();
   const isMobile = useIsMobile();
-  const [isProcessingGoogleLogin, setIsProcessingGoogleLogin] = useState(false);
+  const [isProcessingGoogleLogin, setIsProcessingGoogleLogin] = useState(true);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -63,11 +63,12 @@ export default function LoginPage() {
   });
 
   const handleSuccessfulLogin = async (user: User) => {
+    if (!firestore) throw new Error("Firestore not available");
+    
     if (user) {
       const userDocRef = doc(firestore, 'users', user.uid);
       const userDoc = await getDoc(userDocRef);
 
-      // Create user document if it doesn't exist (for social logins)
       if (!userDoc.exists()) {
         const userData = {
             id: user.uid,
@@ -78,19 +79,19 @@ export default function LoginPage() {
             photoURL: user.photoURL,
             providerId: user.providerData[0]?.providerId || 'google.com',
         };
-        await setDoc(userDocRef, userData, { merge: true }).catch(error => {
+        await setDoc(userDocRef, userData).catch(error => {
           console.error("Error writing user document after social sign-in:", error);
           errorEmitter.emit('permission-error', new FirestorePermissionError({
             path: userDocRef.path,
             operation: 'create',
             requestResourceData: userData
           }));
-          // Throw error to be caught by the calling function's catch block
           throw error;
         });
       }
       
-      const updatedUserDoc = userDoc.exists() ? userDoc.data() : await (await getDoc(userDocRef)).data();
+      const updatedUserDocSnap = await getDoc(userDocRef);
+      const updatedUserDoc = updatedUserDocSnap.data();
       
       if (updatedUserDoc?.isAdmin) {
         router.push('/admin');
@@ -108,11 +109,21 @@ export default function LoginPage() {
   };
 
   useEffect(() => {
-    setIsProcessingGoogleLogin(true);
+    if (!auth) return;
+    
     getRedirectResult(auth)
-      .then((result) => {
+      .then(async (result) => {
         if (result) {
-          handleSuccessfulLogin(result.user);
+            try {
+                await handleSuccessfulLogin(result.user);
+            } catch (handleError: any) {
+                console.error('Error handling successful login:', handleError);
+                toast({
+                    variant: 'destructive',
+                    title: 'Falha no processamento do Login',
+                    description: handleError.message || 'Não foi possível completar o seu login. Tente novamente.',
+                });
+            }
         }
       })
       .catch((error) => {
@@ -120,7 +131,7 @@ export default function LoginPage() {
         toast({
           variant: 'destructive',
           title: 'Falha no login com Google',
-          description: 'Não foi possível completar o login. Tente novamente.',
+          description: error.message || 'Não foi possível completar o login. Tente novamente.',
         });
       })
       .finally(() => {
@@ -157,17 +168,24 @@ export default function LoginPage() {
         const result = await signInWithPopup(auth, provider);
         await handleSuccessfulLogin(result.user);
       } catch (error: any) {
-        // Don't show an error toast if the user simply closes the popup
-        if (error.code !== 'auth/popup-closed-by-user') {
-            console.error('Erro de login com Google:', error);
-            toast({
-                variant: 'destructive',
-                title: 'Falha no login com Google',
-                description: 'Não foi possível fazer o login. Tente novamente mais tarde.',
-            });
+         if (error.code === 'auth/popup-closed-by-user') {
+            // User cancelled the login, do nothing.
+            setIsProcessingGoogleLogin(false);
+            return;
         }
+        
+        console.error('Erro de login com Google:', error);
+        toast({
+            variant: 'destructive',
+            title: 'Falha no login com Google',
+            description: error.message || 'Não foi possível fazer o login. Tente novamente mais tarde.',
+        });
       } finally {
-        setIsProcessingGoogleLogin(false);
+        // This will only be reached for the popup flow's success or non-cancellation error path.
+        // Redirect flow will navigate away.
+        if (!isMobile) {
+            setIsProcessingGoogleLogin(false);
+        }
       }
     }
   };
