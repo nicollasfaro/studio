@@ -3,6 +3,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
+import React, { useRef, useEffect } from 'react';
 import {
   Menu,
   Scissors,
@@ -51,7 +52,6 @@ export function Header() {
   const { userData, isLoading: isUserDataLoading } = useUserData();
   const isAdmin = userData?.isAdmin ?? false;
 
-
   const handleLogout = async () => {
     try {
       await signOut(auth);
@@ -76,9 +76,9 @@ export function Header() {
     { href: bookHref, label: 'Agendar', icon: Calendar },
   ];
 
-
   const isLoading = isUserDataLoading;
   const userPhoto = userData?.photoURL || user?.photoURL;
+  
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-primary/20 bg-primary shadow-sm">
@@ -129,7 +129,7 @@ export function Header() {
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="relative h-10 w-10 rounded-full">
               <Avatar className="h-10 w-10">
-                {userPhoto && <AvatarImage src={userPhoto} alt={user?.displayName || 'User profile'} />}
+                <AvatarImage src={userPhoto || undefined} alt={user?.displayName || 'User profile'} />
                 <AvatarFallback>
                   <User className="text-primary" />
                 </AvatarFallback>
