@@ -66,8 +66,8 @@ export default function LoginPage() {
     if (!firestore) throw new Error("Firestore not available");
     
     const userDocRef = doc(firestore, 'users', user.uid);
-    const userDoc = await getDoc(userDocRef);
-
+    
+    // Always merge data to avoid overwriting existing fields
     const userData: any = {
         id: user.uid,
         name: user.displayName,
@@ -79,33 +79,24 @@ export default function LoginPage() {
     if (accessToken) {
         userData.googleAccessToken = accessToken;
     }
+    
+    const userDoc = await getDoc(userDocRef);
 
     if (!userDoc.exists()) {
         userData.createdAt = new Date().toISOString();
         userData.isAdmin = false;
-        try {
-            await setDoc(userDocRef, userData);
-        } catch (error) {
-            console.error("Error writing user document after social sign-in:", error);
-            errorEmitter.emit('permission-error', new FirestorePermissionError({
-                path: userDocRef.path,
-                operation: 'create',
-                requestResourceData: userData
-            }));
-            throw error; // Re-throw to be caught by the caller
-        }
-    } else {
-         try {
-            await setDoc(userDocRef, userData, { merge: true });
-        } catch (error) {
-            console.error("Error updating user document with token:", error);
-            errorEmitter.emit('permission-error', new FirestorePermissionError({
-                path: userDocRef.path,
-                operation: 'update',
-                requestResourceData: userData
-            }));
-            throw error;
-        }
+    }
+    
+    try {
+        await setDoc(userDocRef, userData, { merge: true });
+    } catch (error) {
+        console.error("Error writing user document:", error);
+        errorEmitter.emit('permission-error', new FirestorePermissionError({
+            path: userDocRef.path,
+            operation: userDoc.exists() ? 'update' : 'create',
+            requestResourceData: userData
+        }));
+        throw error; // Re-throw to be caught by the caller
     }
       
     const updatedUserDocSnap = await getDoc(userDocRef);
@@ -212,7 +203,7 @@ export default function LoginPage() {
       {isProcessingGoogleLogin && (
           <div className="absolute inset-0 bg-background/80 flex flex-col items-center justify-center z-10">
               <Loader2 className="h-10 w-10 animate-spin text-primary" />
-              <p className="mt-4 text-muted-foreground">Processando login com o Google...</p>
+              <p className="mt-4 text-muted-foreground">Processando login...</p>
           </div>
       )}
       <Card className="w-full max-w-md shadow-2xl">
