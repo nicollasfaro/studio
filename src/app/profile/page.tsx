@@ -72,7 +72,7 @@ function ChatDialog({ appointment, user, onOpenChange }: { appointment: Appointm
 
      // Marcar mensagens como lidas pelo cliente
     useEffect(() => {
-        if (!firestore || !messages || messages.length === 0) return;
+        if (!firestore || !messages || messages.length === 0 || !appointmentRef) return;
         
         const unreadMessages = messages.filter(msg => msg.senderId === 'admin' && !msg.isRead);
 
