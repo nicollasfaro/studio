@@ -4,7 +4,7 @@
 import { useState, useEffect } from 'react';
 import { getMessaging, getToken, onMessage } from 'firebase/messaging';
 import { useFirebaseApp, useUser, useFirestore, useUserData } from '@/firebase';
-import { doc, updateDoc, arrayUnion, arrayRemove, getDoc } from 'firebase/firestore';
+import { doc, updateDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
@@ -62,13 +62,24 @@ export default function NotificationSubscriber({ feature, title, description }: 
 
     if (checked) {
       // Subscribe logic
-      if (notificationPermission === 'granted') {
-        if (currentToken) {
+      let permission = notificationPermission;
+      if (permission === 'default') {
+        permission = await Notification.requestPermission();
+        setNotificationPermission(permission);
+      }
+      
+      if (permission === 'granted') {
+          // Re-get token in case it wasn't available before permission was granted
+          const messaging = getMessaging(app);
+          const token = await getToken(messaging, { vapidKey: process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY });
+
+        if (token) {
+          setCurrentToken(token); // Update state with new token
           try {
             const userDocRef = doc(firestore, 'users', user.uid);
-            await updateDoc(userDocRef, { fcmTokens: arrayUnion(currentToken) });
+            await updateDoc(userDocRef, { fcmTokens: arrayUnion(token) });
             setIsSubscribed(true);
-            toast({ title: 'Inscrito!', description: `Você receberá ${title.toLowerCase()}.` });
+            toast({ title: 'Inscrição Ativada!', description: `Você receberá ${title.toLowerCase()}.` });
           } catch (err) {
             console.error('Error subscribing:', err);
             toast({ variant: 'destructive', title: 'Erro', description: 'Não foi possível salvar a sua inscrição.' });
@@ -76,14 +87,8 @@ export default function NotificationSubscriber({ feature, title, description }: 
         } else {
           toast({ variant: 'destructive', title: 'Falha na Inscrição', description: 'Não foi possível obter o token de notificação. Tente recarregar a página.' });
         }
-      } else if (notificationPermission === 'default') {
-        const permission = await Notification.requestPermission();
-        setNotificationPermission(permission);
-        if (permission !== 'granted') {
-          toast({ variant: 'destructive', title: 'Permissão Negada', description: 'Você precisa permitir notificações para se inscrever.' });
-        }
       } else {
-        toast({ variant: 'destructive', title: 'Notificações Bloqueadas', description: 'Por favor, habilite as notificações nas configurações do seu navegador.' });
+        toast({ variant: 'destructive', title: 'Permissão Negada', description: 'Você precisa permitir notificações nas configurações do seu navegador para se inscrever.' });
       }
     } else {
       // Unsubscribe logic
@@ -119,7 +124,7 @@ export default function NotificationSubscriber({ feature, title, description }: 
 
   return (
     <div className="flex items-center justify-between p-4 border rounded-lg">
-      <Label htmlFor={`${feature}-notifications`} className="flex flex-col gap-1 cursor-pointer">
+      <Label htmlFor={`${feature}-notifications`} className="flex flex-col gap-1 cursor-pointer pr-4">
         <span className="font-semibold">{title}</span>
         <span className="text-sm text-muted-foreground">{description}</span>
       </Label>
