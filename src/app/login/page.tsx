@@ -65,11 +65,10 @@ export default function LoginPage() {
   const handleSuccessfulLogin = async (user: User) => {
     if (!firestore) throw new Error("Firestore not available");
     
-    if (user) {
-      const userDocRef = doc(firestore, 'users', user.uid);
-      const userDoc = await getDoc(userDocRef);
+    const userDocRef = doc(firestore, 'users', user.uid);
+    const userDoc = await getDoc(userDocRef);
 
-      if (!userDoc.exists()) {
+    if (!userDoc.exists()) {
         const userData = {
             id: user.uid,
             name: user.displayName,
@@ -79,33 +78,32 @@ export default function LoginPage() {
             photoURL: user.photoURL,
             providerId: user.providerData[0]?.providerId || 'google.com',
         };
-        await setDoc(userDocRef, userData).catch(error => {
-          console.error("Error writing user document after social sign-in:", error);
-          errorEmitter.emit('permission-error', new FirestorePermissionError({
-            path: userDocRef.path,
-            operation: 'create',
-            requestResourceData: userData
-          }));
-          throw error;
-        });
-      }
+        try {
+            await setDoc(userDocRef, userData);
+        } catch (error) {
+            console.error("Error writing user document after social sign-in:", error);
+            errorEmitter.emit('permission-error', new FirestorePermissionError({
+                path: userDocRef.path,
+                operation: 'create',
+                requestResourceData: userData
+            }));
+            throw error; // Re-throw to be caught by the caller
+        }
+    }
       
-      const updatedUserDocSnap = await getDoc(userDocRef);
-      const updatedUserDoc = updatedUserDocSnap.data();
+    const updatedUserDocSnap = await getDoc(userDocRef);
+    const updatedUserDoc = updatedUserDocSnap.data();
       
-      if (updatedUserDoc?.isAdmin) {
+    if (updatedUserDoc?.isAdmin) {
         router.push('/admin');
-      } else {
+    } else {
         router.push('/');
-      }
+    }
 
-      toast({
+    toast({
         title: 'Login bem-sucedido',
         description: 'Bem-vindo(a) de volta!',
-      });
-    } else {
-       router.push('/');
-    }
+    });
   };
 
   useEffect(() => {
@@ -114,6 +112,8 @@ export default function LoginPage() {
     getRedirectResult(auth)
       .then(async (result) => {
         if (result) {
+            // A user has successfully signed in via redirect.
+            // isProcessingGoogleLogin is already true, so the loader is showing.
             try {
                 await handleSuccessfulLogin(result.user);
             } catch (handleError: any) {
@@ -123,7 +123,14 @@ export default function LoginPage() {
                     title: 'Falha no processamento do Login',
                     description: handleError.message || 'Não foi possível completar o seu login. Tente novamente.',
                 });
+            } finally {
+                // This might not be strictly necessary if navigation happens, but good for safety.
+                setIsProcessingGoogleLogin(false);
             }
+        } else {
+            // No redirect result, so we are not in the middle of a redirect login.
+            // Stop showing the loader.
+            setIsProcessingGoogleLogin(false);
         }
       })
       .catch((error) => {
@@ -133,8 +140,6 @@ export default function LoginPage() {
           title: 'Falha no login com Google',
           description: error.message || 'Não foi possível completar o login. Tente novamente.',
         });
-      })
-      .finally(() => {
         setIsProcessingGoogleLogin(false);
       });
   }, [auth]);
@@ -142,6 +147,7 @@ export default function LoginPage() {
 
   const onEmailSubmit = async (values: z.infer<typeof formSchema>) => {
     try {
+      if (!auth) return;
       const userCredential = await signInWithEmailAndPassword(auth, values.email, values.password);
       await handleSuccessfulLogin(userCredential.user);
     } catch (error: any) {
@@ -155,13 +161,13 @@ export default function LoginPage() {
   };
 
   const onGoogleSubmit = async () => {
+    if (!auth) return;
     const provider = new GoogleAuthProvider();
     setIsProcessingGoogleLogin(true);
   
     if (isMobile) {
-      // Use redirect for mobile devices
+      // Use redirect for mobile devices. The result is handled by the useEffect.
       await signInWithRedirect(auth, provider);
-      // The rest of the logic is handled by the `getRedirectResult` useEffect
     } else {
       // Use popup for desktop devices
       try {
@@ -170,22 +176,16 @@ export default function LoginPage() {
       } catch (error: any) {
          if (error.code === 'auth/popup-closed-by-user') {
             // User cancelled the login, do nothing.
-            setIsProcessingGoogleLogin(false);
-            return;
-        }
-        
-        console.error('Erro de login com Google:', error);
-        toast({
-            variant: 'destructive',
-            title: 'Falha no login com Google',
-            description: error.message || 'Não foi possível fazer o login. Tente novamente mais tarde.',
-        });
+         } else {
+            console.error('Erro de login com Google:', error);
+            toast({
+                variant: 'destructive',
+                title: 'Falha no login com Google',
+                description: error.message || 'Não foi possível fazer o login. Tente novamente mais tarde.',
+            });
+         }
       } finally {
-        // This will only be reached for the popup flow's success or non-cancellation error path.
-        // Redirect flow will navigate away.
-        if (!isMobile) {
-            setIsProcessingGoogleLogin(false);
-        }
+        setIsProcessingGoogleLogin(false);
       }
     }
   };
