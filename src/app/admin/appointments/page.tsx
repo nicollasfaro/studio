@@ -43,7 +43,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { MoreHorizontal, CheckCircle, XCircle, Camera, ChevronLeft, ChevronRight, AlertTriangle, MessageSquare } from 'lucide-react';
+import { MoreHorizontal, CheckCircle, XCircle, Camera, ChevronLeft, ChevronRight, AlertTriangle, MessageSquare, Loader2 } from 'lucide-react';
 import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
 import { collection, query, orderBy, doc, updateDoc, limit, startAfter, where, writeBatch, DocumentSnapshot } from 'firebase/firestore';
 import type { Appointment, Service } from '@/lib/types';
@@ -182,9 +182,10 @@ function ContestDialog({ appointment, service, onOpenChange }: { appointment: Ap
             <p className="font-semibold">Novo Valor Proposto: <span className="text-primary">R${contestedPrice?.toFixed(2)}</span></p>
           </div>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>Cancelar</Button>
             <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? "Enviando..." : "Enviar Contestação"}
+              {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Enviar Contestação
             </Button>
           </DialogFooter>
         </form>
@@ -197,6 +198,7 @@ function AppointmentsTable({ services, appointments, isLoading }: AppointmentsTa
   const firestore = useFirestore();
   const { toast } = useToast();
   const [dialogState, setDialogState] = useState<{ isOpen: boolean; appointment: Appointment | null }>({ isOpen: false, appointment: null });
+  const [updatingStatusId, setUpdatingStatusId] = useState<string | null>(null);
 
   const getServiceDetails = (serviceId: string) => {
     return services.find(s => s.id === serviceId);
@@ -204,6 +206,7 @@ function AppointmentsTable({ services, appointments, isLoading }: AppointmentsTa
 
   const handleStatusChange = (appointment: Appointment, newStatus: 'confirmado' | 'cancelado' | 'finalizado') => {
     if (!firestore || !appointment.id) return;
+    setUpdatingStatusId(appointment.id);
     const appointmentRef = doc(firestore, 'appointments', appointment.id);
     const updateData = { status: newStatus, contestStatus: null }; // Clear contest status on manual change
 
@@ -224,6 +227,8 @@ function AppointmentsTable({ services, appointments, isLoading }: AppointmentsTa
           operation: 'update',
           requestResourceData: updateData,
        }));
+    }).finally(() => {
+      setUpdatingStatusId(null);
     });
   };
   
@@ -285,6 +290,7 @@ function AppointmentsTable({ services, appointments, isLoading }: AppointmentsTa
           {!isLoading && appointments?.map((apt) => {
             const service = getServiceDetails(apt.serviceId);
             const canContest = service?.isPriceFrom && apt.hairPhotoUrl && apt.status === 'Marcado';
+            const isUpdating = updatingStatusId === apt.id;
 
             return (
             <TableRow key={apt.id} className={apt.viewedByAdmin === false ? 'bg-secondary/50' : ''}>
@@ -325,37 +331,41 @@ function AppointmentsTable({ services, appointments, isLoading }: AppointmentsTa
                 </Badge>
               </TableCell>
               <TableCell className="text-right">
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon">
-                      <MoreHorizontal className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => handleStatusChange(apt, 'confirmado')} disabled={apt.status === 'confirmado' || apt.status === 'finalizado' || apt.status === 'cancelado'}>
-                      <CheckCircle className="mr-2 h-4 w-4 text-green-500" />
-                      Confirmar
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handleStatusChange(apt, 'finalizado')} disabled={apt.status === 'finalizado' || apt.status === 'cancelado'}>
-                      <CheckCircle className="mr-2 h-4 w-4 text-blue-500" />
-                      Finalizar
-                    </DropdownMenuItem>
-                    {canContest && (
-                      <>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem onClick={() => setDialogState({ isOpen: true, appointment: apt })}>
-                          <AlertTriangle className="mr-2 h-4 w-4 text-amber-500" />
-                          Contestar Valor
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                      </>
-                    )}
-                    <DropdownMenuItem onClick={() => handleStatusChange(apt, 'cancelado')} disabled={apt.status === 'cancelado' || apt.status === 'finalizado'}>
-                      <XCircle className="mr-2 h-4 w-4 text-red-500" />
-                      Cancelar
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                {isUpdating ? (
+                  <Loader2 className="h-4 w-4 animate-spin ml-auto" />
+                ) : (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon">
+                        <MoreHorizontal className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => handleStatusChange(apt, 'confirmado')} disabled={apt.status === 'confirmado' || apt.status === 'finalizado' || apt.status === 'cancelado'}>
+                        <CheckCircle className="mr-2 h-4 w-4 text-green-500" />
+                        Confirmar
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleStatusChange(apt, 'finalizado')} disabled={apt.status === 'finalizado' || apt.status === 'cancelado'}>
+                        <CheckCircle className="mr-2 h-4 w-4 text-blue-500" />
+                        Finalizar
+                      </DropdownMenuItem>
+                      {canContest && (
+                        <>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem onClick={() => setDialogState({ isOpen: true, appointment: apt })}>
+                            <AlertTriangle className="mr-2 h-4 w-4 text-amber-500" />
+                            Contestar Valor
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                        </>
+                      )}
+                      <DropdownMenuItem onClick={() => handleStatusChange(apt, 'cancelado')} disabled={apt.status === 'cancelado' || apt.status === 'finalizado'}>
+                        <XCircle className="mr-2 h-4 w-4 text-red-500" />
+                        Cancelar
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
               </TableCell>
             </TableRow>
           )})}
@@ -423,7 +433,7 @@ const { data: paginatedAppointments, isLoading: isLoadingAppointments, snapshots
   }, [paginatedAppointments, firestore]);
   
   const handleNextPage = () => {
-    if (!snapshots || snapshots.length === 0) return;
+    if (!snapshots || snapshots.length === 0 || snapshots.length < APPOINTMENTS_PER_PAGE) return;
     
     const lastVisible = snapshots[snapshots.length - 1];
     if (lastVisible) {

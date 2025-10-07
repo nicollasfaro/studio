@@ -24,7 +24,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { useUser } from '@/firebase';
 import { Button } from '@/components/ui/button';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 
 
 const USERS_PER_PAGE = 10;
@@ -37,6 +37,7 @@ export default function AdminUsersPage({ isAdmin }: { isAdmin: boolean }) {
 
   const [page, setPage] = useState(0);
   const [paginationSnapshots, setPaginationSnapshots] = useState<(DocumentSnapshot | null)[]>([null]);
+  const [updatingRoleId, setUpdatingRoleId] = useState<string | null>(null);
 
 
   const usersQuery = useMemoFirebase(() => {
@@ -63,6 +64,7 @@ export default function AdminUsersPage({ isAdmin }: { isAdmin: boolean }) {
       return;
     }
 
+    setUpdatingRoleId(userId);
     const userDocRef = doc(firestore, 'users', userId);
     try {
       await updateDoc(userDocRef, {
@@ -79,6 +81,8 @@ export default function AdminUsersPage({ isAdmin }: { isAdmin: boolean }) {
         title: 'Erro ao atualizar',
         description: 'Não foi possível alterar a função do usuário. Verifique suas permissões.',
       });
+    } finally {
+      setUpdatingRoleId(null);
     }
   };
 
@@ -132,24 +136,29 @@ export default function AdminUsersPage({ isAdmin }: { isAdmin: boolean }) {
                   </TableCell>
                 </TableRow>
               ))}
-            {users?.map((user) => (
+            {users?.map((user) => {
+              const isUpdating = updatingRoleId === user.id;
+              return (
               <TableRow key={user.id}>
                 <TableCell className="font-medium">{user.name}</TableCell>
                 <TableCell>{user.email}</TableCell>
                 <TableCell>
-                  <Select
-                    defaultValue={user.isAdmin ? 'admin' : 'user'}
-                    onValueChange={(value) => handleRoleChange(user.id, value as 'admin' | 'user')}
-                    disabled={user.id === currentUser?.uid}
-                  >
-                    <SelectTrigger className="w-[120px]">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="admin">Admin</SelectItem>
-                      <SelectItem value="user">Usuário</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <div className='flex items-center gap-2'>
+                    <Select
+                      defaultValue={user.isAdmin ? 'admin' : 'user'}
+                      onValueChange={(value) => handleRoleChange(user.id, value as 'admin' | 'user')}
+                      disabled={user.id === currentUser?.uid || isUpdating}
+                    >
+                      <SelectTrigger className="w-[120px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="admin">Admin</SelectItem>
+                        <SelectItem value="user">Usuário</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {isUpdating && <Loader2 className="h-4 w-4 animate-spin" />}
+                  </div>
                 </TableCell>
                 <TableCell>
                   {user.createdAt
@@ -157,7 +166,7 @@ export default function AdminUsersPage({ isAdmin }: { isAdmin: boolean }) {
                     : 'N/A'}
                 </TableCell>
               </TableRow>
-            ))}
+            )})}
           </TableBody>
         </Table>
         {!isLoading && users?.length === 0 && (

@@ -19,7 +19,7 @@ import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
-import { Upload, Image as ImageIcon, Trash2, X, CheckCircle, GripVertical } from 'lucide-react';
+import { Upload, Image as ImageIcon, Trash2, X, CheckCircle, GripVertical, Loader2 } from 'lucide-react';
 import type { GalleryImage } from '@/lib/types';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
@@ -268,7 +268,8 @@ export default function AdminGalleryPage() {
                     <Input id="description" placeholder="Ex: Corte de cabelo feminino moderno" value={description} onChange={(e) => setDescription(e.target.value)} disabled={isUploading}/>
                 </div>
                 <Button onClick={handleUpload} disabled={isUploading || !file || !description.trim()}>
-                    <Upload className="mr-2 h-4 w-4" /> {isUploading ? `Enviando...` : 'Enviar Imagem'}
+                    {isUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
+                    {isUploading ? `Enviando...` : 'Enviar Imagem'}
                 </Button>
                  {isUploading && uploadProgress !== null && (
                     <div className="space-y-1">
@@ -290,7 +291,7 @@ export default function AdminGalleryPage() {
           {selectionMode ? (
              <div className="flex items-center gap-2">
                 <Button variant="destructive" onClick={() => setShowDeleteAlert(true)} disabled={selectedImages.length === 0 || isDeleting}>
-                  <Trash2 className="mr-2 h-4 w-4" />
+                   {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
                   Excluir ({selectedImages.length})
                 </Button>
                 <Button variant="outline" onClick={handleCancelSelection} disabled={isDeleting}>
