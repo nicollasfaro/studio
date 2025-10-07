@@ -1,5 +1,9 @@
 
 
+
+
+
+
 export type Service = {
   id: string;
   name: string;
@@ -31,14 +35,33 @@ export type Appointment = {
   serviceId: string;
   startTime: string;
   endTime: string;
-  status: 'Marcado' | 'confirmado' | 'cancelado' | 'finalizado';
+  status: 'Marcado' | 'confirmado' | 'cancelado' | 'finalizado' | 'contestado';
   clientName: string;
   clientEmail: string;
   hairLength?: 'curto' | 'medio' | 'longo';
   hairPhotoUrl?: string | null;
   finalPrice?: number;
   viewedByAdmin?: boolean;
+  contestStatus?: 'pending' | 'accepted' | 'rejected';
+  contestReason?: string;
+  contestedHairLength?: 'curto' | 'medio' | 'longo';
+  contestedPrice?: number;
+  serviceName?: string; // Added for convenience in UI components
+  adminTyping?: boolean;
+  clientTyping?: boolean;
+  hasUnreadAdminMessage?: boolean;
+  hasUnreadClientMessage?: boolean;
 };
+
+export type ChatMessage = {
+    id: string;
+    appointmentId: string;
+    senderId: string; // user.uid or 'admin'
+    senderName: string;
+    text: string;
+    timestamp: any; // Use 'any' for serverTimestamp() compatibility
+    isRead: boolean;
+}
 
 export type TimeSlot = {
   time: string;
@@ -57,6 +80,9 @@ export type User = {
     zipCode?: string;
     photoURL?: string;
     fcmTokens?: string[];
+    providerId?: string;
+    googleAccessToken?: string;
+    googleRefreshToken?: string;
 }
 
 export type SocialMediaLinks = {
@@ -86,4 +112,13 @@ export type BusinessHours = {
   workingDays: number[]; // 0 for Sunday, 1 for Monday, etc.
 }
 
+export type WhatsAppMessage = {
+    to: string;
+    from: string;
+    body: string;
+};
     
+
+    
+
+
