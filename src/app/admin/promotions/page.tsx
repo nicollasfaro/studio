@@ -347,46 +347,48 @@ export default function AdminPromotionsPage() {
             <Card>
             <CardHeader><CardTitle>Promoções Cadastradas</CardTitle></CardHeader>
             <CardContent>
-                <Table>
-                <TableHeader>
-                    <TableRow>
-                    <TableHead>Nome</TableHead>
-                    <TableHead>Desconto</TableHead>
-                    <TableHead>Validade</TableHead>
-                    <TableHead className="text-right">Ações</TableHead>
-                    </TableRow>
-                </TableHeader>
-                <TableBody>
-                    {isLoading &&
-                    Array.from({ length: 3 }).map((_, i) => (
-                        <TableRow key={i}>
-                            <TableCell><Skeleton className="h-4 w-[150px]" /></TableCell>
-                            <TableCell><Skeleton className="h-4 w-[60px]" /></TableCell>
-                            <TableCell><Skeleton className="h-4 w-[180px]" /></TableCell>
-                            <TableCell className="text-right"><Skeleton className="h-8 w-16 ml-auto" /></TableCell>
+                <div className="overflow-x-auto">
+                    <Table>
+                    <TableHeader>
+                        <TableRow>
+                        <TableHead>Nome</TableHead>
+                        <TableHead>Desconto</TableHead>
+                        <TableHead>Validade</TableHead>
+                        <TableHead className="text-right">Ações</TableHead>
                         </TableRow>
-                    ))}
-                    {promotions?.map((promo) => (
-                    <TableRow key={promo.id}>
-                        <TableCell className="font-medium">{promo.name}</TableCell>
-                        <TableCell>{promo.discountPercentage}%</TableCell>
-                        <TableCell>
-                            {new Date(promo.startDate).toLocaleDateString()} - {new Date(promo.endDate).toLocaleDateString()}
-                        </TableCell>
-                        <TableCell className="text-right">
-                        <Button variant="ghost" size="icon" onClick={() => handleEditClick(promo)}>
-                            <Edit className="h-4 w-4" />
-                        </Button>
-                        <AlertDialogTrigger asChild>
-                            <Button variant="ghost" size="icon" onClick={() => setShowDeleteAlert(promo)}>
-                                <Trash2 className="h-4 w-4 text-destructive" />
+                    </TableHeader>
+                    <TableBody>
+                        {isLoading &&
+                        Array.from({ length: 3 }).map((_, i) => (
+                            <TableRow key={i}>
+                                <TableCell><Skeleton className="h-4 w-[150px]" /></TableCell>
+                                <TableCell><Skeleton className="h-4 w-[60px]" /></TableCell>
+                                <TableCell><Skeleton className="h-4 w-[180px]" /></TableCell>
+                                <TableCell className="text-right"><Skeleton className="h-8 w-16 ml-auto" /></TableCell>
+                            </TableRow>
+                        ))}
+                        {promotions?.map((promo) => (
+                        <TableRow key={promo.id}>
+                            <TableCell className="font-medium">{promo.name}</TableCell>
+                            <TableCell>{promo.discountPercentage}%</TableCell>
+                            <TableCell>
+                                {new Date(promo.startDate).toLocaleDateString()} - {new Date(promo.endDate).toLocaleDateString()}
+                            </TableCell>
+                            <TableCell className="text-right">
+                            <Button variant="ghost" size="icon" onClick={() => handleEditClick(promo)}>
+                                <Edit className="h-4 w-4" />
                             </Button>
-                        </AlertDialogTrigger>
-                        </TableCell>
-                    </TableRow>
-                    ))}
-                </TableBody>
-                </Table>
+                            <AlertDialogTrigger asChild>
+                                <Button variant="ghost" size="icon" onClick={() => setShowDeleteAlert(promo)}>
+                                    <Trash2 className="h-4 w-4 text-destructive" />
+                                </Button>
+                            </AlertDialogTrigger>
+                            </TableCell>
+                        </TableRow>
+                        ))}
+                    </TableBody>
+                    </Table>
+                </div>
                 {!isLoading && promotions?.length === 0 && (
                 <p className="text-center text-muted-foreground py-8">Nenhuma promoção cadastrada ainda.</p>
                 )}
