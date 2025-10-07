@@ -46,9 +46,9 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { MoreHorizontal, CheckCircle, XCircle, Camera, ChevronLeft, ChevronRight, AlertTriangle, MessageSquare, Loader2, Send, Check, Fingerprint } from 'lucide-react';
-import { useCollection, useDoc, useFirestore, useMemoFirebase, useUserData } from '@/firebase';
-import { collection, query, orderBy, doc, updateDoc, limit, startAfter, where, writeBatch, DocumentSnapshot, addDoc, serverTimestamp, isSignInWithWebAuthnSupported, signInWithWebAuthn, linkWithPasskey } from 'firebase/firestore';
+import { MoreHorizontal, CheckCircle, XCircle, Camera, ChevronLeft, ChevronRight, AlertTriangle, MessageSquare, Loader2, Send, Check } from 'lucide-react';
+import { useCollection, useDoc, useFirestore, useMemoFirebase } from '@/firebase';
+import { collection, query, orderBy, doc, updateDoc, limit, startAfter, where, writeBatch, DocumentSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
 import type { Appointment, Service, ChatMessage } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
@@ -58,7 +58,7 @@ import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { signOut } from 'firebase/auth';
+
 
 const APPOINTMENTS_PER_PAGE = 6;
 
@@ -157,7 +157,7 @@ function ChatDialog({ appointmentId, clientName, serviceName }: { appointmentId:
                 </DialogDescription>
             </DialogHeader>
             <ScrollArea className="flex-1 px-6">
-                 <div className="space-y-4 py-4">
+                 <div className="space-y-4 py-4" ref={scrollAreaRef}>
                     {isLoadingMessages && <p>Carregando mensagens...</p>}
                     {messages?.map((msg, index) => (
                         <div key={msg.id || index} className={cn("flex items-end gap-2", msg.senderId === 'admin' ? "justify-end" : "justify-start")}>
