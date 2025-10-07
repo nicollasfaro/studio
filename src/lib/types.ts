@@ -2,6 +2,7 @@
 
 
 
+
 export type Service = {
   id: string;
   name: string;
@@ -47,6 +48,8 @@ export type Appointment = {
   serviceName?: string; // Added for convenience in UI components
   adminTyping?: boolean;
   clientTyping?: boolean;
+  hasUnreadAdminMessage?: boolean;
+  hasUnreadClientMessage?: boolean;
 };
 
 export type ChatMessage = {
@@ -76,6 +79,7 @@ export type User = {
     zipCode?: string;
     photoURL?: string;
     fcmTokens?: string[];
+    providerId?: string;
 }
 
 export type SocialMediaLinks = {
@@ -105,6 +109,12 @@ export type BusinessHours = {
   workingDays: number[]; // 0 for Sunday, 1 for Monday, etc.
 }
 
+export type WhatsAppMessage = {
+    to: string;
+    from: string;
+    body: string;
+};
     
 
     
+

@@ -35,6 +35,10 @@
             "format": "uri",
             "description": "URL of the user's profile picture."
         },
+        "providerId": {
+            "type": "string",
+            "description": "The authentication provider used (e.g., 'password', 'google.com')."
+        },
         "address": {
           "type": "string",
           "description": "The user's street address."
@@ -289,6 +293,14 @@
         "clientTyping": {
           "type": "boolean",
           "description": "Flag to indicate if the client is currently typing a message."
+        },
+        "hasUnreadAdminMessage": {
+          "type": "boolean",
+          "description": "Flag to indicate if there are unread messages for the admin."
+        },
+        "hasUnreadClientMessage": {
+            "type": "boolean",
+            "description": "Flag to indicate if there are unread messages for the client."
         }
       },
       "required": [
@@ -503,12 +515,34 @@
         }
       },
       "required": ["imageId", "largeText", "smallText", "buttonText"]
+    },
+    "WhatsAppMessage": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "WhatsAppMessage",
+      "type": "object",
+      "description": "Represents a message to be sent via WhatsApp.",
+      "properties": {
+        "to": {
+          "type": "string",
+          "description": "The recipient's WhatsApp number (e.g., 'whatsapp:+14155238886')."
+        },
+        "from": {
+          "type": "string",
+          "description": "The sender's WhatsApp number provided by the API (e.g., 'whatsapp:+14155238886')."
+        },
+        "body": {
+          "type": "string",
+          "description": "The content of the message."
+        }
+      },
+      "required": ["to", "from", "body"]
     }
   },
   "auth": {
     "providers": [
       "password",
-      "anonymous"
+      "anonymous",
+      "google.com"
     ]
   },
   "firestore": {
