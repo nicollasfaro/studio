@@ -1,6 +1,8 @@
 
-import {onDocumentCreated} from "firebase-functions/v2/firestore";
+import {onDocumentCreated, onDocumentWritten} from "firebase-functions/v2/firestore";
 import * as admin from "firebase-admin";
+import {format} from "date-fns";
+import {ptBR} from "date-fns/locale";
 
 // Inicializa o Firebase Admin SDK.
 // A função irá autenticar-se automaticamente no ambiente do Firebase.
@@ -76,6 +78,71 @@ export const sendPromotionNotification = onDocumentCreated(
       });
     } catch (error) {
       console.error("Erro ao enviar notificações:", error);
+    }
+  },
+);
+
+
+/**
+ * Cloud Function (v2) que monitora alterações nos agendamentos e envia uma
+ * notificação por WhatsApp para o administrador em caso de novo agendamento ou
+ * cancelamento.
+ */
+export const sendAppointmentStatusNotification = onDocumentWritten(
+  "appointments/{appointmentId}",
+  async (event) => {
+    const beforeData = event.data?.before.data();
+    const afterData = event.data?.after.data();
+
+    // Cenário 1: Novo Agendamento
+    const isNewAppointment = !beforeData && afterData?.status === "Marcado";
+    // Cenário 2: Agendamento Cancelado
+    const isCancelled = beforeData?.status !== "cancelado" && afterData?.status === "cancelado";
+
+    if (!isNewAppointment && !isCancelled) {
+      console.log("Nenhuma alteração de status relevante. Encerrando.");
+      return;
+    }
+
+    // Obter número de WhatsApp do admin
+    const configDoc = await admin.firestore().collection("config").doc("notifications").get();
+    const whatsappNumber = configDoc.data()?.notificationWhatsapp;
+
+    if (!whatsappNumber) {
+      console.warn("Número de WhatsApp do administrador não configurado. Notificação não enviada.");
+      return;
+    }
+
+    const {clientName, startTime} = afterData ?? {};
+    const formattedDate = format(new Date(startTime), "dd/MM/yyyy 'às' HH:mm", {locale: ptBR});
+    const servicesRef = admin.firestore().collection("services").doc(afterData?.serviceId);
+    const serviceDoc = await servicesRef.get();
+    const serviceName = serviceDoc.data()?.name || "Serviço não encontrado";
+
+
+    let messageBody = "";
+    if (isNewAppointment) {
+      messageBody = `🔔 *Novo Agendamento!*\n\n*Cliente:* ${clientName}\n*Serviço:* ${serviceName}\n*Data:* ${formattedDate}`;
+    } else if (isCancelled) {
+      const canceller = afterData?.clientName;
+      messageBody = `❌ *Agendamento Cancelado!*\n\n*Cliente:* ${canceller}\n*Serviço:* ${serviceName}\n*Data:* ${formattedDate}`;
+    }
+
+    // Dados da mensagem para o serviço de WhatsApp
+    const whatsappMessage = {
+      to: whatsappNumber,
+      body: messageBody,
+    };
+
+    console.log(`Preparando para enviar mensagem para ${whatsappNumber}: "${messageBody}"`);
+
+    // Aqui você integraria com uma API de WhatsApp (ex: Twilio, Zenvia, etc.)
+    // Exemplo de como seria a lógica de envio:
+    try {
+      // await sendWhatsAppMessage(whatsappMessage);
+      console.log("Simulação: Mensagem de WhatsApp enviada com sucesso.", whatsappMessage);
+    } catch (error) {
+      console.error("Erro ao tentar enviar mensagem de WhatsApp:", error);
     }
   },
 );
