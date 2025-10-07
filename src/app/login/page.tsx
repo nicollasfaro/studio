@@ -120,6 +120,10 @@ export default function LoginPage() {
         await handleSuccessfulLogin(user);
 
     } catch (error: any) {
+      // Don't show an error toast if the user simply closes the popup
+      if (error.code === 'auth/popup-closed-by-user') {
+          return;
+      }
       console.error('Erro de login com Google:', error);
       toast({
         variant: 'destructive',
