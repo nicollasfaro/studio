@@ -281,22 +281,6 @@
         "contestedPrice": {
           "type": "number",
           "description": "The new price proposed by the admin based on the contested hair length."
-        },
-        "adminTyping": {
-          "type": "boolean",
-          "description": "Flag to indicate if the admin is currently typing a message."
-        },
-        "clientTyping": {
-          "type": "boolean",
-          "description": "Flag to indicate if the client is currently typing a message."
-        },
-        "hasUnreadAdminMessage": {
-            "type": "boolean",
-            "description": "Flag to indicate if there is a new message from the client for the admin."
-        },
-        "hasUnreadClientMessage": {
-            "type": "boolean",
-            "description": "Flag to indicate if there is a new message from the admin for the client."
         }
       },
       "required": [

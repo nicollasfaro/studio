@@ -1,10 +1,9 @@
 'use client';
 
-import { useMemo, useState, useEffect, useRef, useCallback } from 'react';
+import { useMemo, useState, useEffect, useRef } from 'react';
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import debounce from 'lodash.debounce';
 
 import {
   Card,
@@ -46,8 +45,8 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { MoreHorizontal, CheckCircle, XCircle, Camera, ChevronLeft, ChevronRight, AlertTriangle, MessageSquare, Loader2, Send, Check } from 'lucide-react';
-import { useCollection, useDoc, useFirestore, useMemoFirebase, useUserData } from '@/firebase';
+import { MoreHorizontal, CheckCircle, XCircle, Camera, ChevronLeft, ChevronRight, AlertTriangle, MessageSquare, Loader2, Send } from 'lucide-react';
+import { useCollection, useFirestore, useMemoFirebase, useUserData } from '@/firebase';
 import { collection, query, orderBy, doc, updateDoc, limit, startAfter, where, writeBatch, DocumentSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
 import type { Appointment, Service, ChatMessage } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
@@ -69,64 +68,26 @@ type ContestFormValues = z.infer<typeof contestSchema>;
 
 function ChatDialog({ appointment, onOpenChange }: { appointment: Appointment, onOpenChange: (open: boolean) => void }) {
     const firestore = useFirestore();
+    const { userData } = useUserData();
     const [newMessage, setNewMessage] = useState('');
     const [isSending, setIsSending] = useState(false);
     const scrollAreaRef = useRef<HTMLDivElement>(null);
-
-    const appointmentRef = useMemoFirebase(() => firestore ? doc(firestore, 'appointments', appointment.id) : null, [firestore, appointment.id]);
-    const { data: appointmentData } = useDoc<Appointment>(appointmentRef);
 
     const messagesRef = useMemoFirebase(
         () => firestore ? query(collection(firestore, 'appointments', appointment.id, 'messages'), orderBy('timestamp', 'asc')) : null,
         [firestore, appointment.id]
     );
     const { data: messages, isLoading: isLoadingMessages } = useCollection<ChatMessage>(messagesRef);
-    
-    // Marcar mensagens como lidas pelo admin
-    useEffect(() => {
-        if (!firestore || !messages || messages.length === 0) return;
-        
-        const unreadMessages = messages.filter(msg => msg.senderId !== 'admin' && !msg.isRead);
-
-        if (unreadMessages.length > 0) {
-            const batch = writeBatch(firestore);
-            unreadMessages.forEach(msg => {
-                const msgRef = doc(firestore, 'appointments', appointment.id, 'messages', msg.id);
-                batch.update(msgRef, { isRead: true });
-            });
-            batch.commit().catch(console.error);
-        }
-        
-        if (appointment.hasUnreadAdminMessage) {
-            updateDoc(appointmentRef, { hasUnreadAdminMessage: false });
-        }
-
-    }, [messages, firestore, appointment.id, appointment.hasUnreadAdminMessage, appointmentRef]);
-
-    // Lógica de "digitando..."
-    const updateTypingStatus = useCallback(debounce((isTyping: boolean) => {
-        if (appointmentRef) {
-            updateDoc(appointmentRef, { adminTyping: isTyping });
-        }
-    }, 500), [appointmentRef]);
-
-    useEffect(() => {
-        updateTypingStatus(newMessage.trim().length > 0);
-        return () => {
-            updateTypingStatus.cancel();
-        };
-    }, [newMessage, updateTypingStatus]);
-
 
     useEffect(() => {
         if (scrollAreaRef.current) {
             scrollAreaRef.current.scrollTop = scrollAreaRef.current.scrollHeight;
         }
-    }, [messages, appointmentData?.clientTyping]);
+    }, [messages]);
 
     const handleSendMessage = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!newMessage.trim() || !firestore || !appointmentRef) return;
+        if (!newMessage.trim() || !firestore || !userData) return;
 
         setIsSending(true);
         const messageData: Omit<ChatMessage, 'id'> = {
@@ -139,11 +100,8 @@ function ChatDialog({ appointment, onOpenChange }: { appointment: Appointment, o
         };
 
         try {
-            // Adiciona a mensagem e atualiza o appointment para notificar o cliente
             await addDoc(collection(firestore, 'appointments', appointment.id, 'messages'), messageData);
-            await updateDoc(appointmentRef, { hasUnreadClientMessage: true });
             setNewMessage('');
-            updateTypingStatus(false);
         } catch (error) {
             console.error("Error sending message:", error);
         } finally {
@@ -156,34 +114,20 @@ function ChatDialog({ appointment, onOpenChange }: { appointment: Appointment, o
             <DialogHeader>
                 <DialogTitle>Chat com {appointment.clientName}</DialogTitle>
                 <DialogDescription>
-                    Conversa sobre o agendamento de {appointmentData?.serviceName}
+                    Conversa sobre o agendamento de {appointment.serviceName}
                 </DialogDescription>
             </DialogHeader>
             <ScrollArea className="flex-1 pr-4 -mr-4" ref={scrollAreaRef}>
-                 <div className="space-y-4 py-4">
+                 <div className="space-y-4">
                     {isLoadingMessages && <p>Carregando mensagens...</p>}
-                    {messages?.map((msg, index) => (
-                        <div key={msg.id || index} className={cn("flex items-end gap-2", msg.senderId === 'admin' ? "justify-end" : "justify-start")}>
+                    {messages?.map((msg) => (
+                        <div key={msg.id} className={cn("flex items-end gap-2", msg.senderId === 'admin' ? "justify-end" : "justify-start")}>
                            <div className={cn("max-w-xs rounded-lg px-3 py-2", msg.senderId === 'admin' ? "bg-primary text-primary-foreground" : "bg-muted")}>
-                                <p className="text-sm break-words">{msg.text}</p>
-                                <div className="flex items-center justify-end gap-1 mt-1">
-                                    <p className="text-xs opacity-70">{msg.timestamp ? format(new Date(msg.timestamp?.toDate()), 'HH:mm') : ''}</p>
-                                    {msg.senderId === 'admin' && (
-                                        msg.isRead ? 
-                                        <Check size={16} className="text-blue-400" /> :
-                                        <Check size={16} className="opacity-70" />
-                                    )}
-                                </div>
+                                <p className="text-sm">{msg.text}</p>
+                                <p className="text-xs opacity-70 mt-1 text-right">{msg.timestamp ? format(new Date(msg.timestamp.toDate()), 'HH:mm') : ''}</p>
                            </div>
                         </div>
                     ))}
-                    {appointmentData?.clientTyping && (
-                         <div className="flex items-end gap-2 justify-start">
-                           <div className="max-w-xs rounded-lg px-3 py-2 bg-muted">
-                                <p className="text-sm italic">Digitando...</p>
-                           </div>
-                        </div>
-                    )}
                 </div>
             </ScrollArea>
             <form onSubmit={handleSendMessage} className="flex items-center gap-2 pt-4 border-t">
@@ -543,7 +487,7 @@ function AppointmentsTable({ services, appointments, isLoading }: AppointmentsTa
       <Dialog open={chatDialogState.isOpen} onOpenChange={(isOpen) => setChatDialogState({ isOpen, appointment: isOpen ? chatDialogState.appointment : null })}>
         {chatDialogState.appointment && (
           <ChatDialog 
-            appointment={chatDialogState.appointment}
+            appointment={chatDialogState.appointment} 
             onOpenChange={(isOpen) => setChatDialogState({ isOpen, appointment: isOpen ? chatDialogState.appointment : null })}
           />
         )}
