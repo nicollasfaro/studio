@@ -3,6 +3,7 @@
 
 
 
+
 export type Service = {
   id: string;
   name: string;
@@ -80,6 +81,8 @@ export type User = {
     photoURL?: string;
     fcmTokens?: string[];
     providerId?: string;
+    googleAccessToken?: string;
+    googleRefreshToken?: string;
 }
 
 export type SocialMediaLinks = {
@@ -117,4 +120,5 @@ export type WhatsAppMessage = {
     
 
     
+
 

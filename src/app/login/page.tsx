@@ -7,7 +7,7 @@ import * as z from 'zod';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, User, signInWithRedirect, getRedirectResult } from 'firebase/auth';
+import { signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, User, signInWithRedirect, getRedirectResult, OAuthProvider } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 
 import { Button } from '@/components/ui/button';
@@ -62,22 +62,27 @@ export default function LoginPage() {
     },
   });
 
-  const handleSuccessfulLogin = async (user: User) => {
+  const handleSuccessfulLogin = async (user: User, accessToken?: string) => {
     if (!firestore) throw new Error("Firestore not available");
     
     const userDocRef = doc(firestore, 'users', user.uid);
     const userDoc = await getDoc(userDocRef);
 
+    const userData: any = {
+        id: user.uid,
+        name: user.displayName,
+        email: user.email,
+        photoURL: user.photoURL,
+        providerId: user.providerData[0]?.providerId || 'google.com',
+    };
+
+    if (accessToken) {
+        userData.googleAccessToken = accessToken;
+    }
+
     if (!userDoc.exists()) {
-        const userData = {
-            id: user.uid,
-            name: user.displayName,
-            email: user.email,
-            createdAt: new Date().toISOString(),
-            isAdmin: false,
-            photoURL: user.photoURL,
-            providerId: user.providerData[0]?.providerId || 'google.com',
-        };
+        userData.createdAt = new Date().toISOString();
+        userData.isAdmin = false;
         try {
             await setDoc(userDocRef, userData);
         } catch (error) {
@@ -88,6 +93,18 @@ export default function LoginPage() {
                 requestResourceData: userData
             }));
             throw error; // Re-throw to be caught by the caller
+        }
+    } else {
+         try {
+            await setDoc(userDocRef, userData, { merge: true });
+        } catch (error) {
+            console.error("Error updating user document with token:", error);
+            errorEmitter.emit('permission-error', new FirestorePermissionError({
+                path: userDocRef.path,
+                operation: 'update',
+                requestResourceData: userData
+            }));
+            throw error;
         }
     }
       
@@ -112,10 +129,10 @@ export default function LoginPage() {
     getRedirectResult(auth)
       .then(async (result) => {
         if (result) {
-            // A user has successfully signed in via redirect.
-            // isProcessingGoogleLogin is already true, so the loader is showing.
             try {
-                await handleSuccessfulLogin(result.user);
+                const credential = GoogleAuthProvider.credentialFromResult(result);
+                const accessToken = credential?.accessToken;
+                await handleSuccessfulLogin(result.user, accessToken);
             } catch (handleError: any) {
                 console.error('Error handling successful login:', handleError);
                 toast({
@@ -124,12 +141,9 @@ export default function LoginPage() {
                     description: handleError.message || 'Não foi possível completar o seu login. Tente novamente.',
                 });
             } finally {
-                // This might not be strictly necessary if navigation happens, but good for safety.
                 setIsProcessingGoogleLogin(false);
             }
         } else {
-            // No redirect result, so we are not in the middle of a redirect login.
-            // Stop showing the loader.
             setIsProcessingGoogleLogin(false);
         }
       })
@@ -163,6 +177,7 @@ export default function LoginPage() {
   const onGoogleSubmit = async () => {
     if (!auth) return;
     const provider = new GoogleAuthProvider();
+    provider.addScope('https://www.googleapis.com/auth/calendar.events');
     setIsProcessingGoogleLogin(true);
   
     if (isMobile) {
@@ -172,7 +187,9 @@ export default function LoginPage() {
       // Use popup for desktop devices
       try {
         const result = await signInWithPopup(auth, provider);
-        await handleSuccessfulLogin(result.user);
+        const credential = GoogleAuthProvider.credentialFromResult(result);
+        const accessToken = credential?.accessToken;
+        await handleSuccessfulLogin(result.user, accessToken);
       } catch (error: any) {
          if (error.code === 'auth/popup-closed-by-user') {
             // User cancelled the login, do nothing.
