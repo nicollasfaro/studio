@@ -212,6 +212,8 @@ export default function ProfilePage() {
     if (!firestore || !user?.uid) {
       return null;
     }
+    // Corrected Query: Only fetch appointments where clientId matches the current user's UID.
+    // This aligns with the Firestore security rules.
     return query(collection(firestore, 'appointments'), where('clientId', '==', user.uid), orderBy('startTime', 'desc'));
   }, [firestore, user?.uid]);
   
@@ -547,7 +549,7 @@ export default function ProfilePage() {
                 </AlertDialogFooter>
             </AlertDialogContent>
              <Dialog open={chatDialogState.isOpen} onOpenChange={(isOpen) => setChatDialogState({ isOpen, appointment: isOpen ? chatDialogState.appointment : null })}>
-                {chatDialogState.appointment && (
+                {chatDialogState.appointment && user && (
                 <ChatDialog 
                     appointment={chatDialogState.appointment}
                     user={user}

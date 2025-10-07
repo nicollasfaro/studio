@@ -2,66 +2,91 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-  
-    // --- Helper Functions ---
+
+    // --- Funções de Segurança ---
+    // Verifica se o usuário autenticado é um administrador.
+    function isAdmin() {
+      // O usuário deve existir no documento /users/{uid} e ter o campo isAdmin = true.
+      return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    }
+
+    // Verifica se o usuário está autenticado.
     function isSignedIn() {
       return request.auth != null;
     }
-
-    function isOwner(userId) {
-      return isSignedIn() && request.auth.uid == userId;
-    }
-
-    function isAdmin() {
-      return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
-    }
     
-    // --- User Profiles ---
-    // Users can read/write their own profile. Admins can read any profile.
+    // --- Coleções ---
+    
     match /users/{userId} {
-      allow read: if isOwner(userId) || isAdmin();
-      allow write: if isOwner(userId);
-      // Admins can update any user's role, but not other fields via this rule.
-      allow update: if isAdmin();
+      allow read, update, write: if request.auth.uid == userId || isAdmin();
+      allow create: if isSignedIn();
+      allow list: if isAdmin();
     }
-    
-    // --- Public Content (Services, Promotions, Gallery, Theme, Social) ---
-    // Anyone can read this data. Only admins can write.
-    match /(services|promotions|galleryImages|theme|content|socialMedia)/{docId} {
-        allow read: if true;
-        allow write: if isAdmin();
-    }
-    
-    // --- Configuration ---
-    // BusinessHours is public read, admin write.
-    match /config/businessHours {
+
+    match /services/{serviceId} {
       allow read: if true;
       allow write: if isAdmin();
     }
-    // Other configs (like notifications) are admin-only.
-    match /config/{docId} {
-       allow read, write: if isAdmin();
+    
+    match /promotions/{promotionId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    match /appointments/{appointmentId} {
+      function isOwner() {
+        // Para 'create', o 'resource' é o novo documento a ser criado.
+        // Para 'get', 'update', 'delete', 'resource' é o documento existente.
+        return request.auth.uid == resource.data.clientId;
+      }
+      
+      // Um admin pode ler qualquer documento individual.
+      // Um usuário pode ler seu próprio agendamento.
+      allow get: if isAdmin() || (isSignedIn() && exists(/databases/$(database)/documents/appointments/$(appointmentId)) && get(/databases/$(database)/documents/appointments/$(appointmentId)).data.clientId == request.auth.uid);
+
+      // Um admin pode listar todos os agendamentos.
+      // Um usuário comum só pode listar agendamentos se a consulta estiver filtrada por seu clientId.
+      allow list: if isAdmin() || (isSignedIn() && request.query.where.clientId == request.auth.uid);
+      
+      allow create: if isOwner();
+      allow update, delete: if isAdmin() || (isSignedIn() && exists(/databases/$(database)/documents/appointments/$(appointmentId)) && get(/databases/$(database)/documents/appointments/$(appointmentId)).data.clientId == request.auth.uid);
+
+      // Chat Messages Subcollection
+      match /messages/{messageId} {
+        function isAppointmentOwner() {
+          return get(/databases/$(database)/documents/appointments/$(appointmentId)).data.clientId == request.auth.uid;
+        }
+        
+        allow read: if isAppointmentOwner() || isAdmin();
+        allow write: if isAppointmentOwner() || isAdmin();
+      }
+    }
+    
+    match /theme/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
     }
 
-    // --- Appointments & Messages ---
-    match /appointments/{appointmentId} {
-      // READ: An admin can read any appointment. A user can read their own.
-      allow get: if isAdmin() || (isSignedIn() && resource.data.clientId == request.auth.uid);
-      
-      // LIST: An admin can list all appointments. A user can ONLY list their own appointments.
-      // This rule FORCES the client query to include `where('clientId', '==', request.auth.uid)`.
-      allow list: if isAdmin() || (isSignedIn() && request.query.get('clientId') == request.auth.uid);
+    match /socialMedia/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    match /config/{docId} {
+        // A regra 'businessHours' é pública para leitura, mas escrita só para admin.
+        // Outros documentos (como 'notifications') são apenas para admin.
+        allow read: if docId == 'businessHours' || isAdmin();
+        allow write: if isAdmin();
+    }
 
-      // WRITE: An admin can write to any appointment. A user can create their own,
-      // and update it only if they are the owner and it's not changing critical fields protected by other rules.
-      allow create: if isSignedIn(); // Allow any signed-in user to create an appointment.
-      allow update, delete: if isAdmin() || (isSignedIn() && resource.data.clientId == request.auth.uid);
-      
-      // --- Chat Messages Subcollection ---
-      // A user can only read/write messages for an appointment they own. Admins can access all.
-      match /messages/{messageId} {
-        allow read, write: if isAdmin() || (isSignedIn() && get(/databases/$(database)/documents/appointments/$(appointmentId)).data.clientId == request.auth.uid);
-      }
+    match /galleryImages/{imageId} {
+        allow read: if true;
+        allow write: if isAdmin();
+    }
+
+    match /content/{contentId} {
+        allow read: if true;
+        allow write: if isAdmin();
     }
   }
 }
