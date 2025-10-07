@@ -1,6 +1,7 @@
 
 
 
+
 export type Service = {
   id: string;
   name: string;
@@ -44,6 +45,8 @@ export type Appointment = {
   contestedHairLength?: 'curto' | 'medio' | 'longo';
   contestedPrice?: number;
   serviceName?: string; // Added for convenience in UI components
+  adminTyping?: boolean;
+  clientTyping?: boolean;
 };
 
 export type ChatMessage = {
