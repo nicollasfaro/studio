@@ -2,6 +2,7 @@
 
 
 
+
 export type Service = {
   id: string;
   name: string;
@@ -47,6 +48,8 @@ export type Appointment = {
   serviceName?: string; // Added for convenience in UI components
   adminTyping?: boolean;
   clientTyping?: boolean;
+  hasUnreadAdminMessage?: boolean;
+  hasUnreadClientMessage?: boolean;
 };
 
 export type ChatMessage = {

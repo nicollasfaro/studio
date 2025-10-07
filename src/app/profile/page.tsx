@@ -55,37 +55,41 @@ interface AppointmentWithService extends Appointment {
   service?: Service;
 }
 
-function ChatDialog({ appointmentId, user, onOpenChange }: { appointmentId: string, user: NonNullable<ReturnType<typeof useUser>['user']>, onOpenChange: (open: boolean) => void }) {
+function ChatDialog({ appointment, user, onOpenChange }: { appointment: AppointmentWithService, user: NonNullable<ReturnType<typeof useUser>['user']>, onOpenChange: (open: boolean) => void }) {
     const firestore = useFirestore();
     const [newMessage, setNewMessage] = useState('');
     const [isSending, setIsSending] = useState(false);
     const scrollAreaRef = useRef<HTMLDivElement>(null);
     
-    const appointmentRef = useMemoFirebase(() => firestore ? doc(firestore, 'appointments', appointmentId) : null, [firestore, appointmentId]);
+    const appointmentRef = useMemoFirebase(() => firestore ? doc(firestore, 'appointments', appointment.id) : null, [firestore, appointment.id]);
     const { data: appointmentData } = useDoc<Appointment>(appointmentRef);
 
     const messagesRef = useMemoFirebase(
-        () => firestore ? query(collection(firestore, 'appointments', appointmentId, 'messages'), orderBy('timestamp', 'asc')) : null,
-        [firestore, appointmentId]
+        () => firestore ? query(collection(firestore, 'appointments', appointment.id, 'messages'), orderBy('timestamp', 'asc')) : null,
+        [firestore, appointment.id]
     );
     const { data: messages, isLoading: isLoadingMessages } = useCollection<ChatMessage>(messagesRef);
 
-     // Marcar mensagens como lidas
+     // Marcar mensagens como lidas pelo cliente
     useEffect(() => {
         if (!firestore || !messages || messages.length === 0) return;
         
-        const batch = writeBatch(firestore);
         const unreadMessages = messages.filter(msg => msg.senderId === 'admin' && !msg.isRead);
 
         if (unreadMessages.length > 0) {
+            const batch = writeBatch(firestore);
             unreadMessages.forEach(msg => {
-                const msgRef = doc(firestore, 'appointments', appointmentId, 'messages', msg.id);
+                const msgRef = doc(firestore, 'appointments', appointment.id, 'messages', msg.id);
                 batch.update(msgRef, { isRead: true });
             });
             batch.commit().catch(console.error);
         }
 
-    }, [messages, firestore, appointmentId]);
+        if (appointment.hasUnreadClientMessage) {
+            updateDoc(appointmentRef, { hasUnreadClientMessage: false });
+        }
+
+    }, [messages, firestore, appointment.id, appointment.hasUnreadClientMessage, appointmentRef]);
 
 
     // Lógica de "digitando..."
@@ -110,11 +114,11 @@ function ChatDialog({ appointmentId, user, onOpenChange }: { appointmentId: stri
 
     const handleSendMessage = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!newMessage.trim() || !firestore || !user) return;
+        if (!newMessage.trim() || !firestore || !user || !appointmentRef) return;
 
         setIsSending(true);
         const messageData: Omit<ChatMessage, 'id'> = {
-            appointmentId: appointmentId,
+            appointmentId: appointment.id,
             senderId: user.uid,
             senderName: user.displayName || 'Cliente',
             text: newMessage.trim(),
@@ -123,7 +127,8 @@ function ChatDialog({ appointmentId, user, onOpenChange }: { appointmentId: stri
         };
 
         try {
-            await addDoc(collection(firestore, 'appointments', appointmentId, 'messages'), messageData);
+            await addDoc(collection(firestore, 'appointments', appointment.id, 'messages'), messageData);
+            await updateDoc(appointmentRef, { hasUnreadAdminMessage: true });
             setNewMessage('');
             updateTypingStatus(false);
         } catch (error) {
@@ -138,7 +143,7 @@ function ChatDialog({ appointmentId, user, onOpenChange }: { appointmentId: stri
             <DialogHeader>
                 <DialogTitle>Chat com o Salão</DialogTitle>
                 <DialogDescription>
-                    Conversa sobre seu agendamento de {appointmentData?.serviceName}
+                    Conversa sobre seu agendamento de {appointment.serviceName}
                 </DialogDescription>
             </DialogHeader>
             <ScrollArea className="flex-1 pr-4 -mr-4" ref={scrollAreaRef}>
@@ -192,7 +197,7 @@ export default function ProfilePage() {
   const { toast } = useToast();
 
   const [appointmentToCancel, setAppointmentToCancel] = useState<Appointment | null>(null);
-  const [chatDialogState, setChatDialogState] = useState<{ isOpen: boolean; appointmentId: string | null }>({ isOpen: false, appointmentId: null });
+  const [chatDialogState, setChatDialogState] = useState<{ isOpen: boolean; appointment: AppointmentWithService | null }>({ isOpen: false, appointment: null });
 
   useEffect(() => {
     if (!isAuthLoading && !user) {
@@ -207,8 +212,7 @@ export default function ProfilePage() {
     if (!firestore || !user?.uid) {
       return null;
     }
-    // This query is now secure and aligns with Firestore rules
-    return query(collection(firestore, 'appointments'), where('clientId', '==', user.uid));
+    return query(collection(firestore, 'appointments'), where('clientId', '==', user.uid), orderBy('startTime', 'desc'));
   }, [firestore, user?.uid]);
   
   const { data: allUserAppointments, isLoading: isLoadingAppointments } = useCollection<Appointment>(appointmentsQuery);
@@ -432,8 +436,14 @@ export default function ProfilePage() {
                           </div>
                           <div className="flex items-center">
                             {apt.status === 'confirmado' && (
-                                <Button variant="ghost" size="icon" onClick={() => setChatDialogState({ isOpen: true, appointmentId: apt.id })}>
+                                <Button variant="ghost" size="icon" onClick={() => setChatDialogState({ isOpen: true, appointment: apt })} className="relative">
                                     <MessageSquare className="h-5 w-5 text-blue-500" />
+                                    {apt.hasUnreadClientMessage && (
+                                        <span className="absolute top-1 right-1 flex h-2 w-2">
+                                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                                            <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+                                        </span>
+                                    )}
                                 </Button>
                             )}
                             {apt.status !== 'contestado' && (
@@ -536,12 +546,12 @@ export default function ProfilePage() {
                     <AlertDialogAction onClick={() => handleCancelAppointment(appointmentToCancel)} className="bg-destructive hover:bg-destructive/90">Sim, cancelar</AlertDialogAction>
                 </AlertDialogFooter>
             </AlertDialogContent>
-             <Dialog open={chatDialogState.isOpen} onOpenChange={(isOpen) => setChatDialogState({ isOpen, appointmentId: isOpen ? chatDialogState.appointmentId : null })}>
-                {chatDialogState.appointmentId && (
+             <Dialog open={chatDialogState.isOpen} onOpenChange={(isOpen) => setChatDialogState({ isOpen, appointment: isOpen ? chatDialogState.appointment : null })}>
+                {chatDialogState.appointment && (
                 <ChatDialog 
-                    appointmentId={chatDialogState.appointmentId}
+                    appointment={chatDialogState.appointment}
                     user={user}
-                    onOpenChange={(isOpen) => setChatDialogState({ isOpen, appointmentId: isOpen ? chatDialogState.appointmentId : null })}
+                    onOpenChange={(isOpen) => setChatDialogState({ isOpen, appointment: isOpen ? chatDialogState.appointment : null })}
                 />
                 )}
             </Dialog>

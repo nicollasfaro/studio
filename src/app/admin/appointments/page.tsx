@@ -67,38 +67,41 @@ const contestSchema = z.object({
 
 type ContestFormValues = z.infer<typeof contestSchema>;
 
-function ChatDialog({ appointmentId, clientName, serviceName }: { appointmentId: string, clientName: string, serviceName?: string }) {
+function ChatDialog({ appointment, onOpenChange }: { appointment: Appointment, onOpenChange: (open: boolean) => void }) {
     const firestore = useFirestore();
     const [newMessage, setNewMessage] = useState('');
     const [isSending, setIsSending] = useState(false);
     const scrollAreaRef = useRef<HTMLDivElement>(null);
-    const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-    const appointmentRef = useMemoFirebase(() => firestore ? doc(firestore, 'appointments', appointmentId) : null, [firestore, appointmentId]);
+    const appointmentRef = useMemoFirebase(() => firestore ? doc(firestore, 'appointments', appointment.id) : null, [firestore, appointment.id]);
     const { data: appointmentData } = useDoc<Appointment>(appointmentRef);
 
     const messagesRef = useMemoFirebase(
-        () => firestore ? query(collection(firestore, 'appointments', appointmentId, 'messages'), orderBy('timestamp', 'asc')) : null,
-        [firestore, appointmentId]
+        () => firestore ? query(collection(firestore, 'appointments', appointment.id, 'messages'), orderBy('timestamp', 'asc')) : null,
+        [firestore, appointment.id]
     );
     const { data: messages, isLoading: isLoadingMessages } = useCollection<ChatMessage>(messagesRef);
     
-    // Marcar mensagens como lidas
+    // Marcar mensagens como lidas pelo admin
     useEffect(() => {
         if (!firestore || !messages || messages.length === 0) return;
         
-        const batch = writeBatch(firestore);
         const unreadMessages = messages.filter(msg => msg.senderId !== 'admin' && !msg.isRead);
 
         if (unreadMessages.length > 0) {
+            const batch = writeBatch(firestore);
             unreadMessages.forEach(msg => {
-                const msgRef = doc(firestore, 'appointments', appointmentId, 'messages', msg.id);
+                const msgRef = doc(firestore, 'appointments', appointment.id, 'messages', msg.id);
                 batch.update(msgRef, { isRead: true });
             });
             batch.commit().catch(console.error);
         }
+        
+        if (appointment.hasUnreadAdminMessage) {
+            updateDoc(appointmentRef, { hasUnreadAdminMessage: false });
+        }
 
-    }, [messages, firestore, appointmentId]);
+    }, [messages, firestore, appointment.id, appointment.hasUnreadAdminMessage, appointmentRef]);
 
     // Lógica de "digitando..."
     const updateTypingStatus = useCallback(debounce((isTyping: boolean) => {
@@ -123,11 +126,11 @@ function ChatDialog({ appointmentId, clientName, serviceName }: { appointmentId:
 
     const handleSendMessage = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!newMessage.trim() || !firestore) return;
+        if (!newMessage.trim() || !firestore || !appointmentRef) return;
 
         setIsSending(true);
         const messageData: Omit<ChatMessage, 'id'> = {
-            appointmentId: appointmentId,
+            appointmentId: appointment.id,
             senderId: 'admin',
             senderName: 'Admin',
             text: newMessage.trim(),
@@ -136,7 +139,9 @@ function ChatDialog({ appointmentId, clientName, serviceName }: { appointmentId:
         };
 
         try {
-            await addDoc(collection(firestore, 'appointments', appointmentId, 'messages'), messageData);
+            // Adiciona a mensagem e atualiza o appointment para notificar o cliente
+            await addDoc(collection(firestore, 'appointments', appointment.id, 'messages'), messageData);
+            await updateDoc(appointmentRef, { hasUnreadClientMessage: true });
             setNewMessage('');
             updateTypingStatus(false);
         } catch (error) {
@@ -149,9 +154,9 @@ function ChatDialog({ appointmentId, clientName, serviceName }: { appointmentId:
     return (
         <DialogContent className="max-w-lg flex flex-col h-[70vh]">
             <DialogHeader>
-                <DialogTitle>Chat com {clientName}</DialogTitle>
+                <DialogTitle>Chat com {appointment.clientName}</DialogTitle>
                 <DialogDescription>
-                    Conversa sobre o agendamento de {serviceName}
+                    Conversa sobre o agendamento de {appointmentData?.serviceName}
                 </DialogDescription>
             </DialogHeader>
             <ScrollArea className="flex-1 pr-4 -mr-4" ref={scrollAreaRef}>
@@ -484,8 +489,16 @@ function AppointmentsTable({ services, appointments, isLoading }: AppointmentsTa
                     <DropdownMenuContent align="end">
                       {canChat && (
                           <DropdownMenuItem onClick={() => setChatDialogState({ isOpen: true, appointment: apt })}>
-                            <MessageSquare className="mr-2 h-4 w-4 text-blue-500" />
-                            Conversar
+                            <div className="relative flex items-center">
+                              <MessageSquare className="mr-2 h-4 w-4 text-blue-500" />
+                              <span>Conversar</span>
+                              {apt.hasUnreadAdminMessage && (
+                                <span className="absolute top-0 right-0 flex h-2 w-2">
+                                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                                  <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+                                </span>
+                              )}
+                            </div>
                           </DropdownMenuItem>
                       )}
                       <DropdownMenuItem onClick={() => handleStatusChange(apt, 'confirmado')} disabled={apt.status === 'confirmado' || apt.status === 'finalizado' || apt.status === 'cancelado'}>
@@ -530,9 +543,8 @@ function AppointmentsTable({ services, appointments, isLoading }: AppointmentsTa
       <Dialog open={chatDialogState.isOpen} onOpenChange={(isOpen) => setChatDialogState({ isOpen, appointment: isOpen ? chatDialogState.appointment : null })}>
         {chatDialogState.appointment && (
           <ChatDialog 
-            appointmentId={chatDialogState.appointment.id}
-            clientName={chatDialogState.appointment.clientName}
-            serviceName={getServiceDetails(chatDialogState.appointment.serviceId)?.name}
+            appointment={chatDialogState.appointment}
+            onOpenChange={(isOpen) => setChatDialogState({ isOpen, appointment: isOpen ? chatDialogState.appointment : null })}
           />
         )}
       </Dialog>
