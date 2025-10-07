@@ -124,7 +124,7 @@ function ChatDialog({ appointment, onOpenChange }: { appointment: Appointment, o
                         <div key={msg.id} className={cn("flex items-end gap-2", msg.senderId === 'admin' ? "justify-end" : "justify-start")}>
                            <div className={cn("max-w-xs rounded-lg px-3 py-2", msg.senderId === 'admin' ? "bg-primary text-primary-foreground" : "bg-muted")}>
                                 <p className="text-sm">{msg.text}</p>
-                                <p className="text-xs opacity-70 mt-1 text-right">{format(new Date(msg.timestamp.toDate()), 'HH:mm')}</p>
+                                <p className="text-xs opacity-70 mt-1 text-right">{msg.timestamp ? format(new Date(msg.timestamp.toDate()), 'HH:mm') : ''}</p>
                            </div>
                         </div>
                     ))}
@@ -274,6 +274,12 @@ function ContestDialog({ appointment, service, onOpenChange }: { appointment: Ap
       </Form>
     </DialogContent>
   );
+}
+
+interface AppointmentsTableProps {
+  services: (Omit<Service, 'id'> & { id: string })[];
+  appointments: Appointment[];
+  isLoading: boolean;
 }
 
 function AppointmentsTable({ services, appointments, isLoading }: AppointmentsTableProps) {
@@ -602,5 +608,3 @@ const { data: paginatedAppointments, isLoading: isLoadingAppointments, snapshots
     </Card>
   );
 }
-
-    
