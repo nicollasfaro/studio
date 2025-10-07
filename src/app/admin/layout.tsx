@@ -1,7 +1,7 @@
 
 'use client';
 
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SidebarProvider, Sidebar, SidebarTrigger, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarContent, SidebarHeader, SidebarInset, SidebarMenuBadge } from '@/components/ui/sidebar';
@@ -12,6 +12,9 @@ import { useUserData } from '@/hooks/use-user-data';
 import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
 import { collection, query, where } from 'firebase/firestore';
 import type { Appointment } from '@/lib/types';
+import { useToast } from '@/hooks/use-toast';
+import { ToastAction } from '@/components/ui/toast';
+import Link from 'next/link';
 
 
 export default function AdminLayout({
@@ -23,6 +26,7 @@ export default function AdminLayout({
   const pathname = usePathname();
   const { userData, isLoading } = useUserData();
   const firestore = useFirestore();
+  const { toast } = useToast();
 
   const isAdmin = userData?.isAdmin ?? false;
 
@@ -32,6 +36,35 @@ export default function AdminLayout({
   );
   const { data: newAppointments } = useCollection<Appointment>(newAppointmentsQuery);
   const newAppointmentsCount = newAppointments?.length || 0;
+
+  // Use a ref to track the previous count of new appointments
+  const prevAppointmentsCountRef = useRef(newAppointmentsCount);
+
+  useEffect(() => {
+    // When the component mounts, sync the ref
+    if (prevAppointmentsCountRef.current === undefined) {
+      prevAppointmentsCountRef.current = newAppointmentsCount;
+      return;
+    }
+
+    // If the new count is greater than the previous one, it means a new appointment has arrived.
+    if (newAppointmentsCount > prevAppointmentsCountRef.current) {
+      toast({
+        title: 'Novo Agendamento!',
+        description: `Você recebeu um novo agendamento de ${newAppointments?.[newAppointments.length - 1]?.clientName || 'um cliente'}.`,
+        action: (
+          <ToastAction altText="Conferir" asChild>
+            <Link href="/admin/appointments">Conferir</Link>
+          </ToastAction>
+        ),
+        duration: 10000,
+      });
+    }
+
+    // Update the ref with the current count for the next check.
+    prevAppointmentsCountRef.current = newAppointmentsCount;
+
+  }, [newAppointmentsCount, newAppointments, toast]);
 
 
   if (isLoading) {
