@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
-import { collection, doc, updateDoc, query, orderBy, limit, startAfter, getDocs, endBefore, limitToLast, DocumentSnapshot, where } from 'firebase/firestore';
+import { collection, doc, updateDoc, query, orderBy, limit, startAfter, DocumentSnapshot, where } from 'firebase/firestore';
 import type { User } from '@/lib/types';
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card';
 import {
@@ -25,6 +25,8 @@ import { useToast } from '@/hooks/use-toast';
 import { useUser } from '@/firebase';
 import { Button } from '@/components/ui/button';
 import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
+import { useIsMobile } from '@/hooks/use-mobile';
+import { cn } from '@/lib/utils';
 
 
 const USERS_PER_PAGE = 10;
@@ -34,6 +36,7 @@ export default function AdminUsersPage({ isAdmin }: { isAdmin: boolean }) {
   const firestore = useFirestore();
   const { user: currentUser } = useUser();
   const { toast } = useToast();
+  const isMobile = useIsMobile();
 
   const [page, setPage] = useState(0);
   const [paginationSnapshots, setPaginationSnapshots] = useState<(DocumentSnapshot | null)[]>([null]);
@@ -42,16 +45,16 @@ export default function AdminUsersPage({ isAdmin }: { isAdmin: boolean }) {
 
   const usersQuery = useMemoFirebase(() => {
     if (!firestore) return null;
-    const q = query(collection(firestore, 'users'), orderBy('createdAt', 'desc'), limit(USERS_PER_PAGE));
+    let q = query(collection(firestore, 'users'), orderBy('createdAt', 'desc'));
     
     if (page > 0 && paginationSnapshots[page]) {
-      return query(collection(firestore, 'users'), orderBy('createdAt', 'desc'), startAfter(paginationSnapshots[page]), limit(USERS_PER_PAGE));
+      return query(q, startAfter(paginationSnapshots[page]), limit(USERS_PER_PAGE));
     }
     
-    return q;
+    return query(q, limit(USERS_PER_PAGE));
   }, [firestore, page, paginationSnapshots]);
   
-  const { data: users, isLoading } = useCollection<User>(usersQuery);
+  const { data: users, isLoading, snapshots } = useCollection<User>(usersQuery);
 
   const handleRoleChange = async (userId: string, newRole: 'admin' | 'user') => {
     if (!firestore) return;
@@ -86,12 +89,12 @@ export default function AdminUsersPage({ isAdmin }: { isAdmin: boolean }) {
     }
   };
 
-  const handleNextPage = async () => {
-    if (!users || users.length === 0 || !firestore) return;
-    const lastVisible = await getDocs(query(collection(firestore, 'users'), where('id', '==', users[users.length - 1].id), limit(1)));
-    
-    if (lastVisible.docs[0]) {
-        setPaginationSnapshots(prev => [...prev, lastVisible.docs[0]]);
+  const handleNextPage = () => {
+    if (!snapshots || snapshots.length === 0 || snapshots.length < USERS_PER_PAGE) return;
+
+    const lastVisible = snapshots[snapshots.length - 1];
+    if (lastVisible) {
+        setPaginationSnapshots(prev => [...prev, lastVisible]);
         setPage(prev => prev + 1);
     }
   };
@@ -102,6 +105,28 @@ export default function AdminUsersPage({ isAdmin }: { isAdmin: boolean }) {
     setPaginationSnapshots(prev => prev.slice(0, -1));
   };
   
+  const renderRoleSelector = (user: User) => {
+    const isUpdating = updatingRoleId === user.id;
+    return (
+        <div className='flex items-center gap-2'>
+            <Select
+                defaultValue={user.isAdmin ? 'admin' : 'user'}
+                onValueChange={(value) => handleRoleChange(user.id, value as 'admin' | 'user')}
+                disabled={user.id === currentUser?.uid || isUpdating}
+            >
+                <SelectTrigger className="w-[120px]">
+                    <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                    <SelectItem value="admin">Admin</SelectItem>
+                    <SelectItem value="user">Usuário</SelectItem>
+                </SelectContent>
+            </Select>
+            {isUpdating && <Loader2 className="h-4 w-4 animate-spin" />}
+        </div>
+    );
+  };
+
 
   return (
     <Card>
@@ -109,66 +134,58 @@ export default function AdminUsersPage({ isAdmin }: { isAdmin: boolean }) {
         <CardTitle>Gerenciamento de Usuários</CardTitle>
       </CardHeader>
       <CardContent>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Nome</TableHead>
-              <TableHead>Email</TableHead>
-              <TableHead>Função</TableHead>
-              <TableHead>Data de Criação</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isLoading &&
-              Array.from({ length: USERS_PER_PAGE }).map((_, i) => (
-                <TableRow key={i}>
-                  <TableCell>
-                    <Skeleton className="h-4 w-[150px]" />
-                  </TableCell>
-                  <TableCell>
-                    <Skeleton className="h-4 w-[200px]" />
-                  </TableCell>
-                  <TableCell>
-                    <Skeleton className="h-8 w-[120px]" />
-                  </TableCell>
-                  <TableCell>
-                    <Skeleton className="h-4 w-[120px]" />
-                  </TableCell>
-                </TableRow>
-              ))}
-            {users?.map((user) => {
-              const isUpdating = updatingRoleId === user.id;
-              return (
-              <TableRow key={user.id}>
-                <TableCell className="font-medium">{user.name}</TableCell>
-                <TableCell>{user.email}</TableCell>
-                <TableCell>
-                  <div className='flex items-center gap-2'>
-                    <Select
-                      defaultValue={user.isAdmin ? 'admin' : 'user'}
-                      onValueChange={(value) => handleRoleChange(user.id, value as 'admin' | 'user')}
-                      disabled={user.id === currentUser?.uid || isUpdating}
-                    >
-                      <SelectTrigger className="w-[120px]">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="admin">Admin</SelectItem>
-                        <SelectItem value="user">Usuário</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    {isUpdating && <Loader2 className="h-4 w-4 animate-spin" />}
-                  </div>
-                </TableCell>
-                <TableCell>
-                  {user.createdAt
-                    ? new Date(user.createdAt).toLocaleDateString()
-                    : 'N/A'}
-                </TableCell>
-              </TableRow>
-            )})}
-          </TableBody>
-        </Table>
+        {isLoading ? (
+            Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-20 w-full mb-4" />)
+        ) : isMobile ? (
+            <div className="space-y-4">
+            {users?.map((user) => (
+                <Card key={user.id} className="p-4">
+                    <div className="flex flex-col space-y-2">
+                        <div>
+                            <p className="font-bold">{user.name}</p>
+                            <p className="text-sm text-muted-foreground">{user.email}</p>
+                        </div>
+                         <div>
+                            <p className="text-sm font-medium">Função</p>
+                            {renderRoleSelector(user)}
+                        </div>
+                        <div>
+                            <p className="text-sm font-medium">Data de Criação</p>
+                            <p className="text-sm text-muted-foreground">
+                                {user.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'N/A'}
+                            </p>
+                        </div>
+                    </div>
+                </Card>
+            ))}
+            </div>
+        ) : (
+             <Table>
+                <TableHeader>
+                    <TableRow>
+                    <TableHead>Nome</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Função</TableHead>
+                    <TableHead>Data de Criação</TableHead>
+                    </TableRow>
+                </TableHeader>
+                <TableBody>
+                    {users?.map((user) => (
+                    <TableRow key={user.id}>
+                        <TableCell className="font-medium">{user.name}</TableCell>
+                        <TableCell>{user.email}</TableCell>
+                        <TableCell>{renderRoleSelector(user)}</TableCell>
+                        <TableCell>
+                        {user.createdAt
+                            ? new Date(user.createdAt).toLocaleDateString()
+                            : 'N/A'}
+                        </TableCell>
+                    </TableRow>
+                    ))}
+                </TableBody>
+            </Table>
+        )}
+       
         {!isLoading && users?.length === 0 && (
           <p className="text-center text-muted-foreground py-8">
             Nenhum usuário encontrado.

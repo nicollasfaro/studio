@@ -19,7 +19,7 @@ import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
-import { Upload, Image as ImageIcon, Trash2, X, CheckCircle, GripVertical, Loader2 } from 'lucide-react';
+import { Upload, Image as ImageIcon, Trash2, X, CheckCircle, GripVertical, Loader2, List } from 'lucide-react';
 import type { GalleryImage } from '@/lib/types';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
@@ -34,13 +34,16 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { cn } from '@/lib/utils';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 export default function AdminGalleryPage() {
   const { toast } = useToast();
   const firestore = useFirestore();
   const app = useFirebaseApp(); 
   const storage = getStorage(app); 
+  const isMobile = useIsMobile();
 
+  const [view, setView] = useState<'list' | 'form'>('list');
   const [file, setFile] = useState<File | null>(null);
   const [description, setDescription] = useState('');
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
@@ -89,6 +92,9 @@ export default function AdminGalleryPage() {
     const fileInput = document.getElementById('picture') as HTMLInputElement;
     if (fileInput) {
         fileInput.value = '';
+    }
+    if(isMobile) {
+        setView('list');
     }
   }
 
@@ -233,16 +239,22 @@ export default function AdminGalleryPage() {
         handleCancelSelection();
     }
   };
-
-
-  return (
-    <div className="space-y-8">
-      <Card>
-        <CardHeader>
-          <CardTitle>Enviar Nova Imagem</CardTitle>
-          <CardDescription>
-            Faça o upload de uma nova imagem (PNG, JPG, WEBP, até 5MB) para ser usada nos serviços e promoções.
-          </CardDescription>
+  
+  const UploadCard = () => (
+     <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle>Enviar Nova Imagem</CardTitle>
+              <CardDescription>
+                Faça o upload de uma nova imagem (PNG, JPG, WEBP, até 5MB).
+              </CardDescription>
+            </div>
+             {isMobile && (
+                <Button variant="outline" size="sm" onClick={() => setView('list')}>
+                    <List className="mr-2 h-4 w-4" />
+                    Ver Galeria
+                </Button>
+            )}
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid sm:grid-cols-2 gap-6 items-start">
@@ -281,30 +293,40 @@ export default function AdminGalleryPage() {
           </div>
         </CardContent>
       </Card>
-
-      <Card>
+  );
+  
+  const GalleryCard = () => (
+     <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <div>
             <CardTitle>Galeria de Imagens</CardTitle>
             <CardDescription>Imagens disponíveis para uso no site.</CardDescription>
           </div>
-          {selectionMode ? (
-             <div className="flex items-center gap-2">
-                <Button variant="destructive" onClick={() => setShowDeleteAlert(true)} disabled={selectedImages.length === 0 || isDeleting}>
-                   {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
-                  Excluir ({selectedImages.length})
+          <div className="flex items-center gap-2">
+            {isMobile ? (
+                <Button variant="default" size="sm" onClick={() => setView('form')}>
+                    <Upload className="mr-2 h-4 w-4" />
+                    Enviar
                 </Button>
-                <Button variant="outline" onClick={handleCancelSelection} disabled={isDeleting}>
-                  <X className="mr-2 h-4 w-4" />
-                  Cancelar
+            ) : null}
+            {selectionMode ? (
+                <div className="flex items-center gap-2">
+                    <Button variant="destructive" onClick={() => setShowDeleteAlert(true)} disabled={selectedImages.length === 0 || isDeleting}>
+                        {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+                        Excluir ({selectedImages.length})
+                    </Button>
+                    <Button variant="outline" onClick={handleCancelSelection} disabled={isDeleting}>
+                        <X className="mr-2 h-4 w-4" />
+                        Cancelar
+                    </Button>
+                </div>
+            ) : (
+                <Button variant="outline" onClick={() => setSelectionMode(true)} disabled={!images || images.length === 0}>
+                    <GripVertical className="mr-2 h-4 w-4" />
+                    Selecionar
                 </Button>
-             </div>
-          ) : (
-            <Button variant="outline" onClick={() => setSelectionMode(true)} disabled={!images || images.length === 0}>
-                <GripVertical className="mr-2 h-4 w-4" />
-                Selecionar
-            </Button>
-          )}
+            )}
+          </div>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
@@ -349,8 +371,33 @@ export default function AdminGalleryPage() {
                 </p>
              )}
           </div>
+           {isMobile && selectionMode && (
+            <div className="mt-4 flex items-center gap-2">
+                <Button variant="destructive" onClick={() => setShowDeleteAlert(true)} disabled={selectedImages.length === 0 || isDeleting} className="flex-1">
+                   {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+                  Excluir ({selectedImages.length})
+                </Button>
+                <Button variant="outline" onClick={handleCancelSelection} disabled={isDeleting}>
+                  <X className="mr-2 h-4 w-4" />
+                  Cancelar
+                </Button>
+             </div>
+          )}
         </CardContent>
       </Card>
+  );
+
+  return (
+    <div className="space-y-8">
+       {isMobile ? (
+          view === 'form' ? <UploadCard /> : <GalleryCard />
+       ) : (
+        <>
+            <UploadCard />
+            <GalleryCard />
+        </>
+       )}
+      
       <AlertDialog open={showDeleteAlert} onOpenChange={setShowDeleteAlert}>
         <AlertDialogContent>
             <AlertDialogHeader>

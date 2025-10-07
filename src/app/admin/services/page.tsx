@@ -49,7 +49,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
 import { collection, doc, addDoc, deleteDoc, setDoc } from 'firebase/firestore';
 import type { Service, GalleryImage } from '@/lib/types';
-import { PlusCircle, Edit, Trash2 } from 'lucide-react';
+import { PlusCircle, Edit, Trash2, List } from 'lucide-react';
 import {
   Select,
   SelectContent,
@@ -59,6 +59,8 @@ import {
 } from '@/components/ui/select';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
+import { useIsMobile } from '@/hooks/use-mobile';
+import { cn } from '@/lib/utils';
 
 const serviceSchema = z.object({
   name: z.string().min(3, 'O nome deve ter pelo menos 3 caracteres.'),
@@ -86,7 +88,9 @@ type ServiceFormValues = z.infer<typeof serviceSchema>;
 export default function AdminServicesPage() {
   const { toast } = useToast();
   const firestore = useFirestore();
+  const isMobile = useIsMobile();
 
+  const [view, setView] = useState<'list' | 'form'>('list');
   const [isEditing, setIsEditing] = useState<Service | null>(null);
   const [showDeleteAlert, setShowDeleteAlert] = useState<Service | null>(null);
 
@@ -193,6 +197,9 @@ export default function AdminServicesPage() {
       priceMediumHair: service.priceMediumHair || 0,
       priceLongHair: service.priceLongHair || 0,
     });
+    if (isMobile) {
+        setView('form');
+    }
   };
   
   const handleCancelEdit = () => {
@@ -208,255 +215,286 @@ export default function AdminServicesPage() {
         priceMediumHair: 0,
         priceLongHair: 0,
       });
+      if (isMobile) {
+        setView('list');
+      }
   }
 
   const isLoading = isLoadingServices || isLoadingGallery;
 
-  return (
-    <div className="grid gap-8 md:grid-cols-3">
-      <div className="md:col-span-1">
-        <Card>
-          <CardHeader>
-            <CardTitle>{isEditing ? 'Editar Serviço' : 'Adicionar Novo Serviço'}</CardTitle>
-          </CardHeader>
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)}>
-              <CardContent className="space-y-4">
-                <FormField
-                  control={form.control}
-                  name="name"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Nome do Serviço</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Ex: Manicure Completa" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="description"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Descrição</FormLabel>
-                      <FormControl>
-                        <Textarea placeholder="Descreva o serviço..." {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                 <FormField
-                  control={form.control}
-                  name="imageId"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Imagem do Serviço</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value} disabled={isLoadingGallery}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder={isLoadingGallery ? "Carregando imagens..." : "Selecione uma imagem"} />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {galleryImages?.map((img) => (
-                            <SelectItem key={img.id} value={img.id}>
-                              {img.description}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                 <FormField
-                  control={form.control}
-                  name="durationMinutes"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Duração (min)</FormLabel>
-                      <FormControl>
-                        <Input type="number" placeholder="60" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                 <FormField
-                    control={form.control}
-                    name="isPriceFrom"
-                    render={({ field }) => (
-                      <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
-                        <div className="space-y-0.5">
-                          <FormLabel>O valor é "a partir de"?</FormLabel>
-                        </div>
-                        <FormControl>
-                          <Switch
-                            checked={field.value}
-                            onCheckedChange={field.onChange}
-                          />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-
-                {isPriceFrom ? (
-                  <>
-                     <FormField
-                        control={form.control}
-                        name="price"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Preço Base (R$)</FormLabel>
-                            <FormControl><Input type="number" placeholder="50.00" {...field} /></FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
+  const FormCard = () => (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between">
+        <CardTitle>{isEditing ? 'Editar Serviço' : 'Adicionar Novo Serviço'}</CardTitle>
+        {isMobile && (
+            <Button variant="outline" size="sm" onClick={() => setView('list')}>
+                <List className="mr-2 h-4 w-4" />
+                Ver Lista
+            </Button>
+        )}
+      </CardHeader>
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)}>
+          <CardContent className="space-y-4">
+            <FormField
+              control={form.control}
+              name="name"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Nome do Serviço</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Ex: Manicure Completa" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="description"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Descrição</FormLabel>
+                  <FormControl>
+                    <Textarea placeholder="Descreva o serviço..." {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+             <FormField
+              control={form.control}
+              name="imageId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Imagem do Serviço</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value} disabled={isLoadingGallery}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder={isLoadingGallery ? "Carregando imagens..." : "Selecione uma imagem"} />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {galleryImages?.map((img) => (
+                        <SelectItem key={img.id} value={img.id}>
+                          {img.description}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+             <FormField
+              control={form.control}
+              name="durationMinutes"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Duração (min)</FormLabel>
+                  <FormControl>
+                    <Input type="number" placeholder="60" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+             <FormField
+                control={form.control}
+                name="isPriceFrom"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                    <div className="space-y-0.5">
+                      <FormLabel>O valor é "a partir de"?</FormLabel>
+                    </div>
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
                       />
-                     <div className="grid grid-cols-3 gap-2">
-                        <FormField
-                            control={form.control}
-                            name="priceShortHair"
-                            render={({ field }) => (
-                            <FormItem>
-                                <FormLabel>Curto</FormLabel>
-                                <FormControl><Input type="number" placeholder="70" {...field} /></FormControl>
-                            </FormItem>
-                            )}
-                        />
-                         <FormField
-                            control={form.control}
-                            name="priceMediumHair"
-                            render={({ field }) => (
-                            <FormItem>
-                                <FormLabel>Médio</FormLabel>
-                                <FormControl><Input type="number" placeholder="90" {...field} /></FormControl>
-                            </FormItem>
-                            )}
-                        />
-                         <FormField
-                            control={form.control}
-                            name="priceLongHair"
-                            render={({ field }) => (
-                            <FormItem>
-                                <FormLabel>Longo</FormLabel>
-                                <FormControl><Input type="number" placeholder="120" {...field} /></FormControl>
-                            </FormItem>
-                            )}
-                        />
-                     </div>
-                      <FormMessage>{form.formState.errors.priceShortHair?.message}</FormMessage>
-                  </>
-                ) : (
-                   <FormField
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+
+            {isPriceFrom ? (
+              <>
+                 <FormField
                     control={form.control}
                     name="price"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Preço (R$)</FormLabel>
-                        <FormControl>
-                          <Input type="number" placeholder="50.00" {...field} />
-                        </FormControl>
+                        <FormLabel>Preço Base (R$)</FormLabel>
+                        <FormControl><Input type="number" placeholder="50.00" {...field} /></FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
+                 <div className="grid grid-cols-3 gap-2">
+                    <FormField
+                        control={form.control}
+                        name="priceShortHair"
+                        render={({ field }) => (
+                        <FormItem>
+                            <FormLabel>Curto</FormLabel>
+                            <FormControl><Input type="number" placeholder="70" {...field} /></FormControl>
+                        </FormItem>
+                        )}
+                    />
+                     <FormField
+                        control={form.control}
+                        name="priceMediumHair"
+                        render={({ field }) => (
+                        <FormItem>
+                            <FormLabel>Médio</FormLabel>
+                            <FormControl><Input type="number" placeholder="90" {...field} /></FormControl>
+                        </FormItem>
+                        )}
+                    />
+                     <FormField
+                        control={form.control}
+                        name="priceLongHair"
+                        render={({ field }) => (
+                        <FormItem>
+                            <FormLabel>Longo</FormLabel>
+                            <FormControl><Input type="number" placeholder="120" {...field} /></FormControl>
+                        </FormItem>
+                        )}
+                    />
+                 </div>
+                  <FormMessage>{form.formState.errors.priceShortHair?.message}</FormMessage>
+              </>
+            ) : (
+               <FormField
+                control={form.control}
+                name="price"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Preço (R$)</FormLabel>
+                    <FormControl>
+                      <Input type="number" placeholder="50.00" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
                 )}
-              </CardContent>
-              <CardFooter className="flex justify-end gap-2">
-                {isEditing && (
-                    <Button type="button" variant="outline" onClick={handleCancelEdit}>
-                        Cancelar
-                    </Button>
-                )}
-                <Button type="submit" disabled={form.formState.isSubmitting}>
-                  <PlusCircle className="mr-2 h-4 w-4" />
-                  {isEditing ? 'Salvar Alterações' : 'Adicionar Serviço'}
+              />
+            )}
+          </CardContent>
+          <CardFooter className="flex justify-end gap-2">
+            {isEditing && (
+                <Button type="button" variant="outline" onClick={handleCancelEdit}>
+                    Cancelar
                 </Button>
-              </CardFooter>
-            </form>
-          </Form>
+            )}
+            <Button type="submit" disabled={form.formState.isSubmitting}>
+              <PlusCircle className="mr-2 h-4 w-4" />
+              {isEditing ? 'Salvar Alterações' : 'Adicionar Serviço'}
+            </Button>
+          </CardFooter>
+        </form>
+      </Form>
+    </Card>
+  );
+
+  const ListCard = () => (
+      <AlertDialog>
+        <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle>Serviços Cadastrados</CardTitle>
+            {isMobile && (
+                <Button variant="default" size="sm" onClick={() => setView('form')}>
+                    <PlusCircle className="mr-2 h-4 w-4" />
+                    Adicionar
+                </Button>
+            )}
+        </CardHeader>
+        <CardContent>
+            <Table>
+            <TableHeader>
+                <TableRow>
+                <TableHead>Nome</TableHead>
+                <TableHead>Preço</TableHead>
+                <TableHead>Duração</TableHead>
+                <TableHead className="text-right">Ações</TableHead>
+                </TableRow>
+            </TableHeader>
+            <TableBody>
+                {isLoading &&
+                Array.from({ length: 3 }).map((_, i) => (
+                    <TableRow key={i}>
+                    <TableCell>
+                        <Skeleton className="h-4 w-[150px]" />
+                    </TableCell>
+                    <TableCell>
+                        <Skeleton className="h-4 w-[60px]" />
+                    </TableCell>
+                    <TableCell>
+                        <Skeleton className="h-4 w-[80px]" />
+                    </TableCell>
+                    <TableCell className="text-right">
+                        <Skeleton className="h-8 w-16 ml-auto" />
+                    </TableCell>
+                    </TableRow>
+                ))}
+                {services?.map((service) => (
+                <TableRow key={service.id}>
+                    <TableCell className="font-medium">{service.name}</TableCell>
+                    <TableCell>{service.isPriceFrom ? `A partir de R$${service.price.toFixed(2)}` : `R$${service.price.toFixed(2)}`}</TableCell>
+                    <TableCell>{service.durationMinutes} min</TableCell>
+                    <TableCell className="text-right">
+                    <Button variant="ghost" size="icon" onClick={() => handleEditClick(service)}>
+                        <Edit className="h-4 w-4" />
+                    </Button>
+                    <AlertDialogTrigger asChild>
+                        <Button variant="ghost" size="icon" onClick={() => setShowDeleteAlert(service)}>
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                    </AlertDialogTrigger>
+                    </TableCell>
+                </TableRow>
+                ))}
+            </TableBody>
+            </Table>
+            {!isLoading && services?.length === 0 && (
+            <p className="text-center text-muted-foreground py-8">
+                Nenhum serviço cadastrado ainda.
+            </p>
+            )}
+        </CardContent>
         </Card>
+        <AlertDialogContent>
+            <AlertDialogHeader>
+                <AlertDialogTitle>Você tem certeza?</AlertDialogTitle>
+                <AlertDialogDescription>
+                    Esta ação não pode ser desfeita. Isso removerá permanentemente o serviço "{showDeleteAlert?.name}" do banco de dados.
+                </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+                <AlertDialogCancel onClick={() => setShowDeleteAlert(null)}>Cancelar</AlertDialogCancel>
+                <AlertDialogAction onClick={handleDeleteService} className="bg-destructive hover:bg-destructive/90">
+                    Sim, remover
+                </AlertDialogAction>
+            </AlertDialogFooter>
+        </AlertDialogContent>
+    </AlertDialog>
+  )
+
+  if (isMobile) {
+    return (
+        <div className="w-full">
+            {view === 'form' ? <FormCard /> : <ListCard />}
+        </div>
+    )
+  }
+
+  return (
+    <div className="grid gap-8 md:grid-cols-3">
+      <div className="md:col-span-1">
+        <FormCard />
       </div>
 
       <div className="md:col-span-2">
-        <AlertDialog>
-            <Card>
-            <CardHeader>
-                <CardTitle>Serviços Cadastrados</CardTitle>
-            </CardHeader>
-            <CardContent>
-                <Table>
-                <TableHeader>
-                    <TableRow>
-                    <TableHead>Nome</TableHead>
-                    <TableHead>Preço</TableHead>
-                    <TableHead>Duração</TableHead>
-                    <TableHead className="text-right">Ações</TableHead>
-                    </TableRow>
-                </TableHeader>
-                <TableBody>
-                    {isLoading &&
-                    Array.from({ length: 3 }).map((_, i) => (
-                        <TableRow key={i}>
-                        <TableCell>
-                            <Skeleton className="h-4 w-[150px]" />
-                        </TableCell>
-                        <TableCell>
-                            <Skeleton className="h-4 w-[60px]" />
-                        </TableCell>
-                        <TableCell>
-                            <Skeleton className="h-4 w-[80px]" />
-                        </TableCell>
-                        <TableCell className="text-right">
-                            <Skeleton className="h-8 w-16 ml-auto" />
-                        </TableCell>
-                        </TableRow>
-                    ))}
-                    {services?.map((service) => (
-                    <TableRow key={service.id}>
-                        <TableCell className="font-medium">{service.name}</TableCell>
-                        <TableCell>{service.isPriceFrom ? `A partir de R$${service.price.toFixed(2)}` : `R$${service.price.toFixed(2)}`}</TableCell>
-                        <TableCell>{service.durationMinutes} min</TableCell>
-                        <TableCell className="text-right">
-                        <Button variant="ghost" size="icon" onClick={() => handleEditClick(service)}>
-                            <Edit className="h-4 w-4" />
-                        </Button>
-                        <AlertDialogTrigger asChild>
-                            <Button variant="ghost" size="icon" onClick={() => setShowDeleteAlert(service)}>
-                                <Trash2 className="h-4 w-4 text-destructive" />
-                            </Button>
-                        </AlertDialogTrigger>
-                        </TableCell>
-                    </TableRow>
-                    ))}
-                </TableBody>
-                </Table>
-                {!isLoading && services?.length === 0 && (
-                <p className="text-center text-muted-foreground py-8">
-                    Nenhum serviço cadastrado ainda.
-                </p>
-                )}
-            </CardContent>
-            </Card>
-            <AlertDialogContent>
-                <AlertDialogHeader>
-                    <AlertDialogTitle>Você tem certeza?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                        Esta ação não pode ser desfeita. Isso removerá permanentemente o serviço "{showDeleteAlert?.name}" do banco de dados.
-                    </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                    <AlertDialogCancel onClick={() => setShowDeleteAlert(null)}>Cancelar</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleDeleteService} className="bg-destructive hover:bg-destructive/90">
-                        Sim, remover
-                    </AlertDialogAction>
-                </AlertDialogFooter>
-            </AlertDialogContent>
-        </AlertDialog>
+        <ListCard />
       </div>
     </div>
   );

@@ -47,7 +47,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { MoreHorizontal, CheckCircle, XCircle, Camera, ChevronLeft, ChevronRight, AlertTriangle, MessageSquare, Loader2, Send, Check } from 'lucide-react';
-import { useCollection, useDoc, useFirestore, useMemoFirebase, useUserData } from '@/firebase';
+import { useCollection, useDoc, useFirestore, useMemoFirebase } from '@/firebase';
 import { collection, query, orderBy, doc, updateDoc, limit, startAfter, where, writeBatch, DocumentSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
 import type { Appointment, Service, ChatMessage } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
@@ -57,6 +57,8 @@ import Image from 'next/image';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 import { cn } from '@/lib/utils';
+import { useIsMobile } from '@/hooks/use-mobile';
+
 
 const APPOINTMENTS_PER_PAGE = 6;
 
@@ -71,7 +73,7 @@ function ChatDialog({ appointmentId, clientName, serviceName }: { appointmentId:
     const firestore = useFirestore();
     const [newMessage, setNewMessage] = useState('');
     const [isSending, setIsSending] = useState(false);
-    const scrollAreaRef = useRef<HTMLDivElement>(null);
+    const scrollAreaViewportRef = useRef<HTMLDivElement>(null);
     const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
     const appointmentRef = useMemoFirebase(() => firestore ? doc(firestore, 'appointments', appointmentId) : null, [firestore, appointmentId]);
@@ -116,8 +118,9 @@ function ChatDialog({ appointmentId, clientName, serviceName }: { appointmentId:
 
 
     useEffect(() => {
-        if (scrollAreaRef.current) {
-            scrollAreaRef.current.scrollTop = scrollAreaRef.current.scrollHeight;
+        const viewport = scrollAreaViewportRef.current;
+        if (viewport) {
+            viewport.scrollTop = viewport.scrollHeight;
         }
     }, [messages, appointmentData?.clientTyping]);
 
@@ -147,14 +150,14 @@ function ChatDialog({ appointmentId, clientName, serviceName }: { appointmentId:
     };
 
     return (
-        <DialogContent className="max-w-lg flex flex-col h-[70vh]">
-            <DialogHeader>
+        <DialogContent className="p-0 w-[95vw] md:max-w-lg flex flex-col h-[90vh] md:h-[70vh] rounded-lg">
+            <DialogHeader className="p-6 pb-0">
                 <DialogTitle>Chat com {clientName}</DialogTitle>
                 <DialogDescription>
                     Conversa sobre o agendamento de {serviceName}
                 </DialogDescription>
             </DialogHeader>
-            <ScrollArea className="flex-1 pr-4 -mr-4" ref={scrollAreaRef}>
+            <ScrollArea ref={scrollAreaViewportRef as any} className="flex-1 px-6">
                  <div className="space-y-4 py-4">
                     {isLoadingMessages && <p>Carregando mensagens...</p>}
                     {messages?.map((msg, index) => (
@@ -181,7 +184,7 @@ function ChatDialog({ appointmentId, clientName, serviceName }: { appointmentId:
                     )}
                 </div>
             </ScrollArea>
-            <form onSubmit={handleSendMessage} className="flex items-center gap-2 pt-4 border-t">
+            <form onSubmit={handleSendMessage} className="flex items-center gap-2 p-6 pt-4 border-t">
                 <Input
                     value={newMessage}
                     onChange={(e) => setNewMessage(e.target.value)}
@@ -327,15 +330,16 @@ function ContestDialog({ appointment, service, onOpenChange }: { appointment: Ap
   );
 }
 
-interface AppointmentsTableProps {
+interface AppointmentsListProps {
   services: (Omit<Service, 'id'> & { id: string })[];
   appointments: Appointment[];
   isLoading: boolean;
 }
 
-function AppointmentsTable({ services, appointments, isLoading }: AppointmentsTableProps) {
+function AppointmentsList({ services, appointments, isLoading }: AppointmentsListProps) {
   const firestore = useFirestore();
   const { toast } = useToast();
+  const isMobile = useIsMobile();
   const [contestDialogState, setContestDialogState] = useState<{ isOpen: boolean; appointment: Appointment | null }>({ isOpen: false, appointment: null });
   const [chatDialogState, setChatDialogState] = useState<{ isOpen: boolean; appointment: Appointment | null }>({ isOpen: false, appointment: null });
   const [updatingStatusId, setUpdatingStatusId] = useState<string | null>(null);
@@ -395,8 +399,151 @@ function AppointmentsTable({ services, appointments, isLoading }: AppointmentsTa
      }
      return {};
   }
+  
+  const renderActions = (apt: Appointment) => {
+    const service = getServiceDetails(apt.serviceId);
+    const canContest = service?.isPriceFrom && apt.hairPhotoUrl && apt.status === 'Marcado';
+    const canChat = apt.status === 'confirmado';
 
+    return (
+        <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon">
+                <MoreHorizontal className="h-4 w-4" />
+            </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+            {canChat && (
+                <DropdownMenuItem onClick={() => setChatDialogState({ isOpen: true, appointment: apt })}>
+                    <MessageSquare className="mr-2 h-4 w-4 text-blue-500" />
+                    Conversar
+                </DropdownMenuItem>
+            )}
+            <DropdownMenuItem onClick={() => handleStatusChange(apt, 'confirmado')} disabled={apt.status === 'confirmado' || apt.status === 'finalizado' || apt.status === 'cancelado'}>
+                <CheckCircle className="mr-2 h-4 w-4 text-green-500" />
+                Confirmar
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => handleStatusChange(apt, 'finalizado')} disabled={apt.status === 'finalizado' || apt.status === 'cancelado'}>
+                <CheckCircle className="mr-2 h-4 w-4 text-blue-500" />
+                Finalizar
+            </DropdownMenuItem>
+            {canContest && (
+                <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => setContestDialogState({ isOpen: true, appointment: apt })}>
+                    <AlertTriangle className="mr-2 h-4 w-4 text-amber-500" />
+                    Contestar Valor
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                </>
+            )}
+            <DropdownMenuItem onClick={() => handleStatusChange(apt, 'cancelado')} disabled={apt.status === 'cancelado' || apt.status === 'finalizado'}>
+                <XCircle className="mr-2 h-4 w-4 text-red-500" />
+                Cancelar
+            </DropdownMenuItem>
+            </DropdownMenuContent>
+        </DropdownMenu>
+    )
+  }
 
+  if (isLoading) {
+    return (
+        <div className="space-y-4">
+            {Array.from({ length: 3 }).map((_, i) => (
+                <Skeleton key={i} className="h-24 w-full rounded-lg" />
+            ))}
+        </div>
+    );
+  }
+
+  if (appointments.length === 0) {
+      return (
+          <div className="py-8 text-center text-muted-foreground">
+              Nenhum agendamento encontrado para este filtro.
+          </div>
+      );
+  }
+  
+  // Mobile View - Cards
+  if (isMobile) {
+      return (
+        <>
+            <div className="space-y-4">
+                {appointments.map(apt => {
+                    const isUpdating = updatingStatusId === apt.id;
+                    return (
+                        <Card key={apt.id} className={cn('relative', apt.viewedByAdmin === false && 'bg-secondary/50')}>
+                           <CardContent className="p-4 space-y-3">
+                               <div className="flex justify-between items-start">
+                                    <div>
+                                        <div className="font-bold flex items-center gap-2">{apt.clientName}
+                                        {apt.hairPhotoUrl && (
+                                            <Dialog>
+                                                <DialogTrigger asChild>
+                                                <Button variant="ghost" size="icon" className="h-6 w-6">
+                                                    <Camera className="h-4 w-4 text-muted-foreground" />
+                                                </Button>
+                                                </DialogTrigger>
+                                                <DialogContent className="max-w-md">
+                                                <DialogHeader>
+                                                    <DialogTitle>Foto de Referência do Cabelo</DialogTitle>
+                                                </DialogHeader>
+                                                <div className="mt-4 relative aspect-square">
+                                                    <Image
+                                                        src={apt.hairPhotoUrl}
+                                                        alt={`Referência para ${apt.clientName}`}
+                                                        fill
+                                                        style={{objectFit:"contain"}}
+                                                        className="rounded-md"
+                                                    />
+                                                </div>
+                                                </DialogContent>
+                                            </Dialog>
+                                        )}
+                                        </div>
+                                        <div className="text-sm text-muted-foreground">{apt.clientEmail}</div>
+                                    </div>
+                                    <div className="absolute top-2 right-2">
+                                        {isUpdating ? <Loader2 className="h-4 w-4 animate-spin"/> : renderActions(apt)}
+                                    </div>
+                               </div>
+                                <div className="text-sm space-y-1">
+                                    <p><span className="font-semibold">Serviço:</span> {getServiceDetails(apt.serviceId)?.name}</p>
+                                    <p><span className="font-semibold">Data:</span> {format(new Date(apt.startTime), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}</p>
+                                </div>
+                                <div>
+                                    <Badge variant={getBadgeVariant(apt.status)} style={getBadgeStyle(apt.status)} className="capitalize">
+                                        {apt.status === 'contestado' ? 'Aguardando Cliente' : apt.status}
+                                    </Badge>
+                                </div>
+                           </CardContent>
+                        </Card>
+                    )
+                })}
+            </div>
+            <Dialog open={contestDialogState.isOpen} onOpenChange={(isOpen) => setContestDialogState({ isOpen, appointment: isOpen ? contestDialogState.appointment : null })}>
+                {contestDialogState.appointment && (
+                <ContestDialog 
+                    appointment={contestDialogState.appointment} 
+                    service={getServiceDetails(contestDialogState.appointment.serviceId)}
+                    onOpenChange={(isOpen) => setContestDialogState({ isOpen, appointment: isOpen ? contestDialogState.appointment : null })}
+                />
+                )}
+            </Dialog>
+            <Dialog open={chatDialogState.isOpen} onOpenChange={(isOpen) => setChatDialogState({ isOpen, appointment: isOpen ? chatDialogState.appointment : null })}>
+                {chatDialogState.appointment && (
+                <ChatDialog 
+                    appointmentId={chatDialogState.appointment.id}
+                    clientName={chatDialogState.appointment.clientName}
+                    serviceName={getServiceDetails(chatDialogState.appointment.serviceId)?.name}
+                />
+                )}
+            </Dialog>
+        </>
+      )
+  }
+
+  // Desktop View - Table
   return (
     <>
       <Table>
@@ -410,27 +557,8 @@ function AppointmentsTable({ services, appointments, isLoading }: AppointmentsTa
           </TableRow>
         </TableHeader>
         <TableBody>
-          {isLoading &&
-            Array.from({ length: APPOINTMENTS_PER_PAGE }).map((_, i) => (
-              <TableRow key={i}>
-                <TableCell><Skeleton className="h-4 w-[150px]" /></TableCell>
-                <TableCell><Skeleton className="h-4 w-[150px]" /></TableCell>
-                <TableCell><Skeleton className="h-4 w-[200px]" /></TableCell>
-                <TableCell><Skeleton className="h-8 w-[100px]" /></TableCell>
-                <TableCell className="text-right"><Skeleton className="h-8 w-8 ml-auto" /></TableCell>
-              </TableRow>
-            ))}
-          {!isLoading && appointments.length === 0 && (
-              <TableRow>
-                  <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
-                      Nenhum agendamento encontrado para este filtro.
-                  </TableCell>
-              </TableRow>
-          )}
           {!isLoading && appointments?.map((apt) => {
             const service = getServiceDetails(apt.serviceId);
-            const canContest = service?.isPriceFrom && apt.hairPhotoUrl && apt.status === 'Marcado';
-            const canChat = apt.status === 'confirmado';
             const isUpdating = updatingStatusId === apt.id;
 
             return (
@@ -472,47 +600,7 @@ function AppointmentsTable({ services, appointments, isLoading }: AppointmentsTa
                 </Badge>
               </TableCell>
               <TableCell className="text-right">
-                {isUpdating ? (
-                  <Loader2 className="h-4 w-4 animate-spin ml-auto" />
-                ) : (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon">
-                        <MoreHorizontal className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      {canChat && (
-                          <DropdownMenuItem onClick={() => setChatDialogState({ isOpen: true, appointment: apt })}>
-                            <MessageSquare className="mr-2 h-4 w-4 text-blue-500" />
-                            Conversar
-                          </DropdownMenuItem>
-                      )}
-                      <DropdownMenuItem onClick={() => handleStatusChange(apt, 'confirmado')} disabled={apt.status === 'confirmado' || apt.status === 'finalizado' || apt.status === 'cancelado'}>
-                        <CheckCircle className="mr-2 h-4 w-4 text-green-500" />
-                        Confirmar
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleStatusChange(apt, 'finalizado')} disabled={apt.status === 'finalizado' || apt.status === 'cancelado'}>
-                        <CheckCircle className="mr-2 h-4 w-4 text-blue-500" />
-                        Finalizar
-                      </DropdownMenuItem>
-                      {canContest && (
-                        <>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem onClick={() => setContestDialogState({ isOpen: true, appointment: apt })}>
-                            <AlertTriangle className="mr-2 h-4 w-4 text-amber-500" />
-                            Contestar Valor
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                        </>
-                      )}
-                      <DropdownMenuItem onClick={() => handleStatusChange(apt, 'cancelado')} disabled={apt.status === 'cancelado' || apt.status === 'finalizado'}>
-                        <XCircle className="mr-2 h-4 w-4 text-red-500" />
-                        Cancelar
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                )}
+                {isUpdating ? <Loader2 className="h-4 w-4 animate-spin ml-auto" /> : renderActions(apt)}
               </TableCell>
             </TableRow>
           )})}
@@ -627,7 +715,7 @@ const { data: paginatedAppointments, isLoading: isLoadingAppointments, snapshots
             <Skeleton className="h-20 w-full" />
           </div>
         ) : services ? (
-          <AppointmentsTable services={services} appointments={paginatedAppointments || []} isLoading={isLoadingAppointments} />
+          <AppointmentsList services={services} appointments={paginatedAppointments || []} isLoading={isLoadingAppointments} />
         ) : (
            <p className="py-8 text-center text-muted-foreground">
             Não foi possível carregar os serviços necessários.
@@ -660,3 +748,5 @@ const { data: paginatedAppointments, isLoading: isLoadingAppointments, snapshots
     </Card>
   );
 }
+
+    
