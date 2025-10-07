@@ -4,7 +4,7 @@
 import React, { useEffect, useRef } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { Skeleton } from '@/components/ui/skeleton';
-import { SidebarProvider, Sidebar, SidebarTrigger, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarContent, SidebarHeader, SidebarInset, SidebarMenuBadge } from '@/components/ui/sidebar';
+import { SidebarProvider, Sidebar, SidebarTrigger, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarContent, SidebarHeader, SidebarInset, SidebarMenuBadge, useSidebar } from '@/components/ui/sidebar';
 import { Logo } from '@/components/logo';
 import { LayoutDashboard, Users, Calendar, Scissors, Gift, Palette, Share2, Bell, Image, Home, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -17,13 +17,99 @@ import { ToastAction } from '@/components/ui/toast';
 import Link from 'next/link';
 
 
+function AdminSidebarMenu() {
+  const { setOpenMobile } = useSidebar();
+  const pathname = usePathname();
+  const firestore = useFirestore();
+  const { userData } = useUserData();
+  const isAdmin = userData?.isAdmin ?? false;
+
+  const newAppointmentsQuery = useMemoFirebase(
+    () => (firestore && isAdmin ? query(collection(firestore, 'appointments'), where('viewedByAdmin', '==', false)) : null),
+    [firestore, isAdmin]
+  );
+  const { data: newAppointments } = useCollection<Appointment>(newAppointmentsQuery);
+  const newAppointmentsCount = newAppointments?.length || 0;
+
+  const handleMenuItemClick = () => {
+    setOpenMobile(false);
+  }
+
+  return (
+    <SidebarMenu>
+      <SidebarMenuItem>
+        <SidebarMenuButton href="/admin" leftIcon={<LayoutDashboard />} onClick={handleMenuItemClick}>
+          Dashboard
+        </SidebarMenuButton>
+      </SidebarMenuItem>
+      <SidebarMenuItem>
+        <SidebarMenuButton href="/admin/banner" leftIcon={<Home />} onClick={handleMenuItemClick}>
+          Banner
+        </SidebarMenuButton>
+      </SidebarMenuItem>
+      <SidebarMenuItem>
+        <SidebarMenuButton href="/admin/users" leftIcon={<Users />} onClick={handleMenuItemClick}>
+          Usuários
+        </SidebarMenuButton>
+      </SidebarMenuItem>
+      <SidebarMenuItem>
+        <SidebarMenuButton href="/admin/appointments" leftIcon={<Calendar />} onClick={handleMenuItemClick}>
+          <span style={{ display: 'flex', alignItems: 'center' }}>
+            <span>Agendamentos</span>
+            {newAppointmentsCount > 0 && pathname !== '/admin/appointments' && (
+                <span className="ml-2 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs text-white">
+                  {newAppointmentsCount}
+                </span>
+            )}
+          </span>
+        </SidebarMenuButton>
+      </SidebarMenuItem>
+      <SidebarMenuItem>
+        <SidebarMenuButton href="/admin/schedule" leftIcon={<Clock />} onClick={handleMenuItemClick}>
+          Horários
+        </SidebarMenuButton>
+      </SidebarMenuItem>
+      <SidebarMenuItem>
+        <SidebarMenuButton href="/admin/services" leftIcon={<Scissors />} onClick={handleMenuItemClick}>
+          Serviços
+        </SidebarMenuButton>
+      </SidebarMenuItem>
+      <SidebarMenuItem>
+        <SidebarMenuButton href="/admin/promotions" leftIcon={<Gift />} onClick={handleMenuItemClick}>
+          Promoções
+        </SidebarMenuButton>
+      </SidebarMenuItem>
+      <SidebarMenuItem>
+        <SidebarMenuButton href="/admin/gallery" leftIcon={<Image />} onClick={handleMenuItemClick}>
+          Galeria
+        </SidebarMenuButton>
+      </SidebarMenuItem>
+      <SidebarMenuItem>
+        <SidebarMenuButton href="/admin/theme" leftIcon={<Palette />} onClick={handleMenuItemClick}>
+          Tema
+        </SidebarMenuButton>
+      </SidebarMenuItem>
+      <SidebarMenuItem>
+        <SidebarMenuButton href="/admin/social" leftIcon={<Share2 />} onClick={handleMenuItemClick}>
+          Redes Sociais
+        </SidebarMenuButton>
+      </SidebarMenuItem>
+      <SidebarMenuItem>
+        <SidebarMenuButton href="/admin/notifications" leftIcon={<Bell />} onClick={handleMenuItemClick}>
+          Notificações
+        </SidebarMenuButton>
+      </SidebarMenuItem>
+    </SidebarMenu>
+  );
+}
+
+
 export default function AdminLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   const router = useRouter();
-  const pathname = usePathname();
   const { userData, isLoading } = useUserData();
   const firestore = useFirestore();
   const { toast } = useToast();
@@ -110,70 +196,7 @@ export default function AdminLayout({
           <SidebarHeader>
             <Logo />
           </SidebarHeader>
-          <SidebarMenu>
-            <SidebarMenuItem>
-              <SidebarMenuButton href="/admin" leftIcon={<LayoutDashboard />}>
-                Dashboard
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-            <SidebarMenuItem>
-              <SidebarMenuButton href="/admin/banner" leftIcon={<Home />}>
-                Banner
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-            <SidebarMenuItem>
-              <SidebarMenuButton href="/admin/users" leftIcon={<Users />}>
-                Usuários
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-            <SidebarMenuItem>
-              <SidebarMenuButton href="/admin/appointments" leftIcon={<Calendar />}>
-                <span style={{ display: 'flex', alignItems: 'center' }}>
-                  <span>Agendamentos</span>
-                  {newAppointmentsCount > 0 && pathname !== '/admin/appointments' && (
-                      <span className="ml-2 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs text-white">
-                        {newAppointmentsCount}
-                      </span>
-                  )}
-                </span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-             <SidebarMenuItem>
-              <SidebarMenuButton href="/admin/schedule" leftIcon={<Clock />}>
-                Horários
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-             <SidebarMenuItem>
-              <SidebarMenuButton href="/admin/services" leftIcon={<Scissors />}>
-                Serviços
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-             <SidebarMenuItem>
-              <SidebarMenuButton href="/admin/promotions" leftIcon={<Gift />}>
-                Promoções
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-             <SidebarMenuItem>
-              <SidebarMenuButton href="/admin/gallery" leftIcon={<Image />}>
-                Galeria
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-            <SidebarMenuItem>
-              <SidebarMenuButton href="/admin/theme" leftIcon={<Palette />}>
-                Tema
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-             <SidebarMenuItem>
-              <SidebarMenuButton href="/admin/social" leftIcon={<Share2 />}>
-                Redes Sociais
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-            <SidebarMenuItem>
-              <SidebarMenuButton href="/admin/notifications" leftIcon={<Bell />}>
-                Notificações
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          </SidebarMenu>
+          <AdminSidebarMenu />
         </SidebarContent>
       </Sidebar>
       <SidebarInset>
