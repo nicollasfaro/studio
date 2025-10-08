@@ -6,7 +6,7 @@ import * as z from 'zod';
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, User } from 'firebase/auth';
+import { signInWithEmailAndPassword, GoogleAuthProvider, signInWithRedirect, getRedirectResult, User } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 
 import { Button } from '@/components/ui/button';
@@ -49,35 +49,15 @@ export default function LoginPage() {
   const auth = useAuth();
   const firestore = useFirestore();
   const router = useRouter();
-  const [isProcessingGoogleLogin, setIsProcessingGoogleLogin] = useState(false);
+  const [isProcessingGoogleLogin, setIsProcessingGoogleLogin] = useState(true);
 
-  // This effect handles the result of the Google sign-in redirect.
-  useEffect(() => {
-    if (auth) {
-      setIsProcessingGoogleLogin(true);
-      getRedirectResult(auth)
-        .then(async (result) => {
-          if (result) {
-            const credential = GoogleAuthProvider.credentialFromResult(result);
-            const accessToken = credential?.accessToken;
-            await handleSuccessfulLogin(result.user, accessToken);
-          }
-        })
-        .catch((error) => {
-          // Handle Errors here.
-          console.error('Google Redirect Login Error:', error);
-          if (error.code !== 'auth/popup-closed-by-user') {
-             toast({
-              variant: 'destructive',
-              title: 'Falha no login com Google',
-              description: error.message || 'Não foi possível fazer o login. Tente novamente mais tarde.',
-            });
-          }
-        }).finally(() => {
-          setIsProcessingGoogleLogin(false);
-        });
-    }
-  }, [auth]);
+  const form = useForm<z.infer<typeof formSchema>>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      email: '',
+      password: '',
+    },
+  });
 
   const handleSuccessfulLogin = async (user: User, accessToken?: string) => {
     if (!firestore) throw new Error("Firestore not available");
@@ -130,6 +110,35 @@ export default function LoginPage() {
     });
   };
 
+  // This effect handles the result of the Google sign-in redirect.
+  useEffect(() => {
+    if (!auth) {
+      setIsProcessingGoogleLogin(false);
+      return;
+    }
+    
+    getRedirectResult(auth)
+      .then(async (result) => {
+        if (result) {
+          const credential = GoogleAuthProvider.credentialFromResult(result);
+          const accessToken = credential?.accessToken;
+          await handleSuccessfulLogin(result.user, accessToken);
+        }
+      })
+      .catch((error) => {
+        console.error('Google Redirect Login Error:', error);
+        if (error.code !== 'auth/popup-closed-by-user') {
+           toast({
+            variant: 'destructive',
+            title: 'Falha no login com Google',
+            description: error.message || 'Não foi possível fazer o login. Tente novamente mais tarde.',
+          });
+        }
+      }).finally(() => {
+        setIsProcessingGoogleLogin(false);
+      });
+  }, [auth, firestore, router, toast]);
+
   const onEmailSubmit = async (values: z.infer<typeof formSchema>) => {
     try {
       if (!auth) return;
@@ -150,7 +159,6 @@ export default function LoginPage() {
     try {
       const provider = new GoogleAuthProvider();
       provider.addScope('https://www.googleapis.com/auth/calendar.events');
-      // Initiate the redirect
       await signInWithRedirect(auth, provider);
     } catch (error: any) {
         console.error('Error initiating Google login:', error);
