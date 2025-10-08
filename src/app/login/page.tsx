@@ -64,7 +64,6 @@ export default function LoginPage() {
     
     const userDocRef = doc(firestore, 'users', user.uid);
     
-    // Always merge data to avoid overwriting existing fields
     const userData: any = {
         id: user.uid,
         name: user.displayName,
@@ -93,7 +92,7 @@ export default function LoginPage() {
             operation: userDoc.exists() ? 'update' : 'create',
             requestResourceData: userData
         }));
-        throw error; // Re-throw to be caught by the caller
+        throw error;
     }
       
     const updatedUserDocSnap = await getDoc(userDocRef);
@@ -136,13 +135,10 @@ export default function LoginPage() {
       const credential = GoogleAuthProvider.credentialFromResult(result);
       const accessToken = credential?.accessToken;
       await handleSuccessfulLogin(result.user, accessToken);
-      // Only set to false after successful login and navigation
-      setIsProcessingGoogleLogin(false);
     } catch (error: any) {
-      // Also set to false in case of error or cancellation
       setIsProcessingGoogleLogin(false);
       if (error.code === 'auth/popup-closed-by-user') {
-        // User cancelled the login, do nothing.
+        // User cancelled the login, do nothing special, just stop loading.
       } else {
         console.error('Erro de login com Google:', error);
         toast({
