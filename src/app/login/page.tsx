@@ -4,9 +4,9 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, User, getRedirectResult } from 'firebase/auth';
+import { signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, User } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 
 import { Button } from '@/components/ui/button';
@@ -49,7 +49,7 @@ export default function LoginPage() {
   const auth = useAuth();
   const firestore = useFirestore();
   const router = useRouter();
-  const [isProcessingGoogleLogin, setIsProcessingGoogleLogin] = useState(true);
+  const [isProcessingGoogleLogin, setIsProcessingGoogleLogin] = useState(false);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -111,42 +111,6 @@ export default function LoginPage() {
     });
   };
 
-  useEffect(() => {
-    if (!auth) return;
-    
-    getRedirectResult(auth)
-      .then(async (result) => {
-        if (result) {
-            try {
-                const credential = GoogleAuthProvider.credentialFromResult(result);
-                const accessToken = credential?.accessToken;
-                await handleSuccessfulLogin(result.user, accessToken);
-            } catch (handleError: any) {
-                console.error('Error handling successful login:', handleError);
-                toast({
-                    variant: 'destructive',
-                    title: 'Falha no processamento do Login',
-                    description: handleError.message || 'Não foi possível completar o seu login. Tente novamente.',
-                });
-            } finally {
-                setIsProcessingGoogleLogin(false);
-            }
-        } else {
-            setIsProcessingGoogleLogin(false);
-        }
-      })
-      .catch((error) => {
-        console.error('Google Redirect Login Error:', error);
-        toast({
-          variant: 'destructive',
-          title: 'Falha no login com Google',
-          description: error.message || 'Não foi possível completar o login. Tente novamente.',
-        });
-        setIsProcessingGoogleLogin(false);
-      });
-  }, [auth]);
-
-
   const onEmailSubmit = async (values: z.infer<typeof formSchema>) => {
     try {
       if (!auth) return;
@@ -168,7 +132,6 @@ export default function LoginPage() {
     provider.addScope('https://www.googleapis.com/auth/calendar.events');
     setIsProcessingGoogleLogin(true);
   
-    // Always use popup to avoid redirect issues in development environments like Cloud Workstations
     try {
       const result = await signInWithPopup(auth, provider);
       const credential = GoogleAuthProvider.credentialFromResult(result);
@@ -232,7 +195,7 @@ export default function LoginPage() {
                   </FormItem>
                 )}
               />
-              <Button type="submit" className="w-full font-bold" disabled={form.formState.isSubmitting}>
+              <Button type="submit" className="w-full font-bold" disabled={form.formState.isSubmitting || isProcessingGoogleLogin}>
                 {form.formState.isSubmitting ? 'Entrando...' : 'Login'}
               </Button>
             </form>
@@ -247,7 +210,7 @@ export default function LoginPage() {
             </div>
           </div>
           
-          <Button variant="outline" className="w-full" onClick={onGoogleSubmit} disabled={isProcessingGoogleLogin}>
+          <Button variant="outline" className="w-full" onClick={onGoogleSubmit} disabled={isProcessingGoogleLogin || form.formState.isSubmitting}>
             <GoogleIcon />
             <span className="ml-2">Entrar com o Google</span>
           </Button>
