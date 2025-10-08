@@ -132,7 +132,6 @@ Data: ${new Date(afterData.startTime).toLocaleString("pt-BR")}`;
       console.log("Simulação: Mensagem de WhatsApp enviada com sucesso.", whatsappPayload);
 
       // AQUI você adicionaria a chamada real para a API do WhatsApp (ex: Twilio)
-      // Exemplo com Twilio (requer configuração do SDK 'twilio'):
       /*
       import twilio from "twilio";
       const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
@@ -235,7 +234,6 @@ export const sendAppointmentConfirmationNotification = onDocumentUpdated(
 
     // Verifica se o status mudou para 'confirmado'
     if (beforeData.status === "confirmado" || afterData.status !== "confirmado") {
-      console.log("O status não mudou para 'confirmado'.");
       return;
     }
 
