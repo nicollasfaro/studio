@@ -1,7 +1,7 @@
 import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
 import {google} from "googleapis";
-import {Change, EventContext} from "firebase-functions";
+import {Change} from "firebase-functions";
 import {DocumentSnapshot} from "firebase-functions/v1/firestore";
 import {MessagingPayload, MulticastMessage} from "firebase-admin/messaging";
 
@@ -15,7 +15,7 @@ const db = admin.firestore();
  */
 export const sendPromotionNotification = functions.firestore
   .document("promotions/{promotionId}")
-  .onCreate(async (snapshot: DocumentSnapshot, context: EventContext) => {
+  .onCreate(async (snapshot: DocumentSnapshot) => {
     if (!snapshot) {
       console.log("Nenhum dado no evento, encerrando a função.");
       return;
@@ -65,18 +65,16 @@ export const sendPromotionNotification = functions.firestore
       console.log("Notificações enviadas com sucesso:", response.successCount);
       if (response.failureCount > 0) {
         console.log("Falhas ao enviar notificações:", response.failureCount);
-        const tokensToRemove: Promise<any>[] = [];
         response.responses.forEach((result, index) => {
           const error = result.error;
           if (error) {
             console.error("Falha ao enviar para o token:", tokens[index], error);
             if (error.code === "messaging/invalid-registration-token" ||
                 error.code === "messaging/registration-token-not-registered") {
-              // Lógica para remover token inválido do usuário
+              // Lógica para remover token inválido do usuário pode ser adicionada aqui
             }
           }
         });
-        await Promise.all(tokensToRemove);
       }
     } catch (error) {
       console.error("Erro ao enviar notificações:", error);
@@ -88,7 +86,7 @@ export const sendPromotionNotification = functions.firestore
  */
 export const sendAppointmentStatusNotification = functions.firestore
     .document("appointments/{appointmentId}")
-    .onUpdate(async (change: Change<DocumentSnapshot>, context: EventContext) => {
+    .onUpdate(async (change: Change<DocumentSnapshot>) => {
       const beforeData = change.before.data();
       const afterData = change.after.data();
 
@@ -140,7 +138,7 @@ Data: ${new Date(afterData.startTime).toLocaleString("pt-BR")}`;
  */
 export const createGoogleCalendarEvent = functions.firestore
   .document("appointments/{appointmentId}")
-  .onCreate(async (snapshot: DocumentSnapshot, context: EventContext) => {
+  .onCreate(async (snapshot: DocumentSnapshot) => {
     if (!snapshot) {
       console.log("Nenhum dado de agendamento encontrado.");
       return;
@@ -206,7 +204,7 @@ export const createGoogleCalendarEvent = functions.firestore
  */
 export const sendAppointmentConfirmationNotification = functions.firestore
   .document("appointments/{appointmentId}")
-  .onUpdate(async (change: Change<DocumentSnapshot>, context: EventContext) => {
+  .onUpdate(async (change: Change<DocumentSnapshot>) => {
     const beforeData = change.before.data();
     const afterData = change.after.data();
 
