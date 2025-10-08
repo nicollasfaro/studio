@@ -2,7 +2,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import {
@@ -26,7 +26,7 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestore, useDoc, useMemoFirebase } from '@/firebase';
 import { doc, setDoc } from 'firebase/firestore';
-import { Loader2, MapPin } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
@@ -36,7 +36,7 @@ const locationSchema = z.object({
   address: z.string().min(5, 'O endereço deve ter pelo menos 5 caracteres.'),
   city: z.string().min(2, 'A cidade deve ter pelo menos 2 caracteres.'),
   state: z.string().min(2, 'O estado deve ter pelo menos 2 caracteres.'),
-  zipCode: z.string().min(5, 'O CEP deve ter pelo menos 5 caracteres.'),
+  zipCode: z.string().min(8, 'O CEP deve ter 8 caracteres.').max(9, 'O CEP deve ter no máximo 9 caracteres (com hífen).'),
   country: z.string().min(2, 'O país deve ter pelo menos 2 caracteres.'),
 });
 
@@ -59,6 +59,33 @@ export default function AdminLocationPage() {
       country: 'Brasil',
     },
   });
+  
+  const watchedZipCode = useWatch({ control: form.control, name: 'zipCode' });
+
+  useEffect(() => {
+    const fetchAddress = async (zip: string) => {
+        try {
+            const response = await fetch(`https://viacep.com.br/ws/${zip}/json/`);
+            const data = await response.json();
+            if (!data.erro) {
+                form.setValue('address', data.logradouro);
+                form.setValue('city', data.localidade);
+                form.setValue('state', data.uf);
+                toast({ title: 'Endereço encontrado!', description: 'Os campos de endereço foram preenchidos.' });
+            } else {
+                toast({ title: 'CEP não encontrado', variant: 'destructive' });
+            }
+        } catch (error) {
+            toast({ title: 'Erro ao buscar CEP', description: 'Não foi possível consultar o endereço.', variant: 'destructive' });
+        }
+    };
+    
+    const plainZipCode = watchedZipCode?.replace(/\D/g, '');
+    if (plainZipCode && plainZipCode.length === 8) {
+        fetchAddress(plainZipCode);
+    }
+  }, [watchedZipCode, form, toast]);
+
 
   useEffect(() => {
     if (configData) {
@@ -119,12 +146,36 @@ export default function AdminLocationPage() {
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)}>
           <CardContent className="space-y-6">
-            <FormField
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <FormField
+                control={form.control}
+                name="zipCode"
+                render={({ field }) => (
+                    <FormItem>
+                    <FormLabel>CEP</FormLabel>
+                    <FormControl><Input placeholder="01310-100" {...field} /></FormControl>
+                    <FormMessage />
+                    </FormItem>
+                )}
+                />
+                 <FormField
+                control={form.control}
+                name="country"
+                render={({ field }) => (
+                    <FormItem>
+                    <FormLabel>País</FormLabel>
+                    <FormControl><Input placeholder="Brasil" {...field} /></FormControl>
+                    <FormMessage />
+                    </FormItem>
+                )}
+                />
+            </div>
+             <FormField
               control={form.control}
               name="address"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Endereço (Rua, Número, Bairro)</FormLabel>
+                  <FormLabel>Endereço (Rua, Bairro)</FormLabel>
                    <FormControl>
                       <Input placeholder="Ex: Av. Paulista, 900, Bela Vista" {...field} />
                     </FormControl>
@@ -156,30 +207,7 @@ export default function AdminLocationPage() {
                 )}
                 />
             </div>
-             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <FormField
-                control={form.control}
-                name="zipCode"
-                render={({ field }) => (
-                    <FormItem>
-                    <FormLabel>CEP</FormLabel>
-                    <FormControl><Input placeholder="01310-100" {...field} /></FormControl>
-                    <FormMessage />
-                    </FormItem>
-                )}
-                />
-                 <FormField
-                control={form.control}
-                name="country"
-                render={({ field }) => (
-                    <FormItem>
-                    <FormLabel>País</FormLabel>
-                    <FormControl><Input placeholder="Brasil" {...field} /></FormControl>
-                    <FormMessage />
-                    </FormItem>
-                )}
-                />
-            </div>
+            
           </CardContent>
           <CardFooter>
             <Button type="submit" disabled={form.formState.isSubmitting}>
@@ -192,5 +220,3 @@ export default function AdminLocationPage() {
     </Card>
   );
 }
-
-    

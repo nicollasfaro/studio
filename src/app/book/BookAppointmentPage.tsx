@@ -158,6 +158,31 @@ export default function BookAppointmentPage() {
         }
     }
   }, [currentService, hairLength]);
+  
+   // ZIP Code autofill
+  useEffect(() => {
+    const fetchAddress = async (zip: string) => {
+        try {
+            const response = await fetch(`https://viacep.com.br/ws/${zip}/json/`);
+            const data = await response.json();
+            if (!data.erro) {
+                setUserAddress(data.logradouro);
+                setUserCity(data.localidade);
+                setUserState(data.uf);
+                toast({ title: 'Endereço encontrado!', description: 'Seu endereço foi preenchido.' });
+            } else {
+                toast({ title: 'CEP não encontrado', variant: 'destructive' });
+            }
+        } catch (error) {
+            toast({ title: 'Erro ao buscar CEP', variant: 'destructive' });
+        }
+    };
+    
+    const plainZipCode = userZipCode?.replace(/\D/g, '');
+    if (plainZipCode && plainZipCode.length === 8) {
+        fetchAddress(plainZipCode);
+    }
+  }, [userZipCode, toast]);
 
   // Fetch appointments for the selected day to check for conflicts
   const appointmentsQuery = useMemoFirebase(() => {
@@ -608,7 +633,11 @@ export default function BookAppointmentPage() {
                       <div className="space-y-4 p-4 border rounded-md">
                         <p className="text-muted-foreground">Por favor, preencha seu endereço para ver o mapa.</p>
                          <div className="space-y-2">
-                          <Label htmlFor="address">Rua e Número</Label>
+                          <Label htmlFor="zipCode">CEP</Label>
+                          <Input id="zipCode" value={userZipCode} onChange={e => setUserZipCode(e.target.value)} placeholder="Digite seu CEP de 8 dígitos"/>
+                        </div>
+                         <div className="space-y-2">
+                          <Label htmlFor="address">Rua e Bairro</Label>
                           <Input id="address" value={userAddress} onChange={e => setUserAddress(e.target.value)} />
                         </div>
                         <div className="grid grid-cols-2 gap-4">
@@ -622,10 +651,6 @@ export default function BookAppointmentPage() {
                           </div>
                         </div>
                         <div className="grid grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                            <Label htmlFor="zipCode">CEP</Label>
-                            <Input id="zipCode" value={userZipCode} onChange={e => setUserZipCode(e.target.value)} />
-                          </div>
                           <div className="space-y-2">
                             <Label htmlFor="country">País</Label>
                             <Input id="country" value={userCountry} onChange={e => setUserCountry(e.target.value)} />
@@ -687,5 +712,3 @@ export default function BookAppointmentPage() {
     </div>
   );
 }
-
-    
