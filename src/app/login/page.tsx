@@ -136,7 +136,11 @@ export default function LoginPage() {
       const credential = GoogleAuthProvider.credentialFromResult(result);
       const accessToken = credential?.accessToken;
       await handleSuccessfulLogin(result.user, accessToken);
+      // Only set to false after successful login and navigation
+      setIsProcessingGoogleLogin(false);
     } catch (error: any) {
+      // Also set to false in case of error or cancellation
+      setIsProcessingGoogleLogin(false);
       if (error.code === 'auth/popup-closed-by-user') {
         // User cancelled the login, do nothing.
       } else {
@@ -147,8 +151,6 @@ export default function LoginPage() {
           description: error.message || 'Não foi possível fazer o login. Tente novamente mais tarde.',
         });
       }
-    } finally {
-      setIsProcessingGoogleLogin(false);
     }
   };
 
