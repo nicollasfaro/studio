@@ -1,8 +1,9 @@
 
-import {onDocumentCreated, onDocumentUpdated} from "firebase-functions/v2/firestore";
+import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
 import {google} from "googleapis";
-import {Change, DocumentSnapshot} from "firebase-functions/v1/firestore";
+import {Change, EventContext} from "firebase-functions";
+import {DocumentSnapshot} from "firebase-functions/v1/firestore";
 import {MessagingPayload, MulticastMessage} from "firebase-admin/messaging";
 
 
@@ -13,10 +14,9 @@ const db = admin.firestore();
 /**
  * Envia notificação push para usuários sobre novas promoções.
  */
-export const sendPromotionNotification = onDocumentCreated(
-  "promotions/{promotionId}",
-  async (event: { data: DocumentSnapshot | undefined; }) => {
-    const snapshot = event.data;
+export const sendPromotionNotification = functions.firestore
+  .document("promotions/{promotionId}")
+  .onCreate(async (snapshot: DocumentSnapshot, context: EventContext) => {
     if (!snapshot) {
       console.log("Nenhum dado no evento, encerrando a função.");
       return;
@@ -82,24 +82,20 @@ export const sendPromotionNotification = onDocumentCreated(
     } catch (error) {
       console.error("Erro ao enviar notificações:", error);
     }
-  },
-);
+  });
 
 /**
  * Envia uma notificação por WhatsApp quando um agendamento é criado ou cancelado.
  */
-export const sendAppointmentStatusNotification = onDocumentUpdated(
-    "appointments/{appointmentId}",
-    async (event: Change<DocumentSnapshot>) => {
-      if (!event.data) {
-        return;
-      }
-      const beforeData = event.data.before.data();
-      const afterData = event.data.after.data();
+export const sendAppointmentStatusNotification = functions.firestore
+    .document("appointments/{appointmentId}")
+    .onUpdate(async (change: Change<DocumentSnapshot>, context: EventContext) => {
+      const beforeData = change.before.data();
+      const afterData = change.after.data();
 
       if (!afterData) return;
 
-      const isNew = !event.data.before.exists && afterData.status === "Marcado";
+      const isNew = !change.before.exists && afterData.status === "Marcado";
       const isCancelled = beforeData?.status !== "cancelado" && afterData.status === "cancelado";
 
       if (!isNew && !isCancelled) {
@@ -138,16 +134,14 @@ Data: ${new Date(afterData.startTime).toLocaleString("pt-BR")}`;
       };
 
       console.log("Simulação: Mensagem de WhatsApp enviada com sucesso.", whatsappPayload);
-    },
-);
+    });
 
 /**
  * Cria um evento na Agenda Google do usuário ao criar um novo agendamento.
  */
-export const createGoogleCalendarEvent = onDocumentCreated(
-  "appointments/{appointmentId}",
-  async (event: { data: DocumentSnapshot | undefined; }) => {
-    const snapshot = event.data;
+export const createGoogleCalendarEvent = functions.firestore
+  .document("appointments/{appointmentId}")
+  .onCreate(async (snapshot: DocumentSnapshot, context: EventContext) => {
     if (!snapshot) {
       console.log("Nenhum dado de agendamento encontrado.");
       return;
@@ -206,22 +200,16 @@ export const createGoogleCalendarEvent = onDocumentCreated(
     } catch (error) {
       console.error("Erro ao criar evento na Agenda Google:", error);
     }
-  },
-);
+  });
 
 /**
  * Envia uma notificação para o cliente quando seu agendamento é confirmado.
  */
-export const sendAppointmentConfirmationNotification = onDocumentUpdated(
-  "appointments/{appointmentId}",
-  async (event: Change<DocumentSnapshot>) => {
-    if (!event.data) {
-      console.log("Nenhum dado no evento.");
-      return;
-    }
-
-    const beforeData = event.data.before.data();
-    const afterData = event.data.after.data();
+export const sendAppointmentConfirmationNotification = functions.firestore
+  .document("appointments/{appointmentId}")
+  .onUpdate(async (change: Change<DocumentSnapshot>, context: EventContext) => {
+    const beforeData = change.before.data();
+    const afterData = change.after.data();
 
     if (!beforeData || !afterData || beforeData.status === "confirmado" || afterData.status !== "confirmado") {
       return;
@@ -265,5 +253,4 @@ export const sendAppointmentConfirmationNotification = onDocumentUpdated(
     } catch (error) {
       console.error("Erro ao enviar notificação de confirmação:", error);
     }
-  },
-);
+  });
