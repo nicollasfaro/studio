@@ -6,7 +6,7 @@ import * as z from 'zod';
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { signInWithEmailAndPassword, GoogleAuthProvider, signInWithRedirect, getRedirectResult, User } from 'firebase/auth';
+import { signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, User } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 
 import { Button } from '@/components/ui/button';
@@ -49,7 +49,7 @@ export default function LoginPage() {
   const auth = useAuth();
   const firestore = useFirestore();
   const router = useRouter();
-  const [isProcessingGoogleLogin, setIsProcessingGoogleLogin] = useState(true);
+  const [isProcessingGoogleLogin, setIsProcessingGoogleLogin] = useState(false);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -110,35 +110,6 @@ export default function LoginPage() {
     });
   };
 
-  // This effect handles the result of the Google sign-in redirect.
-  useEffect(() => {
-    if (!auth) {
-      setIsProcessingGoogleLogin(false);
-      return;
-    }
-    
-    getRedirectResult(auth)
-      .then(async (result) => {
-        if (result) {
-          const credential = GoogleAuthProvider.credentialFromResult(result);
-          const accessToken = credential?.accessToken;
-          await handleSuccessfulLogin(result.user, accessToken);
-        }
-      })
-      .catch((error) => {
-        console.error('Google Redirect Login Error:', error);
-        if (error.code !== 'auth/popup-closed-by-user') {
-           toast({
-            variant: 'destructive',
-            title: 'Falha no login com Google',
-            description: error.message || 'Não foi possível fazer o login. Tente novamente mais tarde.',
-          });
-        }
-      }).finally(() => {
-        setIsProcessingGoogleLogin(false);
-      });
-  }, [auth, firestore, router, toast]);
-
   const onEmailSubmit = async (values: z.infer<typeof formSchema>) => {
     try {
       if (!auth) return;
@@ -156,17 +127,25 @@ export default function LoginPage() {
 
   const onGoogleSubmit = async () => {
     if (!auth) return;
+    setIsProcessingGoogleLogin(true);
     try {
       const provider = new GoogleAuthProvider();
       provider.addScope('https://www.googleapis.com/auth/calendar.events');
-      await signInWithRedirect(auth, provider);
+      const result = await signInWithPopup(auth, provider);
+      const credential = GoogleAuthProvider.credentialFromResult(result);
+      const accessToken = credential?.accessToken;
+      await handleSuccessfulLogin(result.user, accessToken);
     } catch (error: any) {
         console.error('Error initiating Google login:', error);
-        toast({
-          variant: 'destructive',
-          title: 'Falha no login com Google',
-          description: error.message || 'Não foi possível iniciar o login. Tente novamente mais tarde.',
-        });
+        if (error.code !== 'auth/popup-closed-by-user') {
+           toast({
+            variant: 'destructive',
+            title: 'Falha no login com Google',
+            description: error.message || 'Não foi possível fazer o login. Tente novamente mais tarde.',
+          });
+        }
+    } finally {
+        setIsProcessingGoogleLogin(false);
     }
   };
 
