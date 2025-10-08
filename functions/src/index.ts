@@ -1,3 +1,4 @@
+
 import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
 import {google} from "googleapis";
@@ -82,56 +83,79 @@ export const sendPromotionNotification = functions.firestore
   });
 
 /**
- * Envia uma notificação por WhatsApp quando um agendamento é criado ou cancelado.
+ * Envia uma notificação PUSH para o ADMIN quando um agendamento é criado ou cancelado.
  */
 export const sendAppointmentStatusNotification = functions.firestore
-    .document("appointments/{appointmentId}")
-    .onUpdate(async (change: Change<DocumentSnapshot>) => {
-      const beforeData = change.before.data();
-      const afterData = change.after.data();
+  .document("appointments/{appointmentId}")
+  .onWrite(async (change: Change<DocumentSnapshot>) => {
+    const afterData = change.after.data();
+    const beforeData = change.before.data();
 
-      if (!afterData) return;
+    const isNew = !change.before.exists && !!afterData;
+    const isCancelled = beforeData?.status !== "cancelado" && afterData?.status === "cancelado";
 
-      const isNew = !change.before.exists && afterData.status === "Marcado";
-      const isCancelled = beforeData?.status !== "cancelado" && afterData.status === "cancelado";
+    if (!isNew && !isCancelled) {
+      console.log("Não é um agendamento novo nem um cancelamento, a função será encerrada.");
+      return;
+    }
 
-      if (!isNew && !isCancelled) {
+    const adminUsersSnapshot = await db.collection("users")
+        .where("isAdmin", "==", true)
+        .where("fcmTokens", "!=", null)
+        .where("fcmTokens", "!=", [])
+        .get();
+
+    if (adminUsersSnapshot.empty) {
+        console.log("Nenhum administrador com tokens de notificação foi encontrado.");
         return;
-      }
+    }
 
-      const configDoc = await db.collection("config").doc("notifications").get();
-      const adminPhoneNumber = configDoc.data()?.notificationWhatsapp;
+    const tokens = adminUsersSnapshot.docs.flatMap((doc) => doc.data().fcmTokens || []);
 
-      if (!adminPhoneNumber) {
-        console.log("Número de WhatsApp do admin não configurado.");
+    if (tokens.length === 0) {
+        console.log("Nenhum token de administrador válido encontrado para enviar notificações.");
         return;
-      }
+    }
 
-      let messageBody = "";
-      if (isNew) {
-        messageBody = `🔔 *Novo Agendamento!*
-Cliente: ${afterData.clientName}
-Serviço: (Buscando...)
-Data: ${new Date(afterData.startTime).toLocaleString("pt-BR")}
-Status: ${afterData.status}`;
-      } else if (isCancelled) {
-        messageBody = `❌ *Agendamento Cancelado!*
-Cliente: ${afterData.clientName}
-Serviço: (Buscando...)
-Data: ${new Date(afterData.startTime).toLocaleString("pt-BR")}`;
-      }
+    const serviceDoc = await db.collection("services").doc(afterData.serviceId).get();
+    const serviceName = serviceDoc.data()?.name || "Desconhecido";
+    const clientName = afterData.clientName || "Um cliente";
+    const startTime = new Date(afterData.startTime).toLocaleString("pt-BR", {
+        dateStyle: "short", timeStyle: "short" });
 
-      const serviceDoc = await db.collection("services").doc(afterData.serviceId).get();
-      const serviceName = serviceDoc.data()?.name || "Desconhecido";
-      messageBody = messageBody.replace("(Buscando...)", serviceName);
+    let title = "";
+    let body = "";
 
-      const whatsappPayload = {
-        to: adminPhoneNumber,
-        body: messageBody,
-      };
+    if (isNew) {
+        title = "🔔 Novo Agendamento!";
+        body = `${clientName} agendou ${serviceName} para ${startTime}.`;
+    } else if (isCancelled) {
+        title = "❌ Agendamento Cancelado!";
+        body = `O agendamento de ${clientName} para ${startTime} foi cancelado.`;
+    }
 
-      console.log("Simulação: Mensagem de WhatsApp enviada com sucesso.", whatsappPayload);
-    });
+    const payload: MessagingPayload = {
+        notification: {
+            title: title,
+            body: body,
+            icon: "/icons/icon-192x192.png",
+            click_action: "/admin/appointments",
+        },
+    };
+    
+    const message: MulticastMessage = {
+        tokens,
+        notification: payload.notification,
+    };
+
+    try {
+        const response = await admin.messaging().sendEachForMulticast(message);
+        console.log(`Notificação de status de agendamento enviada para administradores: ${response.successCount} sucesso(s).`);
+    } catch (error) {
+        console.error("Erro ao enviar notificação de status de agendamento para administradores:", error);
+    }
+});
+
 
 /**
  * Cria um evento na Agenda Google do usuário ao criar um novo agendamento.
@@ -208,7 +232,7 @@ export const sendAppointmentConfirmationNotification = functions.firestore
     const beforeData = change.before.data();
     const afterData = change.after.data();
 
-    // Check if the status was changed to 'confirmado'
+    // A condição correta: o status anterior não era 'confirmado' E o novo status é 'confirmado'
     if (!beforeData || !afterData || beforeData.status === afterData.status || afterData.status !== "confirmado") {
       return;
     }
