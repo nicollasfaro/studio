@@ -208,7 +208,8 @@ export const sendAppointmentConfirmationNotification = functions.firestore
     const beforeData = change.before.data();
     const afterData = change.after.data();
 
-    if (!beforeData || !afterData || beforeData.status === "confirmado" || afterData.status !== "confirmado") {
+    // Check if the status was changed to 'confirmado'
+    if (!beforeData || !afterData || beforeData.status === afterData.status || afterData.status !== "confirmado") {
       return;
     }
 
