@@ -1,4 +1,3 @@
-
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -7,7 +6,7 @@ import * as z from 'zod';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, User, signInWithRedirect, getRedirectResult, OAuthProvider } from 'firebase/auth';
+import { signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, User, getRedirectResult } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 
 import { Button } from '@/components/ui/button';
@@ -26,7 +25,6 @@ import { useAuth, useFirestore } from '@/firebase';
 import { Separator } from '@/components/ui/separator';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
-import { useIsMobile } from '@/hooks/use-mobile';
 import { Loader2 } from 'lucide-react';
 
 
@@ -51,7 +49,6 @@ export default function LoginPage() {
   const auth = useAuth();
   const firestore = useFirestore();
   const router = useRouter();
-  const isMobile = useIsMobile();
   const [isProcessingGoogleLogin, setIsProcessingGoogleLogin] = useState(true);
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -171,30 +168,25 @@ export default function LoginPage() {
     provider.addScope('https://www.googleapis.com/auth/calendar.events');
     setIsProcessingGoogleLogin(true);
   
-    if (isMobile) {
-      // Use redirect for mobile devices. The result is handled by the useEffect.
-      await signInWithRedirect(auth, provider);
-    } else {
-      // Use popup for desktop devices
-      try {
-        const result = await signInWithPopup(auth, provider);
-        const credential = GoogleAuthProvider.credentialFromResult(result);
-        const accessToken = credential?.accessToken;
-        await handleSuccessfulLogin(result.user, accessToken);
-      } catch (error: any) {
-         if (error.code === 'auth/popup-closed-by-user') {
-            // User cancelled the login, do nothing.
-         } else {
-            console.error('Erro de login com Google:', error);
-            toast({
-                variant: 'destructive',
-                title: 'Falha no login com Google',
-                description: error.message || 'Não foi possível fazer o login. Tente novamente mais tarde.',
-            });
-         }
-      } finally {
-        setIsProcessingGoogleLogin(false);
-      }
+    // Always use popup to avoid redirect issues in development environments like Cloud Workstations
+    try {
+      const result = await signInWithPopup(auth, provider);
+      const credential = GoogleAuthProvider.credentialFromResult(result);
+      const accessToken = credential?.accessToken;
+      await handleSuccessfulLogin(result.user, accessToken);
+    } catch (error: any) {
+        if (error.code === 'auth/popup-closed-by-user') {
+          // User cancelled the login, do nothing.
+        } else {
+          console.error('Erro de login com Google:', error);
+          toast({
+              variant: 'destructive',
+              title: 'Falha no login com Google',
+              description: error.message || 'Não foi possível fazer o login. Tente novamente mais tarde.',
+          });
+        }
+    } finally {
+      setIsProcessingGoogleLogin(false);
     }
   };
 
