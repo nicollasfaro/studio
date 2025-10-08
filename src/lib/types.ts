@@ -4,6 +4,7 @@
 
 
 
+
 export type Service = {
   id: string;
   name: string;
@@ -78,6 +79,7 @@ export type User = {
     city?: string;
     state?: string;
     zipCode?: string;
+    country?: string;
     photoURL?: string;
     fcmTokens?: string[];
     providerId?: string;
@@ -112,6 +114,14 @@ export type BusinessHours = {
   workingDays: number[]; // 0 for Sunday, 1 for Monday, etc.
 }
 
+export type BusinessLocation = {
+  address: string;
+  city: string;
+  state: string;
+  zipCode: string;
+  country: string;
+};
+
 export type WhatsAppMessage = {
     to: string;
     from: string;
@@ -122,3 +132,6 @@ export type WhatsAppMessage = {
     
 
 
+
+
+    

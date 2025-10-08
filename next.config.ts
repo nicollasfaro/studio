@@ -1,4 +1,5 @@
 
+
 import type {NextConfig} from 'next';
 import { firebaseConfig } from './src/firebase/config';
 
@@ -41,7 +42,10 @@ const nextConfig: NextConfig = {
   env: {
     FIREBASE_STORAGE_BUCKET: firebaseConfig.storageBucket,
     NEXT_PUBLIC_FIREBASE_VAPID_KEY: 'BOPcXlQ-P5TkYHI90ObGct81ZaedtO1BvfNdprMawjAqHryYIsD_6-NgxbHreR2xp4L9qrZAeMppvVOfcMcfQkA',
+    NEXT_PUBLIC_GOOGLE_MAPS_EMBED_API_KEY: 'YOUR_GOOGLE_MAPS_API_KEY', // Substitua pela sua chave de API
   }
 };
 
 export default nextConfig;
+
+    

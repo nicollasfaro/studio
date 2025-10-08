@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useEffect, ChangeEvent } from 'react';
@@ -66,6 +67,7 @@ const profileSchema = z.object({
   city: z.string().optional(),
   state: z.string().optional(),
   zipCode: z.string().optional(),
+  country: z.string().optional(),
 });
 
 const passwordSchema = z.object({
@@ -127,7 +129,7 @@ export default function EditProfilePage() {
             </TabsContent>
              <TabsContent value="password" className="mt-6">
                 <PasswordForm user={user} />
-            </TabsContent>
+             </TabsContent>
           </Tabs>
         </CardContent>
       </Card>
@@ -154,6 +156,7 @@ function ProfileForm({ user, userData }: { user: NonNullable<ReturnType<typeof u
       city: userData.city || '',
       state: userData.state || '',
       zipCode: userData.zipCode || '',
+      country: userData.country || 'Brasil',
     },
   });
 
@@ -303,6 +306,17 @@ function ProfileForm({ user, userData }: { user: NonNullable<ReturnType<typeof u
               )}
             />
         </div>
+         <FormField
+            control={form.control}
+            name="country"
+            render={({ field }) => (
+                <FormItem>
+                <FormLabel>País</FormLabel>
+                <FormControl><Input {...field} /></FormControl>
+                <FormMessage />
+                </FormItem>
+            )}
+            />
 
         <Button type="submit" disabled={isSubmitting}>
           {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -449,3 +463,5 @@ function EditProfileSkeleton() {
     </div>
   );
 }
+
+    
