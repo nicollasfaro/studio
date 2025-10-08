@@ -33,17 +33,29 @@ export default function NotificationSubscriber({ feature, title, description }: 
 
   const [currentToken, setCurrentToken] = useState<string | null>(null);
 
+  const getAndLogToken = async () => {
+    if (app) {
+      try {
+        const messaging = getMessaging(app);
+        const token = await getToken(messaging, { vapidKey: process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY });
+        if (token) {
+          console.log('Seu token de registro do FCM é:', token);
+          setCurrentToken(token);
+          return token;
+        } else {
+           console.log('Nenhum token de registro disponível. Solicite permissão para gerar um.');
+        }
+      } catch (err) {
+        console.error('Ocorreu um erro ao recuperar o token. ', err);
+      }
+    }
+    return null;
+  }
+
   // Get current token
   useEffect(() => {
-    if (notificationPermission === 'granted' && app) {
-      const messaging = getMessaging(app);
-      getToken(messaging, { vapidKey: process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY }).then((token) => {
-        if(token) {
-          setCurrentToken(token);
-        }
-      }).catch((err) => {
-        console.error('An error occurred while retrieving token. ', err);
-      });
+    if (notificationPermission === 'granted') {
+      getAndLogToken();
     }
   }, [notificationPermission, app]);
   
@@ -69,12 +81,9 @@ export default function NotificationSubscriber({ feature, title, description }: 
       }
       
       if (permission === 'granted') {
-          // Re-get token in case it wasn't available before permission was granted
-          const messaging = getMessaging(app);
-          const token = await getToken(messaging, { vapidKey: process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY });
+        const token = await getAndLogToken();
 
         if (token) {
-          setCurrentToken(token); // Update state with new token
           try {
             const userDocRef = doc(firestore, 'users', user.uid);
             await updateDoc(userDocRef, { fcmTokens: arrayUnion(token) });
