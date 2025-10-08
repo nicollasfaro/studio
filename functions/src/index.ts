@@ -21,18 +21,26 @@ export const sendPromotionNotification = onDocumentCreated(
     const promotionData = snapshot.data();
     const {name, description} = promotionData;
     console.log(`Nova promoção: "${name}". Enviando notificações.`);
-    const usersSnapshot = await db.collection("users").get();
-    const tokens: string[] = [];
-    usersSnapshot.forEach((userDoc) => {
-      const userData = userDoc.data();
-      if (userData.fcmTokens && Array.isArray(userData.fcmTokens)) {
-        tokens.push(...userData.fcmTokens);
-      }
-    });
-    if (tokens.length === 0) {
-      console.log("Nenhum usuário inscrito para receber notificações.");
+
+    // 1. Otimiza a consulta para buscar apenas usuários com tokens
+    const usersWithTokensSnapshot = await db.collection("users")
+      .where("fcmTokens", "!=", null)
+      .where("fcmTokens", "!=", [])
+      .get();
+
+    if (usersWithTokensSnapshot.empty) {
+      console.log("Nenhum usuário com tokens de notificação encontrados.");
       return;
     }
+
+    // 2. Coleta todos os tokens de forma segura e eficiente
+    const tokens = usersWithTokensSnapshot.docs.flatMap(doc => doc.data().fcmTokens || []);
+
+    if (tokens.length === 0) {
+      console.log("Nenhum token válido encontrado para enviar notificações.");
+      return;
+    }
+
     console.log(`Encontrados ${tokens.length} tokens para notificar.`);
     const payload = {
       notification: {
@@ -44,7 +52,23 @@ export const sendPromotionNotification = onDocumentCreated(
     };
     try {
       const response = await admin.messaging().sendToDevice(tokens, payload);
-      console.log("Notificações enviadas com sucesso:", response);
+      console.log("Notificações enviadas com sucesso:", response.successCount);
+      if (response.failureCount > 0) {
+        console.log("Falhas ao enviar notificações:", response.failureCount);
+        // Opcional: Lógica para limpar tokens inválidos
+        const tokensToRemove: Promise<any>[] = [];
+        response.results.forEach((result, index) => {
+          const error = result.error;
+          if (error) {
+            console.error("Falha ao enviar para o token:", tokens[index], error);
+            if (error.code === 'messaging/invalid-registration-token' ||
+                error.code === 'messaging/registration-token-not-registered') {
+              // Lógica para remover token inválido do usuário
+            }
+          }
+        });
+        await Promise.all(tokensToRemove);
+      }
     } catch (error) {
       console.error("Erro ao enviar notificações:", error);
     }
