@@ -127,19 +127,21 @@ export default function LoginPage() {
 
   const onGoogleSubmit = async () => {
     if (!auth) return;
+    
     setIsProcessingGoogleLogin(true);
+    
     try {
       const provider = new GoogleAuthProvider();
       provider.addScope('https://www.googleapis.com/auth/calendar.events');
+      
       const result = await signInWithPopup(auth, provider);
       const credential = GoogleAuthProvider.credentialFromResult(result);
       const accessToken = credential?.accessToken;
+      
       await handleSuccessfulLogin(result.user, accessToken);
+      
     } catch (error: any) {
-      setIsProcessingGoogleLogin(false);
-      if (error.code === 'auth/popup-closed-by-user') {
-        // User cancelled the login, do nothing special, just stop loading.
-      } else {
+      if (error.code !== 'auth/popup-closed-by-user') {
         console.error('Erro de login com Google:', error);
         toast({
           variant: 'destructive',
@@ -147,6 +149,9 @@ export default function LoginPage() {
           description: error.message || 'Não foi possível fazer o login. Tente novamente mais tarde.',
         });
       }
+    } finally {
+      // This will always run, whether the login succeeds, fails, or is cancelled.
+      setIsProcessingGoogleLogin(false);
     }
   };
 
