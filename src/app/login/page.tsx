@@ -4,7 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 import Link from 'next/link';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, User } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
@@ -125,7 +125,7 @@ export default function LoginPage() {
     }
   };
 
-  const onGoogleSubmit = async () => {
+ const onGoogleSubmit = async () => {
     if (!auth) return;
     setIsProcessingGoogleLogin(true);
     try {
@@ -136,16 +136,18 @@ export default function LoginPage() {
       const accessToken = credential?.accessToken;
       await handleSuccessfulLogin(result.user, accessToken);
     } catch (error: any) {
-        console.error('Error initiating Google login:', error);
-        if (error.code !== 'auth/popup-closed-by-user') {
-           toast({
-            variant: 'destructive',
-            title: 'Falha no login com Google',
-            description: error.message || 'Não foi possível fazer o login. Tente novamente mais tarde.',
-          });
-        }
+      // Don't show toast for user closing the popup
+      if (error.code !== 'auth/popup-closed-by-user') {
+        console.error('Error with Google login:', error);
+        toast({
+          variant: 'destructive',
+          title: 'Falha no login com Google',
+          description: error.message || 'Não foi possível fazer o login. Tente novamente mais tarde.',
+        });
+      }
     } finally {
-        setIsProcessingGoogleLogin(false);
+      // This will run whether the login succeeded, failed, or was cancelled
+      setIsProcessingGoogleLogin(false);
     }
   };
 
