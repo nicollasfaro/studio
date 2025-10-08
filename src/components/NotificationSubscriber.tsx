@@ -114,21 +114,6 @@ export default function NotificationSubscriber({ feature, title, description }: 
       }
     }
   };
-  
-    // Listen for incoming messages
-  useEffect(() => {
-    if (typeof window !== 'undefined' && 'serviceWorker' in navigator && app) {
-      const messaging = getMessaging(app);
-      const unsubscribe = onMessage(messaging, (payload) => {
-        console.log('Message received. ', payload);
-        toast({
-          title: payload.notification?.title,
-          description: payload.notification?.body,
-        });
-      });
-      return () => unsubscribe();
-    }
-  }, [app, toast]);
 
 
   return (
