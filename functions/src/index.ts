@@ -34,7 +34,7 @@ export const sendPromotionNotification = onDocumentCreated(
     }
 
     // 2. Coleta todos os tokens de forma segura e eficiente
-    const tokens = usersWithTokensSnapshot.docs.flatMap(doc => doc.data().fcmTokens || []);
+    const tokens = usersWithTokensSnapshot.docs.flatMap((doc) => doc.data().fcmTokens || []);
 
     if (tokens.length === 0) {
       console.log("Nenhum token válido encontrado para enviar notificações.");
@@ -61,8 +61,8 @@ export const sendPromotionNotification = onDocumentCreated(
           const error = result.error;
           if (error) {
             console.error("Falha ao enviar para o token:", tokens[index], error);
-            if (error.code === 'messaging/invalid-registration-token' ||
-                error.code === 'messaging/registration-token-not-registered') {
+            if (error.code === "messaging/invalid-registration-token" ||
+                error.code === "messaging/registration-token-not-registered") {
               // Lógica para remover token inválido do usuário
             }
           }
@@ -215,6 +215,65 @@ export const createGoogleCalendarEvent = onDocumentCreated(
     } catch (error) {
       console.error("Erro ao criar evento na Agenda Google:", error);
       // Aqui você poderia adicionar lógica para lidar com tokens expirados, etc.
+    }
+  },
+);
+
+/**
+ * Envia uma notificação para o cliente quando seu agendamento é confirmado.
+ */
+export const sendAppointmentConfirmationNotification = onDocumentUpdated(
+  "appointments/{appointmentId}",
+  async (event) => {
+    if (!event.data) {
+      console.log("Nenhum dado no evento.");
+      return;
+    }
+
+    const beforeData = event.data.before.data();
+    const afterData = event.data.after.data();
+
+    // Verifica se o status mudou para 'confirmado'
+    if (beforeData.status === "confirmado" || afterData.status !== "confirmado") {
+      console.log("O status não mudou para 'confirmado'.");
+      return;
+    }
+
+    const {clientId, serviceId, startTime} = afterData;
+
+    // Busca os dados do cliente para obter os tokens FCM
+    const userDoc = await db.collection("users").doc(clientId).get();
+    const userData = userDoc.data();
+    const tokens = userData?.fcmTokens;
+
+    if (!tokens || tokens.length === 0) {
+      console.log(`Cliente ${clientId} não possui tokens FCM para notificar.`);
+      return;
+    }
+
+    // Busca o nome do serviço para a mensagem
+    const serviceDoc = await db.collection("services").doc(serviceId).get();
+    const serviceName = serviceDoc.data()?.name || "Seu serviço";
+    const formattedDate = new Date(startTime).toLocaleString("pt-BR", {
+      dateStyle: "short",
+      timeStyle: "short",
+    });
+
+    const payload = {
+      notification: {
+        title: "✅ Agendamento Confirmado!",
+        body: `${serviceName} em ${formattedDate} foi confirmado. Mal podemos esperar para te ver!`,
+        icon: "/icons/icon-192x192.png",
+        click_action: "/profile",
+      },
+    };
+
+    try {
+      const response = await admin.messaging().sendToDevice(tokens, payload);
+      console.log(`Notificação de confirmação enviada para ${clientId}:`, response.successCount);
+      // Aqui, você pode adicionar a mesma lógica de limpeza de token inválido que existe na outra função
+    } catch (error) {
+      console.error("Erro ao enviar notificação de confirmação:", error);
     }
   },
 );
