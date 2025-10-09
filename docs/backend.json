@@ -164,6 +164,27 @@
         "priceLongHair": {
           "type": "number",
           "description": "Price for long hair, if applicable."
+        },
+        "hasCustomSchedule": {
+            "type": "boolean",
+            "description": "Flag to indicate if the service has its own schedule."
+        },
+        "customStartTime": {
+            "type": "string",
+            "description": "The custom opening time in HH:mm format, if hasCustomSchedule is true."
+        },
+        "customEndTime": {
+            "type": "string",
+            "description": "The custom closing time in HH:mm format, if hasCustomSchedule is true."
+        },
+        "customWorkingDays": {
+            "type": "array",
+            "description": "An array of numbers representing the custom working days for the service (0=Sunday, ..., 6=Saturday), if hasCustomSchedule is true.",
+            "items": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 6
+            }
         }
       },
       "required": [

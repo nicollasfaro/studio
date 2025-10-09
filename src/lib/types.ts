@@ -5,6 +5,7 @@
 
 
 
+
 export type Service = {
   id: string;
   name: string;
@@ -17,6 +18,10 @@ export type Service = {
   priceShortHair?: number;
   priceMediumHair?: number;
   priceLongHair?: number;
+  hasCustomSchedule?: boolean;
+  customStartTime?: string;
+  customEndTime?: string;
+  customWorkingDays?: number[];
 };
 
 export type Promotion = {
@@ -133,5 +138,7 @@ export type WhatsAppMessage = {
 
 
 
+
+    
 
     
