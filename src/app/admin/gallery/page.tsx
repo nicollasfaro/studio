@@ -115,8 +115,7 @@ function UploadCard({ isMobile, setView, handleUpload, isUploading, uploadProgre
   );
 }
 
-function GalleryListCard({ isLoadingImages, sortedImages, selectionMode, setSelectionMode, selectedImages, setSelectedImages, handleDeleteSelected, isDeleting, handleCancelSelection, isMobile }: any) {
-  const [showDeleteAlert, setShowDeleteAlert] = useState(false);
+function GalleryListCard({ isLoadingImages, sortedImages, selectionMode, setSelectionMode, selectedImages, setSelectedImages, handleDeleteSelected, isDeleting, handleCancelSelection, isMobile, showDeleteAlert, setShowDeleteAlert }: any) {
 
   const handleToggleSelection = (imageId: string) => {
     setSelectedImages((prev: string[]) => 
@@ -251,6 +250,7 @@ export default function AdminGalleryPage() {
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedImages, setSelectedImages] = useState<string[]>([]);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showDeleteAlert, setShowDeleteAlert] = useState(false);
 
   const galleryImagesRef = useMemoFirebase(() => (firestore ? collection(firestore, 'galleryImages') : null), [firestore]);
   const { data: images, isLoading: isLoadingImages } = useCollection<GalleryImage>(galleryImagesRef);
@@ -405,6 +405,7 @@ export default function AdminGalleryPage() {
         });
     } finally {
         setIsDeleting(false);
+        setShowDeleteAlert(false);
         handleCancelSelection();
     }
   };
@@ -435,6 +436,8 @@ export default function AdminGalleryPage() {
     isDeleting,
     handleCancelSelection,
     isMobile,
+    showDeleteAlert,
+    setShowDeleteAlert,
   };
 
   return (
@@ -450,5 +453,3 @@ export default function AdminGalleryPage() {
     </div>
   );
 }
-
-    

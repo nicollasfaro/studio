@@ -423,9 +423,9 @@ function FormCard({ form, onSubmit, isEditing, handleCancelEdit, galleryImages, 
 }
 
 // Moved ListCard out of AdminServicesPage
-function ListCard({ isLoading, services, handleEditClick, setShowDeleteAlert, isMobile, setView }: any) {
+function ListCard({ isLoading, services, handleEditClick, handleDeleteClick, showDeleteAlert, isMobile, setView }: any) {
   return (
-    <AlertDialog>
+    <AlertDialog open={!!showDeleteAlert} onOpenChange={(open) => !open && handleDeleteClick(null)}>
       <Card>
       <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>Serviços Cadastrados</CardTitle>
@@ -474,7 +474,7 @@ function ListCard({ isLoading, services, handleEditClick, setShowDeleteAlert, is
                       <Edit className="h-4 w-4" />
                   </Button>
                   <AlertDialogTrigger asChild>
-                      <Button variant="ghost" size="icon" onClick={() => setShowDeleteAlert(service)}>
+                      <Button variant="ghost" size="icon" onClick={() => handleDeleteClick(service)}>
                           <Trash2 className="h-4 w-4 text-destructive" />
                       </Button>
                   </AlertDialogTrigger>
@@ -498,8 +498,8 @@ function ListCard({ isLoading, services, handleEditClick, setShowDeleteAlert, is
               </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-              <AlertDialogCancel onClick={() => setShowDeleteAlert(null)}>Cancelar</AlertDialogCancel>
-              <AlertDialogAction onClick={() => (setShowDeleteAlert as Function)()} className="bg-destructive hover:bg-destructive/90">
+              <AlertDialogCancel onClick={() => handleDeleteClick(null)}>Cancelar</AlertDialogCancel>
+              <AlertDialogAction onClick={() => (handleDeleteClick as Function)(showDeleteAlert, true)} className="bg-destructive hover:bg-destructive/90">
                   Sim, remover
               </AlertDialogAction>
           </AlertDialogFooter>
@@ -591,14 +591,14 @@ export default function AdminServicesPage() {
       }
   };
 
-  const handleDeleteService = () => {
-    if (!showDeleteAlert || !firestore) return;
-
-        const serviceDocRef = doc(firestore, 'services', showDeleteAlert.id);
+  const handleDeleteService = (service: Service | null, confirm = false) => {
+    if (confirm && service) {
+        if (!firestore) return;
+        const serviceDocRef = doc(firestore, 'services', service.id);
         deleteDoc(serviceDocRef).then(() => {
           toast({
               title: 'Serviço Removido!',
-              description: `O serviço "${showDeleteAlert.name}" foi removido.`,
+              description: `O serviço "${service.name}" foi removido.`,
           });
           setShowDeleteAlert(null);
         }).catch(error => {
@@ -613,6 +613,9 @@ export default function AdminServicesPage() {
             operation: 'delete',
           }));
         });
+    } else {
+        setShowDeleteAlert(service);
+    }
   };
 
   const handleEditClick = (service: Service) => {
@@ -669,7 +672,8 @@ export default function AdminServicesPage() {
     isLoading,
     services,
     handleEditClick,
-    setShowDeleteAlert: handleDeleteService,
+    handleDeleteClick: handleDeleteService,
+    showDeleteAlert,
     isMobile,
     setView
   };
@@ -695,4 +699,3 @@ export default function AdminServicesPage() {
   );
 }
 
-    

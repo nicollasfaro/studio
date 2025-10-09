@@ -217,9 +217,9 @@ function FormCard({ form, onSubmit, isEditing, handleCancelEdit, isLoadingGaller
   );
 }
 
-function ListCard({ isLoading, promotions, handleEditClick, setShowDeleteAlert, isMobile, setView }: any) {
+function ListCard({ isLoading, promotions, handleEditClick, handleDeleteClick, showDeleteAlert, isMobile, setView }: any) {
   return (
-     <AlertDialog>
+     <AlertDialog open={!!showDeleteAlert} onOpenChange={(open) => !open && handleDeleteClick(null)}>
         <Card>
             <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle>Promoções Cadastradas</CardTitle>
@@ -263,7 +263,7 @@ function ListCard({ isLoading, promotions, handleEditClick, setShowDeleteAlert, 
                                 <Edit className="h-4 w-4" />
                             </Button>
                             <AlertDialogTrigger asChild>
-                                <Button variant="ghost" size="icon" onClick={() => setShowDeleteAlert(promo)}>
+                                <Button variant="ghost" size="icon" onClick={() => handleDeleteClick(promo)}>
                                     <Trash2 className="h-4 w-4 text-destructive" />
                                 </Button>
                             </AlertDialogTrigger>
@@ -286,8 +286,8 @@ function ListCard({ isLoading, promotions, handleEditClick, setShowDeleteAlert, 
                 </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-                <AlertDialogCancel onClick={() => setShowDeleteAlert(null)}>Cancelar</AlertDialogCancel>
-                <AlertDialogAction onClick={() => (setShowDeleteAlert as Function)()} className="bg-destructive hover:bg-destructive/90">
+                <AlertDialogCancel onClick={() => handleDeleteClick(null)}>Cancelar</AlertDialogCancel>
+                <AlertDialogAction onClick={() => (handleDeleteClick as Function)(showDeleteAlert, true)} className="bg-destructive hover:bg-destructive/90">
                     Sim, remover
                 </AlertDialogAction>
             </AlertDialogFooter>
@@ -381,14 +381,14 @@ export default function AdminPromotionsPage() {
       }
   };
 
-  const handleDeletePromotion = () => {
-    if (!showDeleteAlert || !firestore) return;
-    
-        const promotionDocRef = doc(firestore, 'promotions', showDeleteAlert.id);
+  const handleDeletePromotion = (promotion: Promotion | null, confirm = false) => {
+    if (confirm && promotion) {
+        if (!firestore) return;
+        const promotionDocRef = doc(firestore, 'promotions', promotion.id);
         deleteDoc(promotionDocRef).then(() => {
           toast({
               title: 'Promoção Removida!',
-              description: `A promoção "${showDeleteAlert.name}" foi removida.`,
+              description: `A promoção "${promotion.name}" foi removida.`,
           });
           setShowDeleteAlert(null);
         }).catch(error => {
@@ -403,6 +403,9 @@ export default function AdminPromotionsPage() {
             operation: 'delete',
           }));
         });
+    } else {
+        setShowDeleteAlert(promotion);
+    }
   };
 
   const handleEditClick = (promotion: Promotion) => {
@@ -451,7 +454,8 @@ export default function AdminPromotionsPage() {
     isLoading,
     promotions,
     handleEditClick,
-    setShowDeleteAlert: handleDeletePromotion,
+    handleDeleteClick: handleDeletePromotion,
+    showDeleteAlert,
     isMobile,
     setView
   };
@@ -475,5 +479,3 @@ export default function AdminPromotionsPage() {
     </div>
   );
 }
-
-    
