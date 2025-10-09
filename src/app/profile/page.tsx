@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useMemo, useState, useRef, useCallback } from 'react';
@@ -425,7 +426,12 @@ export default function ProfilePage() {
                         <div className="flex items-center justify-between">
                           <div className="flex-1">
                             <p className="font-semibold">{apt.serviceName}</p>
-                            <p className="text-sm text-muted-foreground">
+                            {apt.service?.isProfessionalSchedule && apt.service.professionalName && (
+                              <p className="text-sm text-muted-foreground">
+                                com {apt.service.professionalName}
+                              </p>
+                            )}
+                            <p className="text-sm text-muted-foreground mt-1">
                               {format(new Date(apt.startTime), "EEEE, d 'de' MMM 'às' HH:mm", { locale: ptBR })}
                             </p>
                              <Badge variant={getBadgeVariant(apt.status)} style={getBadgeStyle(apt.status)} className="capitalize mt-2">
