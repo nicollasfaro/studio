@@ -1,13 +1,12 @@
-
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, User, signInWithRedirect, getRedirectResult, OAuthProvider } from 'firebase/auth';
+import { signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, User } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 
 import { Button } from '@/components/ui/button';
@@ -26,7 +25,6 @@ import { useAuth, useFirestore } from '@/firebase';
 import { Separator } from '@/components/ui/separator';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
-import { useIsMobile } from '@/hooks/use-mobile';
 import { Loader2 } from 'lucide-react';
 
 
@@ -51,8 +49,7 @@ export default function LoginPage() {
   const auth = useAuth();
   const firestore = useFirestore();
   const router = useRouter();
-  const isMobile = useIsMobile();
-  const [isProcessingGoogleLogin, setIsProcessingGoogleLogin] = useState(true);
+  const [isProcessingGoogleLogin, setIsProcessingGoogleLogin] = useState(false);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -67,7 +64,6 @@ export default function LoginPage() {
     
     const userDocRef = doc(firestore, 'users', user.uid);
     
-    // Always merge data to avoid overwriting existing fields
     const userData: any = {
         id: user.uid,
         name: user.displayName,
@@ -96,7 +92,7 @@ export default function LoginPage() {
             operation: userDoc.exists() ? 'update' : 'create',
             requestResourceData: userData
         }));
-        throw error; // Re-throw to be caught by the caller
+        throw error;
     }
       
     const updatedUserDocSnap = await getDoc(userDocRef);
@@ -114,42 +110,6 @@ export default function LoginPage() {
     });
   };
 
-  useEffect(() => {
-    if (!auth) return;
-    
-    getRedirectResult(auth)
-      .then(async (result) => {
-        if (result) {
-            try {
-                const credential = GoogleAuthProvider.credentialFromResult(result);
-                const accessToken = credential?.accessToken;
-                await handleSuccessfulLogin(result.user, accessToken);
-            } catch (handleError: any) {
-                console.error('Error handling successful login:', handleError);
-                toast({
-                    variant: 'destructive',
-                    title: 'Falha no processamento do Login',
-                    description: handleError.message || 'Não foi possível completar o seu login. Tente novamente.',
-                });
-            } finally {
-                setIsProcessingGoogleLogin(false);
-            }
-        } else {
-            setIsProcessingGoogleLogin(false);
-        }
-      })
-      .catch((error) => {
-        console.error('Google Redirect Login Error:', error);
-        toast({
-          variant: 'destructive',
-          title: 'Falha no login com Google',
-          description: error.message || 'Não foi possível completar o login. Tente novamente.',
-        });
-        setIsProcessingGoogleLogin(false);
-      });
-  }, [auth]);
-
-
   const onEmailSubmit = async (values: z.infer<typeof formSchema>) => {
     try {
       if (!auth) return;
@@ -165,36 +125,29 @@ export default function LoginPage() {
     }
   };
 
-  const onGoogleSubmit = async () => {
+ const onGoogleSubmit = async () => {
     if (!auth) return;
-    const provider = new GoogleAuthProvider();
-    provider.addScope('https://www.googleapis.com/auth/calendar.events');
     setIsProcessingGoogleLogin(true);
-  
-    if (isMobile) {
-      // Use redirect for mobile devices. The result is handled by the useEffect.
-      await signInWithRedirect(auth, provider);
-    } else {
-      // Use popup for desktop devices
-      try {
-        const result = await signInWithPopup(auth, provider);
-        const credential = GoogleAuthProvider.credentialFromResult(result);
-        const accessToken = credential?.accessToken;
-        await handleSuccessfulLogin(result.user, accessToken);
-      } catch (error: any) {
-         if (error.code === 'auth/popup-closed-by-user') {
-            // User cancelled the login, do nothing.
-         } else {
-            console.error('Erro de login com Google:', error);
-            toast({
-                variant: 'destructive',
-                title: 'Falha no login com Google',
-                description: error.message || 'Não foi possível fazer o login. Tente novamente mais tarde.',
-            });
-         }
-      } finally {
-        setIsProcessingGoogleLogin(false);
+    try {
+      const provider = new GoogleAuthProvider();
+      provider.addScope('https://www.googleapis.com/auth/calendar.events');
+      const result = await signInWithPopup(auth, provider);
+      const credential = GoogleAuthProvider.credentialFromResult(result);
+      const accessToken = credential?.accessToken;
+      await handleSuccessfulLogin(result.user, accessToken);
+    } catch (error: any) {
+      // Don't show toast for user closing the popup
+      if (error.code !== 'auth/popup-closed-by-user') {
+        console.error('Error with Google login:', error);
+        toast({
+          variant: 'destructive',
+          title: 'Falha no login com Google',
+          description: error.message || 'Não foi possível fazer o login. Tente novamente mais tarde.',
+        });
       }
+    } finally {
+      // This will run whether the login succeeded, failed, or was cancelled
+      setIsProcessingGoogleLogin(false);
     }
   };
 
@@ -240,7 +193,7 @@ export default function LoginPage() {
                   </FormItem>
                 )}
               />
-              <Button type="submit" className="w-full font-bold" disabled={form.formState.isSubmitting}>
+              <Button type="submit" className="w-full font-bold" disabled={form.formState.isSubmitting || isProcessingGoogleLogin}>
                 {form.formState.isSubmitting ? 'Entrando...' : 'Login'}
               </Button>
             </form>
@@ -255,7 +208,7 @@ export default function LoginPage() {
             </div>
           </div>
           
-          <Button variant="outline" className="w-full" onClick={onGoogleSubmit} disabled={isProcessingGoogleLogin}>
+          <Button variant="outline" className="w-full" onClick={onGoogleSubmit} disabled={isProcessingGoogleLogin || form.formState.isSubmitting}>
             <GoogleIcon />
             <span className="ml-2">Entrar com o Google</span>
           </Button>

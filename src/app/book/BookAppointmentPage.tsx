@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useEffect, useMemo, ChangeEvent } from 'react';
@@ -19,13 +20,13 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { ArrowLeft, ArrowRight, PartyPopper, Loader2, Info, Upload } from 'lucide-react';
+import { ArrowLeft, ArrowRight, PartyPopper, Loader2, Info, Upload, MapPin } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { format, startOfDay, endOfDay, addMinutes, parse, getDay } from 'date-fns';
-import { useCollection, useDoc, useFirestore, useUser, useMemoFirebase, useFirebaseApp } from '@/firebase';
-import { collection, query, where, doc, addDoc, updateDoc } from 'firebase/firestore';
-import type { Service, Appointment, Promotion, BusinessHours } from '@/lib/types';
+import { useCollection, useDoc, useFirestore, useUser, useMemoFirebase, useUserData } from '@/firebase';
+import { collection, query, where, doc, addDoc, updateDoc, setDoc } from 'firebase/firestore';
+import type { Service, Appointment, Promotion, BusinessHours, BusinessLocation } from '@/lib/types';
 import { ptBR } from 'date-fns/locale';
 import {
   AlertDialog,
@@ -53,8 +54,16 @@ export default function BookAppointmentPage() {
   const [selectedServiceId, setSelectedServiceId] = useState<string | undefined>(serviceQueryParam || undefined);
   const [date, setDate] = useState<Date | undefined>(undefined);
   const [selectedTime, setSelectedTime] = useState<string | undefined>();
+  
+  // User Info State
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [userAddress, setUserAddress] = useState('');
+  const [userCity, setUserCity] = useState('');
+  const [userState, setUserState] = useState('');
+  const [userZipCode, setUserZipCode] = useState('');
+  const [userCountry, setUserCountry] = useState('');
+
   const [showAuthAlert, setShowAuthAlert] = useState(false);
   const [isBooking, setIsBooking] = useState(false);
   
@@ -66,6 +75,8 @@ export default function BookAppointmentPage() {
 
   const firestore = useFirestore();
   const { user, isUserLoading } = useUser();
+  const { userData, isLoading: isUserDataLoading } = useUserData();
+
   const servicesCollectionRef = useMemoFirebase(() => (firestore ? collection(firestore, 'services') : null), [firestore]);
   const { data: allServices, isLoading: isLoadingServices } = useCollection<Service>(servicesCollectionRef);
 
@@ -78,13 +89,22 @@ export default function BookAppointmentPage() {
   const businessHoursRef = useMemoFirebase(() => (firestore ? doc(firestore, 'config', 'businessHours') : null), [firestore]);
   const { data: businessHours, isLoading: isLoadingBusinessHours } = useDoc<BusinessHours>(businessHoursRef);
 
+  const businessLocationRef = useMemoFirebase(() => (firestore ? doc(firestore, 'config', 'location') : null), [firestore]);
+  const { data: businessLocation, isLoading: isLoadingLocation } = useDoc<BusinessLocation>(businessLocationRef);
+
+
   // Auto-fill user data if logged in
   useEffect(() => {
-    if (user) {
-      setName(user.displayName || '');
-      setEmail(user.email || '');
+    if (user && userData) {
+      setName(userData.name || user.displayName || '');
+      setEmail(userData.email || user.email || '');
+      setUserAddress(userData.address || '');
+      setUserCity(userData.city || '');
+      setUserState(userData.state || '');
+      setUserZipCode(userData.zipCode || '');
+      setUserCountry(userData.country || 'Brasil');
     }
-  }, [user]);
+  }, [user, userData]);
 
   // Set service ID if rescheduling
   useEffect(() => {
@@ -138,6 +158,31 @@ export default function BookAppointmentPage() {
         }
     }
   }, [currentService, hairLength]);
+  
+   // ZIP Code autofill
+  useEffect(() => {
+    const fetchAddress = async (zip: string) => {
+        try {
+            const response = await fetch(`https://viacep.com.br/ws/${zip}/json/`);
+            const data = await response.json();
+            if (!data.erro) {
+                setUserAddress(data.logradouro);
+                setUserCity(data.localidade);
+                setUserState(data.uf);
+                toast({ title: 'Endereço encontrado!', description: 'Seu endereço foi preenchido.' });
+            } else {
+                toast({ title: 'CEP não encontrado', variant: 'destructive' });
+            }
+        } catch (error) {
+            toast({ title: 'Erro ao buscar CEP', variant: 'destructive' });
+        }
+    };
+    
+    const plainZipCode = userZipCode?.replace(/\D/g, '');
+    if (plainZipCode && plainZipCode.length === 8) {
+        fetchAddress(plainZipCode);
+    }
+  }, [userZipCode, toast]);
 
   // Fetch appointments for the selected day to check for conflicts
   const appointmentsQuery = useMemoFirebase(() => {
@@ -238,6 +283,7 @@ export default function BookAppointmentPage() {
 
   }, [todaysAppointments, allServices, isLoadingAppointments, rescheduleId, timeSlots, businessHours, currentService]);
 
+  const userHasAddress = !!(userAddress && userCity && userState && userZipCode && userCountry);
 
   const handleNextStep = () => {
     if (step === 1 && !selectedServiceId) {
@@ -259,6 +305,14 @@ export default function BookAppointmentPage() {
       toast({ title: 'Por favor, selecione uma data e hora.', variant: 'destructive' });
       return;
     }
+    const confirmationStep = currentService?.isPriceFrom ? 4 : 3;
+    if (step === confirmationStep && !userHasAddress) {
+        if (!userAddress || !userCity || !userState || !userZipCode || !userCountry) {
+            toast({ title: 'Por favor, preencha seu endereço.', variant: 'destructive' });
+            return;
+        }
+    }
+
     setStep(step + 1);
   };
   
@@ -333,6 +387,18 @@ export default function BookAppointmentPage() {
         appointmentData.hairPhotoUrl = hairPhotoDataUrl;
       }
 
+      // If user address was filled in this step, save it to their profile
+      if (!userHasAddress) {
+          const userDocRef = doc(firestore, 'users', user.uid);
+          await setDoc(userDocRef, {
+              address: userAddress,
+              city: userCity,
+              state: userState,
+              zipCode: userZipCode,
+              country: userCountry,
+          }, { merge: true });
+      }
+
       if (rescheduleId && appointmentToRescheduleRef) {
           await updateDoc(appointmentToRescheduleRef, appointmentData)
           toast({
@@ -371,6 +437,16 @@ export default function BookAppointmentPage() {
   const dateTimeStep = currentService?.isPriceFrom ? 3 : 2;
   const confirmationStep = currentService?.isPriceFrom ? 4 : 3;
   const successStep = totalSteps + 1;
+  
+  const mapSourceUrl = useMemo(() => {
+    if (step !== confirmationStep || !businessLocation || !userHasAddress) return '';
+
+    const origin = encodeURIComponent(`${userAddress}, ${userCity}, ${userState}, ${userZipCode}, ${userCountry}`);
+    const destination = encodeURIComponent(`${businessLocation.address}, ${businessLocation.city}, ${businessLocation.state}, ${businessLocation.zipCode}, ${businessLocation.country}`);
+    
+    return `https://www.google.com/maps/embed/v1/directions?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_EMBED_API_KEY}&origin=${origin}&destination=${destination}`;
+
+  }, [step, businessLocation, userHasAddress, userAddress, userCity, userState, userZipCode, userCountry]);
 
 
   return (
@@ -539,16 +615,51 @@ export default function BookAppointmentPage() {
                         </div>
                     </CardContent>
                 </Card>
-              <div className="grid sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="name">Nome Completo</Label>
-                  <Input id="name" placeholder="Jane Doe" value={name} onChange={(e) => setName(e.target.value)} disabled={!!user || !!rescheduleId} />
+                <div className="space-y-4">
+                  <h4 className="text-lg font-semibold">Localização</h4>
+                  {isLoadingLocation ? <Skeleton className="h-48 w-full" /> : 
+                    !businessLocation ? (
+                      <p className="text-muted-foreground">O endereço do salão ainda não foi configurado.</p>
+                    ) : userHasAddress ? (
+                       <iframe
+                          width="100%"
+                          height="450"
+                          style={{border:0}}
+                          loading="lazy"
+                          allowFullScreen
+                          src={mapSourceUrl}>
+                        </iframe>
+                    ) : (
+                      <div className="space-y-4 p-4 border rounded-md">
+                        <p className="text-muted-foreground">Por favor, preencha seu endereço para ver o mapa.</p>
+                         <div className="space-y-2">
+                          <Label htmlFor="zipCode">CEP</Label>
+                          <Input id="zipCode" value={userZipCode} onChange={e => setUserZipCode(e.target.value)} placeholder="Digite seu CEP de 8 dígitos"/>
+                        </div>
+                         <div className="space-y-2">
+                          <Label htmlFor="address">Rua e Bairro</Label>
+                          <Input id="address" value={userAddress} onChange={e => setUserAddress(e.target.value)} />
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="city">Cidade</Label>
+                            <Input id="city" value={userCity} onChange={e => setUserCity(e.target.value)} />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="state">Estado</Label>
+                            <Input id="state" value={userState} onChange={e => setUserState(e.target.value)} />
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="country">País</Label>
+                            <Input id="country" value={userCountry} onChange={e => setUserCountry(e.target.value)} />
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  }
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="email">Endereço de Email</Label>
-                  <Input id="email" type="email" placeholder="jane@exemplo.com" value={email} onChange={(e) => setEmail(e.target.value)} disabled={!!user || !!rescheduleId}/>
-                </div>
-              </div>
             </div>
           )}
             

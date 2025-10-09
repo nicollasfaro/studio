@@ -66,6 +66,7 @@ const profileSchema = z.object({
   city: z.string().optional(),
   state: z.string().optional(),
   zipCode: z.string().optional(),
+  country: z.string().optional(),
 });
 
 const passwordSchema = z.object({
@@ -127,7 +128,7 @@ export default function EditProfilePage() {
             </TabsContent>
              <TabsContent value="password" className="mt-6">
                 <PasswordForm user={user} />
-            </TabsContent>
+             </TabsContent>
           </Tabs>
         </CardContent>
       </Card>
@@ -154,8 +155,35 @@ function ProfileForm({ user, userData }: { user: NonNullable<ReturnType<typeof u
       city: userData.city || '',
       state: userData.state || '',
       zipCode: userData.zipCode || '',
+      country: userData.country || 'Brasil',
     },
   });
+  
+  const watchedZipCode = useWatch({ control: form.control, name: 'zipCode' });
+
+  useEffect(() => {
+    const fetchAddress = async (zip: string) => {
+        try {
+            const response = await fetch(`https://viacep.com.br/ws/${zip}/json/`);
+            const data = await response.json();
+            if (!data.erro) {
+                form.setValue('address', data.logradouro);
+                form.setValue('city', data.localidade);
+                form.setValue('state', data.uf);
+                toast({ title: 'Endereço encontrado!', description: 'Seus campos de endereço foram preenchidos.' });
+            } else {
+                toast({ title: 'CEP não encontrado', variant: 'destructive' });
+            }
+        } catch (error) {
+            toast({ title: 'Erro ao buscar CEP', description: 'Não foi possível consultar o endereço.', variant: 'destructive' });
+        }
+    };
+    
+    const plainZipCode = watchedZipCode?.replace(/\D/g, '');
+    if (plainZipCode && plainZipCode.length === 8) {
+        fetchAddress(plainZipCode);
+    }
+  }, [watchedZipCode, form, toast]);
 
   const handlePhotoChange = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -257,6 +285,30 @@ function ProfileForm({ user, userData }: { user: NonNullable<ReturnType<typeof u
         <Separator />
         
         <h3 className="text-lg font-medium">Endereço</h3>
+         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+             <FormField
+              control={form.control}
+              name="zipCode"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>CEP</FormLabel>
+                  <FormControl><Input placeholder="01310-100" {...field} /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+             <FormField
+              control={form.control}
+              name="country"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>País</FormLabel>
+                  <FormControl><Input {...field} /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+        </div>
         <FormField
           control={form.control}
           name="address"
@@ -268,7 +320,7 @@ function ProfileForm({ user, userData }: { user: NonNullable<ReturnType<typeof u
             </FormItem>
           )}
         />
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
              <FormField
               control={form.control}
               name="city"
@@ -286,17 +338,6 @@ function ProfileForm({ user, userData }: { user: NonNullable<ReturnType<typeof u
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Estado</FormLabel>
-                  <FormControl><Input {...field} /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-             <FormField
-              control={form.control}
-              name="zipCode"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>CEP</FormLabel>
                   <FormControl><Input {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>

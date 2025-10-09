@@ -59,7 +59,7 @@ function ChatDialog({ appointmentId, user, onOpenChange }: { appointmentId: stri
     const firestore = useFirestore();
     const [newMessage, setNewMessage] = useState('');
     const [isSending, setIsSending] = useState(false);
-    const scrollAreaRef = useRef<HTMLDivElement>(null);
+    const scrollAreaViewportRef = useRef<HTMLDivElement | null>(null);
     
     const appointmentRef = useMemoFirebase(() => firestore ? doc(firestore, 'appointments', appointmentId) : null, [firestore, appointmentId]);
     const { data: appointmentData } = useDoc<Appointment>(appointmentRef);
@@ -103,8 +103,8 @@ function ChatDialog({ appointmentId, user, onOpenChange }: { appointmentId: stri
     }, [newMessage, updateTypingStatus]);
 
      useEffect(() => {
-        if (scrollAreaRef.current) {
-            scrollAreaRef.current.scrollTop = scrollAreaRef.current.scrollHeight;
+        if (scrollAreaViewportRef.current) {
+            scrollAreaViewportRef.current.scrollTop = scrollAreaViewportRef.current.scrollHeight;
         }
     }, [messages, appointmentData?.adminTyping]);
 
@@ -141,7 +141,7 @@ function ChatDialog({ appointmentId, user, onOpenChange }: { appointmentId: stri
                     Conversa sobre seu agendamento de {appointmentData?.serviceName}
                 </DialogDescription>
             </DialogHeader>
-            <ScrollArea className="flex-1 pr-4 -mr-4" ref={scrollAreaRef}>
+            <ScrollArea className="flex-1 pr-4 -mr-4" viewportRef={scrollAreaViewportRef}>
                  <div className="space-y-4 py-4">
                     {isLoadingMessages && <p>Carregando mensagens...</p>}
                     {messages?.map((msg, index) => (
@@ -233,7 +233,9 @@ export default function ProfilePage() {
 
   const handleLogout = async () => {
     try {
-      await signOut(auth);
+      if(auth) {
+        await signOut(auth);
+      }
       router.push('/login');
     } catch (error) {
       console.error('Erro ao sair: ', error);
@@ -516,11 +518,6 @@ export default function ProfilePage() {
                         title="Notificações Promocionais"
                         description="Receba atualizações sobre ofertas especiais e novos serviços."
                     />
-                    <NotificationSubscriber
-                        feature="reminders"
-                        title="Lembretes de Agendamento"
-                        description="Receba lembretes para seus próximos agendamentos."
-                    />
                 </CardContent>
             </Card>
 
@@ -537,7 +534,7 @@ export default function ProfilePage() {
                 </AlertDialogFooter>
             </AlertDialogContent>
              <Dialog open={chatDialogState.isOpen} onOpenChange={(isOpen) => setChatDialogState({ isOpen, appointmentId: isOpen ? chatDialogState.appointmentId : null })}>
-                {chatDialogState.appointmentId && (
+                {chatDialogState.appointmentId && user && (
                 <ChatDialog 
                     appointmentId={chatDialogState.appointmentId}
                     user={user}

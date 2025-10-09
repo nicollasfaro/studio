@@ -1,7 +1,11 @@
 
-import {onDocumentCreated, onDocumentUpdated} from "firebase-functions/v2/firestore";
+import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
 import {google} from "googleapis";
+import {Change} from "firebase-functions";
+import {DocumentSnapshot} from "firebase-functions/v1/firestore";
+import {MessagingPayload, MulticastMessage} from "firebase-admin/messaging";
+
 
 // Inicializa o Firebase Admin SDK.
 admin.initializeApp();
@@ -10,31 +14,40 @@ const db = admin.firestore();
 /**
  * Envia notificação push para usuários sobre novas promoções.
  */
-export const sendPromotionNotification = onDocumentCreated(
-  "promotions/{promotionId}",
-  async (event) => {
-    const snapshot = event.data;
+export const sendPromotionNotification = functions.firestore
+  .document("promotions/{promotionId}")
+  .onCreate(async (snapshot: DocumentSnapshot) => {
     if (!snapshot) {
       console.log("Nenhum dado no evento, encerrando a função.");
       return;
     }
     const promotionData = snapshot.data();
-    const {name, description} = promotionData;
-    console.log(`Nova promoção: "${name}". Enviando notificações.`);
-    const usersSnapshot = await db.collection("users").get();
-    const tokens: string[] = [];
-    usersSnapshot.forEach((userDoc) => {
-      const userData = userDoc.data();
-      if (userData.fcmTokens && Array.isArray(userData.fcmTokens)) {
-        tokens.push(...userData.fcmTokens);
-      }
-    });
-    if (tokens.length === 0) {
-      console.log("Nenhum usuário inscrito para receber notificações.");
+    if (!promotionData) {
+      console.log("Dados da promoção não encontrados.");
       return;
     }
+    const {name, description} = promotionData;
+    console.log(`Nova promoção: "${name}". Enviando notificações.`);
+
+    const usersWithTokensSnapshot = await db.collection("users")
+      .where("fcmTokens", "!=", null)
+      .where("fcmTokens", "!=", [])
+      .get();
+
+    if (usersWithTokensSnapshot.empty) {
+      console.log("Nenhum usuário com tokens de notificação encontrados.");
+      return;
+    }
+
+    const tokens = usersWithTokensSnapshot.docs.flatMap((doc) => doc.data().fcmTokens || []);
+
+    if (tokens.length === 0) {
+      console.log("Nenhum token válido encontrado para enviar notificações.");
+      return;
+    }
+
     console.log(`Encontrados ${tokens.length} tokens para notificar.`);
-    const payload = {
+    const payload: MessagingPayload = {
       notification: {
         title: `🎉 Nova Promoção: ${name}!`,
         body: description,
@@ -42,105 +55,126 @@ export const sendPromotionNotification = onDocumentCreated(
         click_action: "/promotions",
       },
     };
+
+    const message: MulticastMessage = {
+      tokens,
+      notification: payload.notification,
+    };
+
     try {
-      const response = await admin.messaging().sendToDevice(tokens, payload);
-      console.log("Notificações enviadas com sucesso:", response);
+      const response = await admin.messaging().sendEachForMulticast(message);
+      console.log("Notificações enviadas com sucesso:", response.successCount);
+      if (response.failureCount > 0) {
+        console.log("Falhas ao enviar notificações:", response.failureCount);
+        response.responses.forEach((result, index) => {
+          const error = result.error;
+          if (error) {
+            console.error("Falha ao enviar para o token:", tokens[index], error);
+            if (error.code === "messaging/invalid-registration-token" ||
+                error.code === "messaging/registration-token-not-registered") {
+              // Lógica para remover token inválido do usuário pode ser adicionada aqui
+            }
+          }
+        });
+      }
     } catch (error) {
       console.error("Erro ao enviar notificações:", error);
     }
-  },
-);
+  });
 
 /**
- * Envia uma notificação por WhatsApp quando um agendamento é criado ou cancelado.
+ * Envia uma notificação PUSH para o ADMIN quando um agendamento é criado ou cancelado.
  */
-export const sendAppointmentStatusNotification = onDocumentUpdated(
-    "appointments/{appointmentId}",
-    async (event) => {
-      if (!event.data) {
+export const sendAppointmentStatusNotification = functions.firestore
+  .document("appointments/{appointmentId}")
+  .onWrite(async (change: Change<DocumentSnapshot>) => {
+    const afterData = change.after.data();
+    const beforeData = change.before.data();
+
+    const isNew = !change.before.exists && !!afterData;
+    const isCancelled = beforeData?.status !== "cancelado" && afterData?.status === "cancelado";
+
+    if (!isNew && !isCancelled) {
+      console.log("Não é um agendamento novo nem um cancelamento, a função será encerrada.");
+      return;
+    }
+
+    const adminUsersSnapshot = await db.collection("users")
+        .where("isAdmin", "==", true)
+        .where("fcmTokens", "!=", null)
+        .where("fcmTokens", "!=", [])
+        .get();
+
+    if (adminUsersSnapshot.empty) {
+        console.log("Nenhum administrador com tokens de notificação foi encontrado.");
         return;
-      }
-      const beforeData = event.data.before.data();
-      const afterData = event.data.after.data();
+    }
 
-      // Verifica se é uma criação (sem dados antes) ou se o status mudou para 'cancelado'
-      const isNew = !event.data.before.exists && afterData.status === "Marcado";
-      const isCancelled = beforeData.status !== "cancelado" && afterData.status === "cancelado";
+    const tokens = adminUsersSnapshot.docs.flatMap((doc) => doc.data().fcmTokens || []);
 
-      if (!isNew && !isCancelled) {
+    if (tokens.length === 0) {
+        console.log("Nenhum token de administrador válido encontrado para enviar notificações.");
         return;
-      }
+    }
 
-      // Busca o número de WhatsApp do admin
-      const configDoc = await db.collection("config").doc("notifications").get();
-      const adminPhoneNumber = configDoc.data()?.notificationWhatsapp;
+    const serviceDoc = await db.collection("services").doc(afterData.serviceId).get();
+    const serviceName = serviceDoc.data()?.name || "Desconhecido";
+    const clientName = afterData.clientName || "Um cliente";
+    const startTime = new Date(afterData.startTime).toLocaleString("pt-BR", {
+        dateStyle: "short", timeStyle: "short" });
 
-      if (!adminPhoneNumber) {
-        console.log("Número de WhatsApp do admin não configurado.");
-        return;
-      }
+    let title = "";
+    let body = "";
 
-      let messageBody = "";
-      if (isNew) {
-        messageBody = `🔔 *Novo Agendamento!*
-Cliente: ${afterData.clientName}
-Serviço: (Buscando...)
-Data: ${new Date(afterData.startTime).toLocaleString("pt-BR")}
-Status: ${afterData.status}`;
-      } else if (isCancelled) {
-        messageBody = `❌ *Agendamento Cancelado!*
-Cliente: ${afterData.clientName}
-Serviço: (Buscando...)
-Data: ${new Date(afterData.startTime).toLocaleString("pt-BR")}`;
-      }
+    if (isNew) {
+        title = "🔔 Novo Agendamento!";
+        body = `${clientName} agendou ${serviceName} para ${startTime}.`;
+    } else if (isCancelled) {
+        title = "❌ Agendamento Cancelado!";
+        body = `O agendamento de ${clientName} para ${startTime} foi cancelado.`;
+    }
 
-      // Busca o nome do serviço
-      const serviceDoc = await db.collection("services").doc(afterData.serviceId).get();
-      const serviceName = serviceDoc.data()?.name || "Desconhecido";
-      messageBody = messageBody.replace("(Buscando...)", serviceName);
+    const payload: MessagingPayload = {
+        notification: {
+            title: title,
+            body: body,
+            icon: "/icons/icon-192x192.png",
+            click_action: "/admin/appointments",
+        },
+    };
+    
+    const message: MulticastMessage = {
+        tokens,
+        notification: payload.notification,
+    };
 
-      // Simulação do envio de WhatsApp
-      const whatsappPayload = {
-        to: adminPhoneNumber,
-        body: messageBody,
-      };
+    try {
+        const response = await admin.messaging().sendEachForMulticast(message);
+        console.log(`Notificação de status de agendamento enviada para administradores: ${response.successCount} sucesso(s).`);
+    } catch (error) {
+        console.error("Erro ao enviar notificação de status de agendamento para administradores:", error);
+    }
+});
 
-      console.log("Simulação: Mensagem de WhatsApp enviada com sucesso.", whatsappPayload);
-
-      // AQUI você adicionaria a chamada real para a API do WhatsApp (ex: Twilio)
-      // Exemplo com Twilio (requer configuração do SDK 'twilio'):
-      /*
-      import twilio from "twilio";
-      const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
-      try {
-        await client.messages.create({
-          from: 'whatsapp:+<SEU_NUMERO_TWILIO>',
-          to: `whatsapp:${adminPhoneNumber}`,
-          body: messageBody,
-        });
-        console.log("Mensagem de WhatsApp enviada com sucesso.");
-      } catch (error) {
-        console.error("Erro ao enviar WhatsApp:", error);
-      }
-      */
-    },
-);
 
 /**
  * Cria um evento na Agenda Google do usuário ao criar um novo agendamento.
  */
-export const createGoogleCalendarEvent = onDocumentCreated(
-  "appointments/{appointmentId}",
-  async (event) => {
-    const appointmentData = event.data?.data();
-    if (!appointmentData) {
+export const createGoogleCalendarEvent = functions.firestore
+  .document("appointments/{appointmentId}")
+  .onCreate(async (snapshot: DocumentSnapshot) => {
+    if (!snapshot) {
       console.log("Nenhum dado de agendamento encontrado.");
+      return;
+    }
+    const appointmentData = snapshot.data();
+    if (!appointmentData) {
+      console.log("Dados do agendamento não encontrados.");
       return;
     }
 
     const {clientId, serviceId, startTime, endTime} = appointmentData;
 
-    // 1. Buscar os dados do usuário para obter o token de acesso.
     const userDoc = await db.collection("users").doc(clientId).get();
     const userData = userDoc.data();
 
@@ -149,27 +183,24 @@ export const createGoogleCalendarEvent = onDocumentCreated(
       return;
     }
 
-    // 2. Buscar o nome do serviço.
     const serviceDoc = await db.collection("services").doc(serviceId).get();
     const serviceName = serviceDoc.data()?.name || "Agendamento";
 
-    // 3. Configurar o cliente OAuth2 com o token do usuário.
     const oauth2Client = new google.auth.OAuth2();
     oauth2Client.setCredentials({access_token: userData.googleAccessToken});
 
     const calendar = google.calendar({version: "v3", auth: oauth2Client});
 
-    // 4. Montar o evento da agenda.
     const eventDetails = {
       summary: `${serviceName} na Thainnes Cuba Ciuldin`,
       description: "Seu agendamento de beleza.",
       start: {
         dateTime: startTime,
-        timeZone: "America/Sao_Paulo", // Ajuste para o seu fuso horário
+        timeZone: "America/Sao_Paulo",
       },
       end: {
         dateTime: endTime,
-        timeZone: "America/Sao_Paulo", // Ajuste para o seu fuso horário
+        timeZone: "America/Sao_Paulo",
       },
       attendees: [{email: userData.email}],
       reminders: {
@@ -181,7 +212,6 @@ export const createGoogleCalendarEvent = onDocumentCreated(
       },
     };
 
-    // 5. Inserir o evento na agenda primária do usuário.
     try {
       await calendar.events.insert({
         calendarId: "primary",
@@ -190,7 +220,59 @@ export const createGoogleCalendarEvent = onDocumentCreated(
       console.log(`Evento criado com sucesso na agenda do usuário ${clientId}.`);
     } catch (error) {
       console.error("Erro ao criar evento na Agenda Google:", error);
-      // Aqui você poderia adicionar lógica para lidar com tokens expirados, etc.
     }
-  },
-);
+  });
+
+/**
+ * Envia uma notificação para o cliente quando seu agendamento é confirmado.
+ */
+export const sendAppointmentConfirmationNotification = functions.firestore
+  .document("appointments/{appointmentId}")
+  .onUpdate(async (change: Change<DocumentSnapshot>) => {
+    const beforeData = change.before.data();
+    const afterData = change.after.data();
+
+    // A condição correta: o status anterior não era 'confirmado' E o novo status é 'confirmado'
+    if (!beforeData || !afterData || beforeData.status === "confirmado" || afterData.status !== "confirmado") {
+      return;
+    }
+
+    const {clientId, serviceId, startTime} = afterData;
+
+    const userDoc = await db.collection("users").doc(clientId).get();
+    const userData = userDoc.data();
+    const tokens = userData?.fcmTokens;
+
+    if (!tokens || tokens.length === 0) {
+      console.log(`Cliente ${clientId} não possui tokens FCM para notificar.`);
+      return;
+    }
+
+    const serviceDoc = await db.collection("services").doc(serviceId).get();
+    const serviceName = serviceDoc.data()?.name || "Seu serviço";
+    const formattedDate = new Date(startTime).toLocaleString("pt-BR", {
+      dateStyle: "short",
+      timeStyle: "short",
+    });
+
+    const payload: MessagingPayload = {
+      notification: {
+        title: "✅ Agendamento Confirmado!",
+        body: `${serviceName} em ${formattedDate} foi confirmado. Mal podemos esperar para te ver!`,
+        icon: "/icons/icon-192x192.png",
+        click_action: "/profile",
+      },
+    };
+
+    const message: MulticastMessage = {
+        tokens,
+        notification: payload.notification,
+    };
+
+    try {
+      const response = await admin.messaging().sendEachForMulticast(message);
+      console.log(`Notificação de confirmação enviada para ${clientId}:`, response.successCount);
+    } catch (error) {
+      console.error("Erro ao enviar notificação de confirmação:", error);
+    }
+  });

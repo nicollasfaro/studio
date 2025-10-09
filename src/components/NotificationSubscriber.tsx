@@ -4,7 +4,7 @@
 import { useState, useEffect } from 'react';
 import { getMessaging, getToken, onMessage } from 'firebase/messaging';
 import { useFirebaseApp, useUser, useFirestore, useUserData } from '@/firebase';
-import { doc, updateDoc, arrayUnion, arrayRemove, getDoc } from 'firebase/firestore';
+import { doc, updateDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
@@ -33,17 +33,29 @@ export default function NotificationSubscriber({ feature, title, description }: 
 
   const [currentToken, setCurrentToken] = useState<string | null>(null);
 
+  const getAndLogToken = async () => {
+    if (app) {
+      try {
+        const messaging = getMessaging(app);
+        const token = await getToken(messaging, { vapidKey: process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY });
+        if (token) {
+          console.log('Seu token de registro do FCM é:', token);
+          setCurrentToken(token);
+          return token;
+        } else {
+           console.log('Nenhum token de registro disponível. Solicite permissão para gerar um.');
+        }
+      } catch (err) {
+        console.error('Ocorreu um erro ao recuperar o token. ', err);
+      }
+    }
+    return null;
+  }
+
   // Get current token
   useEffect(() => {
-    if (notificationPermission === 'granted' && app) {
-      const messaging = getMessaging(app);
-      getToken(messaging, { vapidKey: process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY }).then((token) => {
-        if(token) {
-          setCurrentToken(token);
-        }
-      }).catch((err) => {
-        console.error('An error occurred while retrieving token. ', err);
-      });
+    if (notificationPermission === 'granted') {
+      getAndLogToken();
     }
   }, [notificationPermission, app]);
   
@@ -62,13 +74,21 @@ export default function NotificationSubscriber({ feature, title, description }: 
 
     if (checked) {
       // Subscribe logic
-      if (notificationPermission === 'granted') {
-        if (currentToken) {
+      let permission = notificationPermission;
+      if (permission === 'default') {
+        permission = await Notification.requestPermission();
+        setNotificationPermission(permission);
+      }
+      
+      if (permission === 'granted') {
+        const token = await getAndLogToken();
+
+        if (token) {
           try {
             const userDocRef = doc(firestore, 'users', user.uid);
-            await updateDoc(userDocRef, { fcmTokens: arrayUnion(currentToken) });
+            await updateDoc(userDocRef, { fcmTokens: arrayUnion(token) });
             setIsSubscribed(true);
-            toast({ title: 'Inscrito!', description: `Você receberá ${title.toLowerCase()}.` });
+            toast({ title: 'Inscrição Ativada!', description: `Você receberá ${title.toLowerCase()}.` });
           } catch (err) {
             console.error('Error subscribing:', err);
             toast({ variant: 'destructive', title: 'Erro', description: 'Não foi possível salvar a sua inscrição.' });
@@ -76,14 +96,8 @@ export default function NotificationSubscriber({ feature, title, description }: 
         } else {
           toast({ variant: 'destructive', title: 'Falha na Inscrição', description: 'Não foi possível obter o token de notificação. Tente recarregar a página.' });
         }
-      } else if (notificationPermission === 'default') {
-        const permission = await Notification.requestPermission();
-        setNotificationPermission(permission);
-        if (permission !== 'granted') {
-          toast({ variant: 'destructive', title: 'Permissão Negada', description: 'Você precisa permitir notificações para se inscrever.' });
-        }
       } else {
-        toast({ variant: 'destructive', title: 'Notificações Bloqueadas', description: 'Por favor, habilite as notificações nas configurações do seu navegador.' });
+        toast({ variant: 'destructive', title: 'Permissão Negada', description: 'Você precisa permitir notificações nas configurações do seu navegador para se inscrever.' });
       }
     } else {
       // Unsubscribe logic
@@ -100,26 +114,11 @@ export default function NotificationSubscriber({ feature, title, description }: 
       }
     }
   };
-  
-    // Listen for incoming messages
-  useEffect(() => {
-    if (typeof window !== 'undefined' && 'serviceWorker' in navigator && app) {
-      const messaging = getMessaging(app);
-      const unsubscribe = onMessage(messaging, (payload) => {
-        console.log('Message received. ', payload);
-        toast({
-          title: payload.notification?.title,
-          description: payload.notification?.body,
-        });
-      });
-      return () => unsubscribe();
-    }
-  }, [app, toast]);
 
 
   return (
     <div className="flex items-center justify-between p-4 border rounded-lg">
-      <Label htmlFor={`${feature}-notifications`} className="flex flex-col gap-1 cursor-pointer">
+      <Label htmlFor={`${feature}-notifications`} className="flex flex-col gap-1 cursor-pointer pr-4">
         <span className="font-semibold">{title}</span>
         <span className="text-sm text-muted-foreground">{description}</span>
       </Label>
