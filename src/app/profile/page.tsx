@@ -83,10 +83,15 @@ function ChatDialog({ appointmentId, user, onOpenChange }: { appointmentId: stri
                 const msgRef = doc(firestore, 'appointments', appointmentId, 'messages', msg.id);
                 batch.update(msgRef, { isRead: true });
             });
+            
+             if (appointmentRef) {
+                batch.update(appointmentRef, { hasUnreadClientMessage: false });
+            }
+
             batch.commit().catch(console.error);
         }
 
-    }, [messages, firestore, appointmentId]);
+    }, [messages, firestore, appointmentId, appointmentRef]);
 
 
     // Lógica de "digitando..."
@@ -124,7 +129,11 @@ function ChatDialog({ appointmentId, user, onOpenChange }: { appointmentId: stri
         };
 
         try {
-            await addDoc(collection(firestore, 'appointments', appointmentId, 'messages'), messageData);
+            const messagesCollectionRef = collection(firestore, 'appointments', appointmentId, 'messages');
+            await addDoc(messagesCollectionRef, messageData);
+             if (appointmentRef) {
+                await updateDoc(appointmentRef, { hasUnreadAdminMessage: true });
+            }
             setNewMessage('');
             updateTypingStatus(false);
         } catch (error) {
@@ -440,9 +449,14 @@ export default function ProfilePage() {
                           </div>
                           <div className="flex items-center">
                             {apt.status === 'confirmado' && (
-                                <Button variant="ghost" size="icon" onClick={() => setChatDialogState({ isOpen: true, appointmentId: apt.id })}>
-                                    <MessageSquare className="h-5 w-5 text-blue-500" />
-                                </Button>
+                                <div className="relative">
+                                    <Button variant="ghost" size="icon" onClick={() => setChatDialogState({ isOpen: true, appointmentId: apt.id })}>
+                                        <MessageSquare className="h-5 w-5 text-blue-500" />
+                                    </Button>
+                                    {apt.hasUnreadClientMessage && (
+                                        <span className="absolute top-0 right-0 block h-2 w-2 rounded-full bg-red-500 ring-2 ring-background" />
+                                    )}
+                                </div>
                             )}
                             {apt.status !== 'contestado' && (
                                 <DropdownMenu>
