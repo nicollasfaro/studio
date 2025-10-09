@@ -24,7 +24,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
-import { Label } from '@/components/ui/label';
 import {
   Form,
   FormControl,
@@ -121,159 +120,14 @@ const serviceSchema = z.object({
     path: ['customEndTime'],
 });
 
-
 type ServiceFormValues = z.infer<typeof serviceSchema>;
 
-export default function AdminServicesPage() {
-  const { toast } = useToast();
-  const firestore = useFirestore();
-  const isMobile = useIsMobile();
-
-  const [view, setView] = useState<'list' | 'form'>('list');
-  const [isEditing, setIsEditing] = useState<Service | null>(null);
-  const [showDeleteAlert, setShowDeleteAlert] = useState<Service | null>(null);
-
-  const servicesRef = useMemoFirebase(() => (firestore ? collection(firestore, 'services') : null), [firestore]);
-  const { data: services, isLoading: isLoadingServices } = useCollection<Service>(servicesRef);
-  
-  const galleryImagesRef = useMemoFirebase(() => (firestore ? collection(firestore, 'galleryImages') : null), [firestore]);
-  const { data: galleryImages, isLoading: isLoadingGallery } = useCollection<GalleryImage>(galleryImagesRef);
-
-
-  const form = useForm<ServiceFormValues>({
-    resolver: zodResolver(serviceSchema),
-    defaultValues: {
-      name: '',
-      description: '',
-      price: 0,
-      durationMinutes: 30,
-      imageId: '',
-      isPriceFrom: false,
-      priceShortHair: 0,
-      priceMediumHair: 0,
-      priceLongHair: 0,
-      isProfessionalSchedule: false,
-      professionalName: '',
-      customStartTime: '09:00',
-      customEndTime: '18:00',
-      customWorkingDays: [],
-    },
-  });
-
+// Moved FormCard out of AdminServicesPage
+function FormCard({ form, onSubmit, isEditing, handleCancelEdit, galleryImages, isLoadingGallery, isMobile, setView }: any) {
   const isPriceFrom = form.watch('isPriceFrom');
   const isProfessionalSchedule = form.watch('isProfessionalSchedule');
 
-  const onSubmit = (values: ServiceFormValues) => {
-    if (!firestore || !servicesRef) return;
-    
-      if (isEditing) {
-        const serviceDocRef = doc(firestore, 'services', isEditing.id);
-        setDoc(serviceDocRef, values, { merge: true }).then(() => {
-            toast({
-              title: 'Serviço Atualizado!',
-              description: `O serviço "${values.name}" foi atualizado com sucesso.`,
-            });
-            handleCancelEdit();
-        }).catch(error => {
-            console.error('Erro ao atualizar serviço:', error);
-            toast({
-              variant: 'destructive',
-              title: 'Erro ao atualizar',
-              description: 'Não foi possível atualizar o serviço.',
-            });
-            errorEmitter.emit('permission-error', new FirestorePermissionError({
-                path: serviceDocRef.path,
-                operation: 'update',
-                requestResourceData: values,
-            }));
-        });
-      } else {
-        addDoc(servicesRef, values).then(() => {
-            toast({
-              title: 'Serviço Adicionado!',
-              description: `O serviço "${values.name}" foi adicionado com sucesso.`,
-            });
-            handleCancelEdit();
-        }).catch(error => {
-            console.error('Erro ao adicionar serviço:', error);
-            toast({
-              variant: 'destructive',
-              title: 'Erro ao salvar',
-              description: 'Não foi possível salvar o serviço. Tente novamente.',
-            });
-            errorEmitter.emit('permission-error', new FirestorePermissionError({
-                path: servicesRef.path,
-                operation: 'create',
-                requestResourceData: values,
-            }));
-        });
-      }
-  };
-
-  const handleDeleteService = () => {
-    if (!showDeleteAlert || !firestore) return;
-
-        const serviceDocRef = doc(firestore, 'services', showDeleteAlert.id);
-        deleteDoc(serviceDocRef).then(() => {
-          toast({
-              title: 'Serviço Removido!',
-              description: `O serviço "${showDeleteAlert.name}" foi removido.`,
-          });
-          setShowDeleteAlert(null);
-        }).catch(error => {
-          console.error('Erro ao remover serviço:', error);
-          toast({
-              variant: 'destructive',
-              title: 'Erro ao remover',
-              description: 'Não foi possível remover o serviço.',
-          });
-          errorEmitter.emit('permission-error', new FirestorePermissionError({
-            path: serviceDocRef.path,
-            operation: 'delete',
-          }));
-        });
-  };
-
-  const handleEditClick = (service: Service) => {
-    setIsEditing(service);
-    form.reset({
-      ...service,
-      priceShortHair: service.priceShortHair || 0,
-      priceMediumHair: service.priceMediumHair || 0,
-      priceLongHair: service.priceLongHair || 0,
-      customWorkingDays: service.customWorkingDays || [],
-    });
-    if (isMobile) {
-        setView('form');
-    }
-  };
-  
-  const handleCancelEdit = () => {
-      setIsEditing(null);
-      form.reset({
-        name: '',
-        description: '',
-        price: 0,
-        durationMinutes: 30,
-        imageId: '',
-        isPriceFrom: false,
-        priceShortHair: 0,
-        priceMediumHair: 0,
-        priceLongHair: 0,
-        isProfessionalSchedule: false,
-        professionalName: '',
-        customStartTime: '09:00',
-        customEndTime: '18:00',
-        customWorkingDays: [],
-      });
-      if (isMobile) {
-        setView('list');
-      }
-  }
-
-  const isLoading = isLoadingServices || isLoadingGallery;
-
-  const FormCard = () => (
+  return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle>{isEditing ? 'Editar Serviço' : 'Adicionar Novo Serviço'}</CardTitle>
@@ -326,7 +180,7 @@ export default function AdminServicesPage() {
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {galleryImages?.map((img) => (
+                      {galleryImages?.map((img: GalleryImage) => (
                         <SelectItem key={img.id} value={img.id}>
                           {img.description}
                         </SelectItem>
@@ -566,94 +420,264 @@ export default function AdminServicesPage() {
       </Form>
     </Card>
   );
+}
 
-  const ListCard = () => (
-      <AlertDialog>
-        <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle>Serviços Cadastrados</CardTitle>
-            {isMobile && (
-                <Button variant="default" size="sm" onClick={() => setView('form')}>
-                    <PlusCircle className="mr-2 h-4 w-4" />
-                    Adicionar
-                </Button>
-            )}
-        </CardHeader>
-        <CardContent>
-            <Table>
-            <TableHeader>
-                <TableRow>
-                <TableHead>Nome</TableHead>
-                <TableHead>Preço</TableHead>
-                <TableHead>Duração</TableHead>
-                <TableHead className="text-right">Ações</TableHead>
-                </TableRow>
-            </TableHeader>
-            <TableBody>
-                {isLoading &&
-                Array.from({ length: 3 }).map((_, i) => (
-                    <TableRow key={i}>
-                    <TableCell>
-                        <Skeleton className="h-4 w-[150px]" />
-                    </TableCell>
-                    <TableCell>
-                        <Skeleton className="h-4 w-[60px]" />
-                    </TableCell>
-                    <TableCell>
-                        <Skeleton className="h-4 w-[80px]" />
-                    </TableCell>
-                    <TableCell className="text-right">
-                        <Skeleton className="h-8 w-16 ml-auto" />
-                    </TableCell>
-                    </TableRow>
-                ))}
-                {services?.map((service) => (
-                <TableRow key={service.id}>
-                    <TableCell className="font-medium">{service.name}</TableCell>
-                    <TableCell>{service.isPriceFrom ? `A partir de R$${service.price.toFixed(2)}` : `R$${service.price.toFixed(2)}`}</TableCell>
-                    <TableCell>{service.durationMinutes} min</TableCell>
-                    <TableCell className="text-right">
-                    <Button variant="ghost" size="icon" onClick={() => handleEditClick(service)}>
-                        <Edit className="h-4 w-4" />
-                    </Button>
-                    <AlertDialogTrigger asChild>
-                        <Button variant="ghost" size="icon" onClick={() => setShowDeleteAlert(service)}>
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
-                    </AlertDialogTrigger>
-                    </TableCell>
-                </TableRow>
-                ))}
-            </TableBody>
-            </Table>
-            {!isLoading && services?.length === 0 && (
-            <p className="text-center text-muted-foreground py-8">
-                Nenhum serviço cadastrado ainda.
-            </p>
-            )}
-        </CardContent>
-        </Card>
-        <AlertDialogContent>
-            <AlertDialogHeader>
-                <AlertDialogTitle>Você tem certeza?</AlertDialogTitle>
-                <AlertDialogDescription>
-                    Esta ação não pode ser desfeita. Isso removerá permanentemente o serviço "{showDeleteAlert?.name}" do banco de dados.
-                </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-                <AlertDialogCancel onClick={() => setShowDeleteAlert(null)}>Cancelar</AlertDialogCancel>
-                <AlertDialogAction onClick={handleDeleteService} className="bg-destructive hover:bg-destructive/90">
-                    Sim, remover
-                </AlertDialogAction>
-            </AlertDialogFooter>
-        </AlertDialogContent>
-    </AlertDialog>
-  )
+// Moved ListCard out of AdminServicesPage
+function ListCard({ isLoading, services, handleEditClick, setShowDeleteAlert, isMobile, setView }: any) {
+  return (
+    <AlertDialog>
+      <Card>
+      <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle>Serviços Cadastrados</CardTitle>
+          {isMobile && (
+              <Button variant="default" size="sm" onClick={() => setView('form')}>
+                  <PlusCircle className="mr-2 h-4 w-4" />
+                  Adicionar
+              </Button>
+          )}
+      </CardHeader>
+      <CardContent>
+          <Table>
+          <TableHeader>
+              <TableRow>
+              <TableHead>Nome</TableHead>
+              <TableHead>Preço</TableHead>
+              <TableHead>Duração</TableHead>
+              <TableHead className="text-right">Ações</TableHead>
+              </TableRow>
+          </TableHeader>
+          <TableBody>
+              {isLoading &&
+              Array.from({ length: 3 }).map((_, i) => (
+                  <TableRow key={i}>
+                  <TableCell>
+                      <Skeleton className="h-4 w-[150px]" />
+                  </TableCell>
+                  <TableCell>
+                      <Skeleton className="h-4 w-[60px]" />
+                  </TableCell>
+                  <TableCell>
+                      <Skeleton className="h-4 w-[80px]" />
+                  </TableCell>
+                  <TableCell className="text-right">
+                      <Skeleton className="h-8 w-16 ml-auto" />
+                  </TableCell>
+                  </TableRow>
+              ))}
+              {services?.map((service: Service) => (
+              <TableRow key={service.id}>
+                  <TableCell className="font-medium">{service.name}</TableCell>
+                  <TableCell>{service.isPriceFrom ? `A partir de R$${service.price.toFixed(2)}` : `R$${service.price.toFixed(2)}`}</TableCell>
+                  <TableCell>{service.durationMinutes} min</TableCell>
+                  <TableCell className="text-right">
+                  <Button variant="ghost" size="icon" onClick={() => handleEditClick(service)}>
+                      <Edit className="h-4 w-4" />
+                  </Button>
+                  <AlertDialogTrigger asChild>
+                      <Button variant="ghost" size="icon" onClick={() => setShowDeleteAlert(service)}>
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                  </AlertDialogTrigger>
+                  </TableCell>
+              </TableRow>
+              ))}
+          </TableBody>
+          </Table>
+          {!isLoading && services?.length === 0 && (
+          <p className="text-center text-muted-foreground py-8">
+              Nenhum serviço cadastrado ainda.
+          </p>
+          )}
+      </CardContent>
+      </Card>
+      <AlertDialogContent>
+          <AlertDialogHeader>
+              <AlertDialogTitle>Você tem certeza?</AlertDialogTitle>
+              <AlertDialogDescription>
+                  Esta ação não pode ser desfeita. Isso removerá permanentemente o serviço "{showDeleteAlert?.name}" do banco de dados.
+              </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setShowDeleteAlert(null)}>Cancelar</AlertDialogCancel>
+              <AlertDialogAction onClick={() => (setShowDeleteAlert as Function)()} className="bg-destructive hover:bg-destructive/90">
+                  Sim, remover
+              </AlertDialogAction>
+          </AlertDialogFooter>
+      </AlertDialogContent>
+  </AlertDialog>
+  );
+}
+
+export default function AdminServicesPage() {
+  const { toast } = useToast();
+  const firestore = useFirestore();
+  const isMobile = useIsMobile();
+
+  const [view, setView] = useState<'list' | 'form'>('list');
+  const [isEditing, setIsEditing] = useState<Service | null>(null);
+  const [showDeleteAlert, setShowDeleteAlert] = useState<Service | null>(null);
+
+  const servicesRef = useMemoFirebase(() => (firestore ? collection(firestore, 'services') : null), [firestore]);
+  const { data: services, isLoading: isLoadingServices } = useCollection<Service>(servicesRef);
+  
+  const galleryImagesRef = useMemoFirebase(() => (firestore ? collection(firestore, 'galleryImages') : null), [firestore]);
+  const { data: galleryImages, isLoading: isLoadingGallery } = useCollection<GalleryImage>(galleryImagesRef);
+
+
+  const form = useForm<ServiceFormValues>({
+    resolver: zodResolver(serviceSchema),
+    defaultValues: {
+      name: '',
+      description: '',
+      price: 0,
+      durationMinutes: 30,
+      imageId: '',
+      isPriceFrom: false,
+      priceShortHair: 0,
+      priceMediumHair: 0,
+      priceLongHair: 0,
+      isProfessionalSchedule: false,
+      professionalName: '',
+      customStartTime: '09:00',
+      customEndTime: '18:00',
+      customWorkingDays: [],
+    },
+  });
+
+  const onSubmit = (values: ServiceFormValues) => {
+    if (!firestore || !servicesRef) return;
+    
+      if (isEditing) {
+        const serviceDocRef = doc(firestore, 'services', isEditing.id);
+        setDoc(serviceDocRef, values, { merge: true }).then(() => {
+            toast({
+              title: 'Serviço Atualizado!',
+              description: `O serviço "${values.name}" foi atualizado com sucesso.`,
+            });
+            handleCancelEdit();
+        }).catch(error => {
+            console.error('Erro ao atualizar serviço:', error);
+            toast({
+              variant: 'destructive',
+              title: 'Erro ao atualizar',
+              description: 'Não foi possível atualizar o serviço.',
+            });
+            errorEmitter.emit('permission-error', new FirestorePermissionError({
+                path: serviceDocRef.path,
+                operation: 'update',
+                requestResourceData: values,
+            }));
+        });
+      } else {
+        addDoc(servicesRef, values).then(() => {
+            toast({
+              title: 'Serviço Adicionado!',
+              description: `O serviço "${values.name}" foi adicionado com sucesso.`,
+            });
+            handleCancelEdit();
+        }).catch(error => {
+            console.error('Erro ao adicionar serviço:', error);
+            toast({
+              variant: 'destructive',
+              title: 'Erro ao salvar',
+              description: 'Não foi possível salvar o serviço. Tente novamente.',
+            });
+            errorEmitter.emit('permission-error', new FirestorePermissionError({
+                path: servicesRef.path,
+                operation: 'create',
+                requestResourceData: values,
+            }));
+        });
+      }
+  };
+
+  const handleDeleteService = () => {
+    if (!showDeleteAlert || !firestore) return;
+
+        const serviceDocRef = doc(firestore, 'services', showDeleteAlert.id);
+        deleteDoc(serviceDocRef).then(() => {
+          toast({
+              title: 'Serviço Removido!',
+              description: `O serviço "${showDeleteAlert.name}" foi removido.`,
+          });
+          setShowDeleteAlert(null);
+        }).catch(error => {
+          console.error('Erro ao remover serviço:', error);
+          toast({
+              variant: 'destructive',
+              title: 'Erro ao remover',
+              description: 'Não foi possível remover o serviço.',
+          });
+          errorEmitter.emit('permission-error', new FirestorePermissionError({
+            path: serviceDocRef.path,
+            operation: 'delete',
+          }));
+        });
+  };
+
+  const handleEditClick = (service: Service) => {
+    setIsEditing(service);
+    form.reset({
+      ...service,
+      priceShortHair: service.priceShortHair || 0,
+      priceMediumHair: service.priceMediumHair || 0,
+      priceLongHair: service.priceLongHair || 0,
+      customWorkingDays: service.customWorkingDays || [],
+    });
+    if (isMobile) {
+        setView('form');
+    }
+  };
+  
+  const handleCancelEdit = () => {
+      setIsEditing(null);
+      form.reset({
+        name: '',
+        description: '',
+        price: 0,
+        durationMinutes: 30,
+        imageId: '',
+        isPriceFrom: false,
+        priceShortHair: 0,
+        priceMediumHair: 0,
+        priceLongHair: 0,
+        isProfessionalSchedule: false,
+        professionalName: '',
+        customStartTime: '09:00',
+        customEndTime: '18:00',
+        customWorkingDays: [],
+      });
+      if (isMobile) {
+        setView('list');
+      }
+  }
+
+  const isLoading = isLoadingServices || isLoadingGallery;
+
+  const formCardProps = {
+    form,
+    onSubmit,
+    isEditing,
+    handleCancelEdit,
+    galleryImages,
+    isLoadingGallery,
+    isMobile,
+    setView
+  };
+
+  const listCardProps = {
+    isLoading,
+    services,
+    handleEditClick,
+    setShowDeleteAlert: handleDeleteService,
+    isMobile,
+    setView
+  };
 
   if (isMobile) {
     return (
         <div className="w-full">
-            {view === 'form' ? <FormCard /> : <ListCard />}
+            {view === 'form' ? <FormCard {...formCardProps} /> : <ListCard {...listCardProps} />}
         </div>
     )
   }
@@ -661,11 +685,11 @@ export default function AdminServicesPage() {
   return (
     <div className="grid gap-8 md:grid-cols-3">
       <div className="md:col-span-1">
-        <FormCard />
+        <FormCard {...formCardProps} />
       </div>
 
       <div className="md:col-span-2">
-        <ListCard />
+        <ListCard {...listCardProps} />
       </div>
     </div>
   );

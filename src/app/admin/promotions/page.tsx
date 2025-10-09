@@ -60,8 +60,6 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { cn } from '@/lib/utils';
-
 
 const promotionSchema = z.object({
   name: z.string().min(3, 'O nome deve ter pelo menos 3 caracteres.'),
@@ -69,12 +67,234 @@ const promotionSchema = z.object({
   discountPercentage: z.coerce.number().min(1, 'O desconto deve ser de no mínimo 1%.').max(100, 'O desconto não pode passar de 100%.'),
   imageId: z.string().min(1, 'Por favor, selecione uma imagem.'),
   serviceIds: z.array(z.string()).min(1, 'Selecione pelo menos um serviço.'),
-  // Dates are stored as strings, validation for date logic is handled separately if needed
   startDate: z.string().min(1, 'Data de início é obrigatória.'),
   endDate: z.string().min(1, 'Data de fim é obrigatória.'),
 });
 
 type PromotionFormValues = z.infer<typeof promotionSchema>;
+
+function FormCard({ form, onSubmit, isEditing, handleCancelEdit, isLoadingGallery, galleryImages, services, isMobile, setView }: any) {
+  return (
+     <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle>{isEditing ? 'Editar Promoção' : 'Adicionar Nova Promoção'}</CardTitle>
+            {isMobile && (
+                <Button variant="outline" size="sm" onClick={() => { handleCancelEdit(); setView('list'); }}>
+                    <List className="mr-2 h-4 w-4" />
+                    Ver Lista
+                </Button>
+            )}
+        </CardHeader>
+        <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)}>
+            <CardContent className="space-y-4">
+            <FormField
+                control={form.control}
+                name="name"
+                render={({ field }) => (
+                <FormItem>
+                    <FormLabel>Nome da Promoção</FormLabel>
+                    <FormControl><Input placeholder="Ex: Especial de Verão" {...field} /></FormControl>
+                    <FormMessage />
+                </FormItem>
+                )}
+            />
+            <FormField
+                control={form.control}
+                name="description"
+                render={({ field }) => (
+                <FormItem>
+                    <FormLabel>Descrição</FormLabel>
+                    <FormControl><Textarea placeholder="Descreva a promoção..." {...field} /></FormControl>
+                    <FormMessage />
+                </FormItem>
+                )}
+            />
+            <FormField
+                control={form.control}
+                name="imageId"
+                render={({ field }) => (
+                <FormItem>
+                    <FormLabel>Imagem da Promoção</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value} disabled={isLoadingGallery}>
+                    <FormControl>
+                        <SelectTrigger>
+                        <SelectValue placeholder={isLoadingGallery ? "Carregando imagens..." : "Selecione uma imagem"} />
+                        </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                        {galleryImages?.map((img: GalleryImage) => (
+                        <SelectItem key={img.id} value={img.id}>{img.description}</SelectItem>
+                        ))}
+                    </SelectContent>
+                    </Select>
+                    <FormMessage />
+                </FormItem>
+                )}
+            />
+            <FormField
+                control={form.control}
+                name="discountPercentage"
+                render={({ field }) => (
+                <FormItem>
+                    <FormLabel>Desconto (%)</FormLabel>
+                    <FormControl><Input type="number" placeholder="15" {...field} /></FormControl>
+                    <FormMessage />
+                </FormItem>
+                )}
+            />
+            <FormField
+                control={form.control}
+                name="serviceIds"
+                render={() => (
+                <FormItem>
+                    <FormLabel>Serviços Aplicáveis</FormLabel>
+                    <ScrollArea className="h-32 w-full rounded-md border p-4">
+                    {services?.map((service: Service) => (
+                        <FormField
+                        key={service.id}
+                        control={form.control}
+                        name="serviceIds"
+                        render={({ field }) => (
+                            <FormItem key={service.id} className="flex flex-row items-start space-x-3 space-y-0">
+                            <FormControl>
+                                <Checkbox
+                                checked={field.value?.includes(service.id)}
+                                onCheckedChange={(checked) => {
+                                    return checked
+                                    ? field.onChange([...(field.value || []), service.id])
+                                    : field.onChange(field.value?.filter((value) => value !== service.id));
+                                }}
+                                />
+                            </FormControl>
+                            <FormLabel className="font-normal">{service.name}</FormLabel>
+                            </FormItem>
+                        )}
+                        />
+                    ))}
+                    </ScrollArea>
+                    <FormMessage />
+                </FormItem>
+                )}
+            />
+            <div className="grid grid-cols-2 gap-4">
+                <FormField
+                control={form.control}
+                name="startDate"
+                render={({ field }) => (
+                    <FormItem>
+                    <FormLabel>Data de Início</FormLabel>
+                    <FormControl><Input type="date" {...field} /></FormControl>
+                    <FormMessage />
+                    </FormItem>
+                )}
+                />
+                <FormField
+                control={form.control}
+                name="endDate"
+                render={({ field }) => (
+                    <FormItem>
+                    <FormLabel>Data de Fim</FormLabel>
+                    <FormControl><Input type="date" {...field} /></FormControl>
+                    <FormMessage />
+                    </FormItem>
+                )}
+                />
+            </div>
+            </CardContent>
+            <CardFooter className="flex justify-end gap-2">
+            {isEditing && (
+                <Button type="button" variant="outline" onClick={handleCancelEdit}>Cancelar</Button>
+            )}
+            <Button type="submit" disabled={form.formState.isSubmitting}>
+                <PlusCircle className="mr-2 h-4 w-4" />
+                {isEditing ? 'Salvar Alterações' : 'Adicionar Promoção'}
+            </Button>
+            </CardFooter>
+        </form>
+        </Form>
+    </Card>
+  );
+}
+
+function ListCard({ isLoading, promotions, handleEditClick, setShowDeleteAlert, isMobile, setView }: any) {
+  return (
+     <AlertDialog>
+        <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle>Promoções Cadastradas</CardTitle>
+                 {isMobile && (
+                    <Button variant="default" size="sm" onClick={() => setView('form')}>
+                        <PlusCircle className="mr-2 h-4 w-4" />
+                        Adicionar
+                    </Button>
+                )}
+            </CardHeader>
+            <CardContent>
+                <div className="overflow-x-auto">
+                    <Table>
+                    <TableHeader>
+                        <TableRow>
+                        <TableHead>Nome</TableHead>
+                        <TableHead>Desconto</TableHead>
+                        <TableHead>Validade</TableHead>
+                        <TableHead className="text-right">Ações</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {isLoading &&
+                        Array.from({ length: 3 }).map((_, i) => (
+                            <TableRow key={i}>
+                                <TableCell><Skeleton className="h-4 w-[150px]" /></TableCell>
+                                <TableCell><Skeleton className="h-4 w-[60px]" /></TableCell>
+                                <TableCell><Skeleton className="h-4 w-[180px]" /></TableCell>
+                                <TableCell className="text-right"><Skeleton className="h-8 w-16 ml-auto" /></TableCell>
+                            </TableRow>
+                        ))}
+                        {promotions?.map((promo: Promotion) => (
+                        <TableRow key={promo.id}>
+                            <TableCell className="font-medium">{promo.name}</TableCell>
+                            <TableCell>{promo.discountPercentage}%</TableCell>
+                            <TableCell>
+                                {new Date(promo.startDate).toLocaleDateString()} - {new Date(promo.endDate).toLocaleDateString()}
+                            </TableCell>
+                            <TableCell className="text-right">
+                            <Button variant="ghost" size="icon" onClick={() => handleEditClick(promo)}>
+                                <Edit className="h-4 w-4" />
+                            </Button>
+                            <AlertDialogTrigger asChild>
+                                <Button variant="ghost" size="icon" onClick={() => setShowDeleteAlert(promo)}>
+                                    <Trash2 className="h-4 w-4 text-destructive" />
+                                </Button>
+                            </AlertDialogTrigger>
+                            </TableCell>
+                        </TableRow>
+                        ))}
+                    </TableBody>
+                    </Table>
+                </div>
+                {!isLoading && promotions?.length === 0 && (
+                <p className="text-center text-muted-foreground py-8">Nenhuma promoção cadastrada ainda.</p>
+                )}
+            </CardContent>
+        </Card>
+        <AlertDialogContent>
+            <AlertDialogHeader>
+                <AlertDialogTitle>Você tem certeza?</AlertDialogTitle>
+                <AlertDialogDescription>
+                    Esta ação não pode ser desfeita. Isso removerá permanentemente a promoção "{showDeleteAlert?.name}".
+                </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+                <AlertDialogCancel onClick={() => setShowDeleteAlert(null)}>Cancelar</AlertDialogCancel>
+                <AlertDialogAction onClick={() => (setShowDeleteAlert as Function)()} className="bg-destructive hover:bg-destructive/90">
+                    Sim, remover
+                </AlertDialogAction>
+            </AlertDialogFooter>
+        </AlertDialogContent>
+    </AlertDialog>
+  );
+}
 
 export default function AdminPromotionsPage() {
   const { toast } = useToast();
@@ -215,229 +435,31 @@ export default function AdminPromotionsPage() {
 
   const isLoading = isLoadingServices || isLoadingPromotions || isLoadingGallery;
 
-  const FormCard = () => (
-     <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle>{isEditing ? 'Editar Promoção' : 'Adicionar Nova Promoção'}</CardTitle>
-            {isMobile && (
-                <Button variant="outline" size="sm" onClick={() => { setIsEditing(null); setView('list'); }}>
-                    <List className="mr-2 h-4 w-4" />
-                    Ver Lista
-                </Button>
-            )}
-        </CardHeader>
-        <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)}>
-            <CardContent className="space-y-4">
-            <FormField
-                control={form.control}
-                name="name"
-                render={({ field }) => (
-                <FormItem>
-                    <FormLabel>Nome da Promoção</FormLabel>
-                    <FormControl><Input placeholder="Ex: Especial de Verão" {...field} /></FormControl>
-                    <FormMessage />
-                </FormItem>
-                )}
-            />
-            <FormField
-                control={form.control}
-                name="description"
-                render={({ field }) => (
-                <FormItem>
-                    <FormLabel>Descrição</FormLabel>
-                    <FormControl><Textarea placeholder="Descreva a promoção..." {...field} /></FormControl>
-                    <FormMessage />
-                </FormItem>
-                )}
-            />
-            <FormField
-                control={form.control}
-                name="imageId"
-                render={({ field }) => (
-                <FormItem>
-                    <FormLabel>Imagem da Promoção</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value} disabled={isLoadingGallery}>
-                    <FormControl>
-                        <SelectTrigger>
-                        <SelectValue placeholder={isLoadingGallery ? "Carregando imagens..." : "Selecione uma imagem"} />
-                        </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                        {galleryImages?.map((img) => (
-                        <SelectItem key={img.id} value={img.id}>{img.description}</SelectItem>
-                        ))}
-                    </SelectContent>
-                    </Select>
-                    <FormMessage />
-                </FormItem>
-                )}
-            />
-            <FormField
-                control={form.control}
-                name="discountPercentage"
-                render={({ field }) => (
-                <FormItem>
-                    <FormLabel>Desconto (%)</FormLabel>
-                    <FormControl><Input type="number" placeholder="15" {...field} /></FormControl>
-                    <FormMessage />
-                </FormItem>
-                )}
-            />
-            <FormField
-                control={form.control}
-                name="serviceIds"
-                render={() => (
-                <FormItem>
-                    <FormLabel>Serviços Aplicáveis</FormLabel>
-                    <ScrollArea className="h-32 w-full rounded-md border p-4">
-                    {services?.map((service) => (
-                        <FormField
-                        key={service.id}
-                        control={form.control}
-                        name="serviceIds"
-                        render={({ field }) => (
-                            <FormItem key={service.id} className="flex flex-row items-start space-x-3 space-y-0">
-                            <FormControl>
-                                <Checkbox
-                                checked={field.value?.includes(service.id)}
-                                onCheckedChange={(checked) => {
-                                    return checked
-                                    ? field.onChange([...(field.value || []), service.id])
-                                    : field.onChange(field.value?.filter((value) => value !== service.id));
-                                }}
-                                />
-                            </FormControl>
-                            <FormLabel className="font-normal">{service.name}</FormLabel>
-                            </FormItem>
-                        )}
-                        />
-                    ))}
-                    </ScrollArea>
-                    <FormMessage />
-                </FormItem>
-                )}
-            />
-            <div className="grid grid-cols-2 gap-4">
-                <FormField
-                control={form.control}
-                name="startDate"
-                render={({ field }) => (
-                    <FormItem>
-                    <FormLabel>Data de Início</FormLabel>
-                    <FormControl><Input type="date" {...field} /></FormControl>
-                    <FormMessage />
-                    </FormItem>
-                )}
-                />
-                <FormField
-                control={form.control}
-                name="endDate"
-                render={({ field }) => (
-                    <FormItem>
-                    <FormLabel>Data de Fim</FormLabel>
-                    <FormControl><Input type="date" {...field} /></FormControl>
-                    <FormMessage />
-                    </FormItem>
-                )}
-                />
-            </div>
-            </CardContent>
-            <CardFooter className="flex justify-end gap-2">
-            {isEditing && (
-                <Button type="button" variant="outline" onClick={handleCancelEdit}>Cancelar</Button>
-            )}
-            <Button type="submit" disabled={form.formState.isSubmitting}>
-                <PlusCircle className="mr-2 h-4 w-4" />
-                {isEditing ? 'Salvar Alterações' : 'Adicionar Promoção'}
-            </Button>
-            </CardFooter>
-        </form>
-        </Form>
-    </Card>
-  );
+  const formCardProps = {
+    form,
+    onSubmit,
+    isEditing,
+    handleCancelEdit,
+    isLoadingGallery,
+    galleryImages,
+    services,
+    isMobile,
+    setView
+  };
 
-  const ListCard = () => (
-     <AlertDialog>
-        <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle>Promoções Cadastradas</CardTitle>
-                 {isMobile && (
-                    <Button variant="default" size="sm" onClick={() => setView('form')}>
-                        <PlusCircle className="mr-2 h-4 w-4" />
-                        Adicionar
-                    </Button>
-                )}
-            </CardHeader>
-            <CardContent>
-                <div className="overflow-x-auto">
-                    <Table>
-                    <TableHeader>
-                        <TableRow>
-                        <TableHead>Nome</TableHead>
-                        <TableHead>Desconto</TableHead>
-                        <TableHead>Validade</TableHead>
-                        <TableHead className="text-right">Ações</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {isLoading &&
-                        Array.from({ length: 3 }).map((_, i) => (
-                            <TableRow key={i}>
-                                <TableCell><Skeleton className="h-4 w-[150px]" /></TableCell>
-                                <TableCell><Skeleton className="h-4 w-[60px]" /></TableCell>
-                                <TableCell><Skeleton className="h-4 w-[180px]" /></TableCell>
-                                <TableCell className="text-right"><Skeleton className="h-8 w-16 ml-auto" /></TableCell>
-                            </TableRow>
-                        ))}
-                        {promotions?.map((promo) => (
-                        <TableRow key={promo.id}>
-                            <TableCell className="font-medium">{promo.name}</TableCell>
-                            <TableCell>{promo.discountPercentage}%</TableCell>
-                            <TableCell>
-                                {new Date(promo.startDate).toLocaleDateString()} - {new Date(promo.endDate).toLocaleDateString()}
-                            </TableCell>
-                            <TableCell className="text-right">
-                            <Button variant="ghost" size="icon" onClick={() => handleEditClick(promo)}>
-                                <Edit className="h-4 w-4" />
-                            </Button>
-                            <AlertDialogTrigger asChild>
-                                <Button variant="ghost" size="icon" onClick={() => setShowDeleteAlert(promo)}>
-                                    <Trash2 className="h-4 w-4 text-destructive" />
-                                </Button>
-                            </AlertDialogTrigger>
-                            </TableCell>
-                        </TableRow>
-                        ))}
-                    </TableBody>
-                    </Table>
-                </div>
-                {!isLoading && promotions?.length === 0 && (
-                <p className="text-center text-muted-foreground py-8">Nenhuma promoção cadastrada ainda.</p>
-                )}
-            </CardContent>
-        </Card>
-        <AlertDialogContent>
-            <AlertDialogHeader>
-                <AlertDialogTitle>Você tem certeza?</AlertDialogTitle>
-                <AlertDialogDescription>
-                    Esta ação não pode ser desfeita. Isso removerá permanentemente a promoção "{showDeleteAlert?.name}".
-                </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-                <AlertDialogCancel onClick={() => setShowDeleteAlert(null)}>Cancelar</AlertDialogCancel>
-                <AlertDialogAction onClick={handleDeletePromotion} className="bg-destructive hover:bg-destructive/90">
-                    Sim, remover
-                </AlertDialogAction>
-            </AlertDialogFooter>
-        </AlertDialogContent>
-    </AlertDialog>
-  );
+  const listCardProps = {
+    isLoading,
+    promotions,
+    handleEditClick,
+    setShowDeleteAlert: handleDeletePromotion,
+    isMobile,
+    setView
+  };
 
   if (isMobile) {
       return (
           <div className="w-full">
-              {view === 'form' ? <FormCard /> : <ListCard />}
+              {view === 'form' ? <FormCard {...formCardProps} /> : <ListCard {...listCardProps} />}
           </div>
       )
   }
@@ -445,11 +467,13 @@ export default function AdminPromotionsPage() {
   return (
     <div className="grid gap-8 md:grid-cols-3">
       <div className="md:col-span-1">
-        <FormCard />
+        <FormCard {...formCardProps} />
       </div>
       <div className="md:col-span-2">
-        <ListCard />
+        <ListCard {...listCardProps} />
       </div>
     </div>
   );
 }
+
+    
