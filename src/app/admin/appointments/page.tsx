@@ -47,7 +47,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { MoreHorizontal, CheckCircle, XCircle, Camera, ChevronLeft, ChevronRight, AlertTriangle, MessageSquare, Loader2, Send, Check } from 'lucide-react';
-import { useCollection, useDoc, useFirestore, useMemoFirebase } from '@/firebase';
+import { useCollection, useDoc, useFirestore, useMemoFirebase, useUser } from '@/firebase';
 import { collection, query, orderBy, doc, updateDoc, limit, startAfter, where, writeBatch, DocumentSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
 import type { Appointment, Service, ChatMessage } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
@@ -74,7 +74,7 @@ function ChatDialog({ appointmentId, clientName, serviceName }: { appointmentId:
     const [newMessage, setNewMessage] = useState('');
     const [isSending, setIsSending] = useState(false);
     const scrollAreaViewportRef = useRef<HTMLDivElement>(null);
-    const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const { user } = useUser();
 
     const appointmentRef = useMemoFirebase(() => firestore ? doc(firestore, 'appointments', appointmentId) : null, [firestore, appointmentId]);
     const { data: appointmentData } = useDoc<Appointment>(appointmentRef);
@@ -85,22 +85,24 @@ function ChatDialog({ appointmentId, clientName, serviceName }: { appointmentId:
     );
     const { data: messages, isLoading: isLoadingMessages } = useCollection<ChatMessage>(messagesRef);
     
-    // Marcar mensagens como lidas
+    // Marcar mensagens como lidas pelo admin
     useEffect(() => {
-        if (!firestore || !messages || messages.length === 0) return;
+        if (!firestore || !messages || !appointmentRef) return;
         
-        const batch = writeBatch(firestore);
         const unreadMessages = messages.filter(msg => msg.senderId !== 'admin' && !msg.isRead);
 
         if (unreadMessages.length > 0) {
+            const batch = writeBatch(firestore);
             unreadMessages.forEach(msg => {
                 const msgRef = doc(firestore, 'appointments', appointmentId, 'messages', msg.id);
                 batch.update(msgRef, { isRead: true });
             });
+            // Também marca no agendamento que o admin leu
+            batch.update(appointmentRef, { hasUnreadAdminMessage: false });
             batch.commit().catch(console.error);
         }
 
-    }, [messages, firestore, appointmentId]);
+    }, [messages, firestore, appointmentId, appointmentRef]);
 
     // Lógica de "digitando..."
     const updateTypingStatus = useCallback(debounce((isTyping: boolean) => {
@@ -126,7 +128,7 @@ function ChatDialog({ appointmentId, clientName, serviceName }: { appointmentId:
 
     const handleSendMessage = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!newMessage.trim() || !firestore) return;
+        if (!newMessage.trim() || !firestore || !appointmentRef) return;
 
         setIsSending(true);
         const messageData: Omit<ChatMessage, 'id'> = {
@@ -140,6 +142,8 @@ function ChatDialog({ appointmentId, clientName, serviceName }: { appointmentId:
 
         try {
             await addDoc(collection(firestore, 'appointments', appointmentId, 'messages'), messageData);
+            // Marca que o cliente tem uma nova mensagem não lida
+            await updateDoc(appointmentRef, { hasUnreadClientMessage: true });
             setNewMessage('');
             updateTypingStatus(false);
         } catch (error) {
@@ -416,7 +420,12 @@ function AppointmentsList({ services, appointments, isLoading }: AppointmentsLis
             {canChat && (
                 <DropdownMenuItem onClick={() => setChatDialogState({ isOpen: true, appointment: apt })}>
                     <MessageSquare className="mr-2 h-4 w-4 text-blue-500" />
-                    Conversar
+                    <div className="flex items-center">
+                        <span>Conversar</span>
+                         {apt.hasUnreadAdminMessage && (
+                            <span className="ml-2 h-2 w-2 rounded-full bg-red-500" />
+                        )}
+                    </div>
                 </DropdownMenuItem>
             )}
             <DropdownMenuItem onClick={() => handleStatusChange(apt, 'confirmado')} disabled={apt.status === 'confirmado' || apt.status === 'finalizado' || apt.status === 'cancelado'}>
@@ -748,5 +757,3 @@ const { data: paginatedAppointments, isLoading: isLoadingAppointments, snapshots
     </Card>
   );
 }
-
-    
