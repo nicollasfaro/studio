@@ -90,7 +90,8 @@ const serviceSchema = z.object({
   priceShortHair: z.coerce.number().optional(),
   priceMediumHair: z.coerce.number().optional(),
   priceLongHair: z.coerce.number().optional(),
-  hasCustomSchedule: z.boolean().default(false),
+  isProfessionalSchedule: z.boolean().default(false),
+  professionalName: z.string().optional(),
   customStartTime: z.string().optional(),
   customEndTime: z.string().optional(),
   customWorkingDays: z.array(z.number()).optional(),
@@ -103,15 +104,15 @@ const serviceSchema = z.object({
     message: "Preencha os preços para todos os comprimentos de cabelo.",
     path: ['priceShortHair'],
 }).refine(data => {
-    if (data.hasCustomSchedule) {
-        return !!data.customStartTime && !!data.customEndTime && !!data.customWorkingDays && data.customWorkingDays.length > 0;
+    if (data.isProfessionalSchedule) {
+        return !!data.professionalName && data.professionalName.length > 2 && !!data.customStartTime && !!data.customEndTime && !!data.customWorkingDays && data.customWorkingDays.length > 0;
     }
     return true;
 }, {
-    message: "Configure os dias e horários da agenda própria.",
-    path: ['customWorkingDays'],
+    message: "Configure o nome do profissional, dias e horários da agenda.",
+    path: ['professionalName'],
 }).refine(data => {
-    if (data.hasCustomSchedule && data.customStartTime && data.customEndTime) {
+    if (data.isProfessionalSchedule && data.customStartTime && data.customEndTime) {
         return data.customStartTime < data.customEndTime;
     }
     return true;
@@ -151,7 +152,8 @@ export default function AdminServicesPage() {
       priceShortHair: 0,
       priceMediumHair: 0,
       priceLongHair: 0,
-      hasCustomSchedule: false,
+      isProfessionalSchedule: false,
+      professionalName: '',
       customStartTime: '09:00',
       customEndTime: '18:00',
       customWorkingDays: [],
@@ -159,7 +161,7 @@ export default function AdminServicesPage() {
   });
 
   const isPriceFrom = form.watch('isPriceFrom');
-  const hasCustomSchedule = form.watch('hasCustomSchedule');
+  const isProfessionalSchedule = form.watch('isProfessionalSchedule');
 
   const onSubmit = (values: ServiceFormValues) => {
     if (!firestore || !servicesRef) return;
@@ -258,7 +260,8 @@ export default function AdminServicesPage() {
         priceShortHair: 0,
         priceMediumHair: 0,
         priceLongHair: 0,
-        hasCustomSchedule: false,
+        isProfessionalSchedule: false,
+        professionalName: '',
         customStartTime: '09:00',
         customEndTime: '18:00',
         customWorkingDays: [],
@@ -432,11 +435,11 @@ export default function AdminServicesPage() {
             
             <FormField
                 control={form.control}
-                name="hasCustomSchedule"
+                name="isProfessionalSchedule"
                 render={({ field }) => (
                   <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
                     <div className="space-y-0.5">
-                      <FormLabel>Este serviço tem agenda própria?</FormLabel>
+                      <FormLabel>Serviço com Profissional Específico?</FormLabel>
                     </div>
                     <FormControl>
                       <Switch
@@ -448,8 +451,19 @@ export default function AdminServicesPage() {
                 )}
               />
             
-            {hasCustomSchedule && (
+            {isProfessionalSchedule && (
                 <div className="space-y-4 p-4 border rounded-md">
+                     <FormField
+                        control={form.control}
+                        name="professionalName"
+                        render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>Nome do Profissional</FormLabel>
+                                <FormControl><Input placeholder="Ex: Ana Silva" {...field} /></FormControl>
+                                <FormMessage />
+                            </FormItem>
+                        )}
+                    />
                      <div className="grid sm:grid-cols-2 gap-4">
                         <FormField
                         control={form.control}
