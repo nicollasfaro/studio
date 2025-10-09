@@ -165,9 +165,13 @@
           "type": "number",
           "description": "Price for long hair, if applicable."
         },
-        "hasCustomSchedule": {
+        "isProfessionalSchedule": {
             "type": "boolean",
-            "description": "Flag to indicate if the service has its own schedule."
+            "description": "Flag to indicate if the service has its own schedule tied to a professional."
+        },
+        "professionalName": {
+            "type": "string",
+            "description": "The name of the professional responsible for the service, if it has a custom schedule."
         },
         "customStartTime": {
             "type": "string",
@@ -777,4 +781,5 @@
 }
 
 
+    
     

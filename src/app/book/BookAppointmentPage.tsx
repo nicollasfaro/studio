@@ -199,7 +199,7 @@ export default function BookAppointmentPage() {
   const { data: todaysAppointments, isLoading: isLoadingAppointments } = useCollection<Appointment>(appointmentsQuery);
   
   const activeSchedule = useMemo(() => {
-      if (currentService?.hasCustomSchedule && currentService.customWorkingDays && currentService.customStartTime && currentService.customEndTime) {
+      if (currentService?.isProfessionalSchedule && currentService.customWorkingDays && currentService.customStartTime && currentService.customEndTime) {
           return {
               workingDays: currentService.customWorkingDays,
               startTime: currentService.customStartTime,
@@ -258,7 +258,7 @@ export default function BookAppointmentPage() {
       return timeSlots.map(slot => ({ ...slot, available: false }));
     }
 
-    const currentServiceHasCustomSchedule = currentService.hasCustomSchedule === true;
+    const currentServiceHasCustomSchedule = currentService.isProfessionalSchedule === true;
     
     const conflictingAppointments = todaysAppointments.filter(apt => {
         // When rescheduling, ignore the appointment being rescheduled from conflict checking
@@ -269,7 +269,7 @@ export default function BookAppointmentPage() {
         if (!aptService) return false;
 
         // An appointment is a conflict if its schedule type matches the current service's schedule type
-        const aptServiceHasCustomSchedule = aptService.hasCustomSchedule === true;
+        const aptServiceHasCustomSchedule = aptService.isProfessionalSchedule === true;
         return aptServiceHasCustomSchedule === currentServiceHasCustomSchedule;
     });
 
@@ -616,6 +616,12 @@ export default function BookAppointmentPage() {
                             <span className="text-muted-foreground">Serviço:</span>
                             <span className="font-semibold">{currentService?.name}</span>
                         </div>
+                         {currentService?.isProfessionalSchedule && (
+                           <div className="flex justify-between">
+                                <span className="text-muted-foreground">Profissional:</span>
+                                <span className="font-semibold capitalize">{currentService.professionalName}</span>
+                           </div>
+                        )}
                         {currentService?.isPriceFrom && hairLength && (
                            <div className="flex justify-between">
                                 <span className="text-muted-foreground">Comprimento:</span>
@@ -735,3 +741,5 @@ export default function BookAppointmentPage() {
 }
 
 
+
+    
