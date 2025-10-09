@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useMemo, useState, useEffect, useRef, useCallback } from 'react';
@@ -409,7 +410,6 @@ function AppointmentsList({ services, appointments, isLoading }: AppointmentsLis
     if (!canChat) return null;
 
     return (
-      <DialogTrigger asChild>
         <Button variant="ghost" size="icon" className="relative" onClick={() => setChatDialogState({ isOpen: true, appointment })}>
             <MessageSquare className="h-5 w-5 text-blue-500" />
             {appointment.hasUnreadAdminMessage && (
@@ -419,7 +419,6 @@ function AppointmentsList({ services, appointments, isLoading }: AppointmentsLis
                 </span>
             )}
         </Button>
-      </DialogTrigger>
     );
   };
   
@@ -483,7 +482,12 @@ function AppointmentsList({ services, appointments, isLoading }: AppointmentsLis
   // Mobile View - Cards
   if (isMobile) {
       return (
-        <Dialog>
+        <Dialog open={chatDialogState.isOpen || contestDialogState.isOpen} onOpenChange={(isOpen) => {
+            if (!isOpen) {
+                setChatDialogState({ isOpen: false, appointment: null });
+                setContestDialogState({ isOpen: false, appointment: null });
+            }
+        }}>
             <div className="space-y-4">
                 {appointments.map(apt => {
                     const isUpdating = updatingStatusId === apt.id;
@@ -541,15 +545,13 @@ function AppointmentsList({ services, appointments, isLoading }: AppointmentsLis
                 })}
             </div>
             {/* Dialog Contents */}
-            <Dialog open={contestDialogState.isOpen} onOpenChange={(isOpen) => setContestDialogState({ isOpen, appointment: isOpen ? contestDialogState.appointment : null })}>
-                {contestDialogState.appointment && (
+            {contestDialogState.appointment && (
                 <ContestDialog 
                     appointment={contestDialogState.appointment} 
                     service={getServiceDetails(contestDialogState.appointment.serviceId)}
                     onOpenChange={(isOpen) => setContestDialogState({ isOpen, appointment: isOpen ? contestDialogState.appointment : null })}
                 />
-                )}
-            </Dialog>
+            )}
             {chatDialogState.appointment && (
                 <ChatDialog 
                     appointmentId={chatDialogState.appointment.id}
@@ -563,7 +565,12 @@ function AppointmentsList({ services, appointments, isLoading }: AppointmentsLis
 
   // Desktop View - Table
   return (
-    <Dialog>
+    <Dialog open={chatDialogState.isOpen || contestDialogState.isOpen} onOpenChange={(isOpen) => {
+        if (!isOpen) {
+            setChatDialogState({ isOpen: false, appointment: null });
+            setContestDialogState({ isOpen: false, appointment: null });
+        }
+    }}>
       <Table>
         <TableHeader>
           <TableRow>
@@ -631,15 +638,13 @@ function AppointmentsList({ services, appointments, isLoading }: AppointmentsLis
       </Table>
       
       {/* Dialog Contents */}
-      <Dialog open={contestDialogState.isOpen} onOpenChange={(isOpen) => setContestDialogState({ isOpen, appointment: isOpen ? contestDialogState.appointment : null })}>
-        {contestDialogState.appointment && (
+      {contestDialogState.appointment && (
           <ContestDialog 
             appointment={contestDialogState.appointment} 
             service={getServiceDetails(contestDialogState.appointment.serviceId)}
             onOpenChange={(isOpen) => setContestDialogState({ isOpen, appointment: isOpen ? contestDialogState.appointment : null })}
           />
         )}
-      </Dialog>
       {chatDialogState.appointment && (
         <ChatDialog 
           appointmentId={chatDialogState.appointment.id}
