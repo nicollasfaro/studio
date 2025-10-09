@@ -197,20 +197,32 @@ export default function BookAppointmentPage() {
   }, [firestore, date]);
   
   const { data: todaysAppointments, isLoading: isLoadingAppointments } = useCollection<Appointment>(appointmentsQuery);
+  
+  const activeSchedule = useMemo(() => {
+      if (currentService?.hasCustomSchedule && currentService.customWorkingDays && currentService.customStartTime && currentService.customEndTime) {
+          return {
+              workingDays: currentService.customWorkingDays,
+              startTime: currentService.customStartTime,
+              endTime: currentService.customEndTime,
+          };
+      }
+      return businessHours;
+  }, [currentService, businessHours]);
+
 
   const isDayDisabled = (day: Date) => {
     const today = startOfDay(new Date());
     if (day < today) return true;
-    if (businessHours && businessHours.workingDays) {
+    if (activeSchedule && activeSchedule.workingDays) {
         const dayOfWeek = getDay(day);
-        return !businessHours.workingDays.includes(dayOfWeek);
+        return !activeSchedule.workingDays.includes(dayOfWeek);
     }
-    return true; // Disable all days if business hours are not loaded
+    return true; // Disable all days if schedule is not loaded
   }
 
   // Set initial date only if today is a valid working day
   useEffect(() => {
-      if (!date && businessHours) {
+      if (!date && activeSchedule) {
         let checkDate = new Date();
         let attempts = 0;
         while(isDayDisabled(checkDate) && attempts < 7) {
@@ -221,14 +233,14 @@ export default function BookAppointmentPage() {
            setDate(checkDate);
         }
       }
-  }, [businessHours, date]);
+  }, [activeSchedule, date]);
 
-  // Generate time slots based on business hours
+  // Generate time slots based on the active schedule
   const timeSlots = useMemo(() => {
-    if (!businessHours) return [];
+    if (!activeSchedule) return [];
     
     const slots = [];
-    const { startTime, endTime } = businessHours;
+    const { startTime, endTime } = activeSchedule;
     let current = parse(startTime, 'HH:mm', new Date());
     const end = parse(endTime, 'HH:mm', new Date());
 
@@ -237,17 +249,17 @@ export default function BookAppointmentPage() {
         current = addMinutes(current, 30); // Assuming 30 minute intervals, can be configured
     }
     return slots;
-  }, [businessHours]);
+  }, [activeSchedule]);
 
 
   // Memoize available time slots calculation
   const availableTimeSlots = useMemo(() => {
-    if (isLoadingAppointments || !todaysAppointments || !allServices || !timeSlots.length || !businessHours || !currentService) {
+    if (isLoadingAppointments || !todaysAppointments || !allServices || !timeSlots.length || !activeSchedule || !currentService) {
       return timeSlots.map(slot => ({ ...slot, available: false }));
     }
     
     const bookedSlots = new Set<string>();
-    const closingTime = parse(businessHours.endTime, 'HH:mm', new Date());
+    const closingTime = parse(activeSchedule.endTime, 'HH:mm', new Date());
 
     todaysAppointments.forEach(apt => {
         // When rescheduling, ignore the appointment being rescheduled from conflict checking
@@ -281,7 +293,7 @@ export default function BookAppointmentPage() {
       }
     });
 
-  }, [todaysAppointments, allServices, isLoadingAppointments, rescheduleId, timeSlots, businessHours, currentService]);
+  }, [todaysAppointments, allServices, isLoadingAppointments, rescheduleId, timeSlots, activeSchedule, currentService]);
 
   const userHasAddress = !!(userAddress && userCity && userState && userZipCode && userCountry);
 
@@ -712,3 +724,4 @@ export default function BookAppointmentPage() {
     </div>
   );
 }
+
