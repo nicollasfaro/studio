@@ -57,10 +57,28 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Checkbox } from "@/components/ui/checkbox"
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
+import { Separator } from '@/components/ui/separator';
+
+const timeSlots = Array.from({ length: 24 * 2 }, (_, i) => {
+    const hours = Math.floor(i / 2);
+    const minutes = (i % 2) * 30;
+    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+});
+
+const daysOfWeek = [
+    { id: 1, label: 'Segunda' },
+    { id: 2, label: 'Terça' },
+    { id: 3, label: 'Quarta' },
+    { id: 4, label: 'Quinta' },
+    { id: 5, label: 'Sexta' },
+    { id: 6, label: 'Sábado' },
+    { id: 0, label: 'Domingo' },
+];
 
 const serviceSchema = z.object({
   name: z.string().min(3, 'O nome deve ter pelo menos 3 caracteres.'),
@@ -72,6 +90,10 @@ const serviceSchema = z.object({
   priceShortHair: z.coerce.number().optional(),
   priceMediumHair: z.coerce.number().optional(),
   priceLongHair: z.coerce.number().optional(),
+  hasCustomSchedule: z.boolean().default(false),
+  customStartTime: z.string().optional(),
+  customEndTime: z.string().optional(),
+  customWorkingDays: z.array(z.number()).optional(),
 }).refine(data => {
     if (data.isPriceFrom) {
         return data.priceShortHair != null && data.priceMediumHair != null && data.priceLongHair != null;
@@ -79,7 +101,23 @@ const serviceSchema = z.object({
     return true;
 }, {
     message: "Preencha os preços para todos os comprimentos de cabelo.",
-    path: ['priceShortHair'], // you can point this to any of the fields
+    path: ['priceShortHair'],
+}).refine(data => {
+    if (data.hasCustomSchedule) {
+        return !!data.customStartTime && !!data.customEndTime && !!data.customWorkingDays && data.customWorkingDays.length > 0;
+    }
+    return true;
+}, {
+    message: "Configure os dias e horários da agenda própria.",
+    path: ['customWorkingDays'],
+}).refine(data => {
+    if (data.hasCustomSchedule && data.customStartTime && data.customEndTime) {
+        return data.customStartTime < data.customEndTime;
+    }
+    return true;
+}, {
+    message: "O horário de término deve ser após o de início.",
+    path: ['customEndTime'],
 });
 
 
@@ -113,10 +151,15 @@ export default function AdminServicesPage() {
       priceShortHair: 0,
       priceMediumHair: 0,
       priceLongHair: 0,
+      hasCustomSchedule: false,
+      customStartTime: '09:00',
+      customEndTime: '18:00',
+      customWorkingDays: [],
     },
   });
 
   const isPriceFrom = form.watch('isPriceFrom');
+  const hasCustomSchedule = form.watch('hasCustomSchedule');
 
   const onSubmit = (values: ServiceFormValues) => {
     if (!firestore || !servicesRef) return;
@@ -196,6 +239,7 @@ export default function AdminServicesPage() {
       priceShortHair: service.priceShortHair || 0,
       priceMediumHair: service.priceMediumHair || 0,
       priceLongHair: service.priceLongHair || 0,
+      customWorkingDays: service.customWorkingDays || [],
     });
     if (isMobile) {
         setView('form');
@@ -214,6 +258,10 @@ export default function AdminServicesPage() {
         priceShortHair: 0,
         priceMediumHair: 0,
         priceLongHair: 0,
+        hasCustomSchedule: false,
+        customStartTime: '09:00',
+        customEndTime: '18:00',
+        customWorkingDays: [],
       });
       if (isMobile) {
         setView('list');
@@ -379,6 +427,115 @@ export default function AdminServicesPage() {
                 )}
               />
             )}
+
+            <Separator />
+            
+            <FormField
+                control={form.control}
+                name="hasCustomSchedule"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                    <div className="space-y-0.5">
+                      <FormLabel>Este serviço tem agenda própria?</FormLabel>
+                    </div>
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+            
+            {hasCustomSchedule && (
+                <div className="space-y-4 p-4 border rounded-md">
+                     <div className="grid sm:grid-cols-2 gap-4">
+                        <FormField
+                        control={form.control}
+                        name="customStartTime"
+                        render={({ field }) => (
+                            <FormItem>
+                            <FormLabel>Abertura (Agenda Própria)</FormLabel>
+                            <Select onValueChange={field.onChange} value={field.value}>
+                                <FormControl>
+                                <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                {timeSlots.map(time => (
+                                    <SelectItem key={`start-${time}`} value={time}>{time}</SelectItem>
+                                ))}
+                                </SelectContent>
+                            </Select>
+                            </FormItem>
+                        )}
+                        />
+                        <FormField
+                        control={form.control}
+                        name="customEndTime"
+                        render={({ field }) => (
+                            <FormItem>
+                            <FormLabel>Fechamento (Agenda Própria)</FormLabel>
+                            <Select onValueChange={field.onChange} value={field.value}>
+                                <FormControl>
+                                <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                {timeSlots.map(time => (
+                                    <SelectItem key={`end-${time}`} value={time}>{time}</SelectItem>
+                                ))}
+                                </SelectContent>
+                            </Select>
+                            </FormItem>
+                        )}
+                        />
+                    </div>
+                     <FormField
+                        control={form.control}
+                        name="customWorkingDays"
+                        render={() => (
+                            <FormItem>
+                                <FormLabel>Dias (Agenda Própria)</FormLabel>
+                                <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                                {daysOfWeek.map((day) => (
+                                    <FormField
+                                    key={day.id}
+                                    control={form.control}
+                                    name="customWorkingDays"
+                                    render={({ field }) => {
+                                        return (
+                                        <FormItem key={day.id} className="flex flex-row items-center space-x-2 space-y-0">
+                                            <FormControl>
+                                            <Checkbox
+                                                checked={field.value?.includes(day.id)}
+                                                onCheckedChange={(checked) => {
+                                                return checked
+                                                    ? field.onChange([...(field.value || []), day.id])
+                                                    : field.onChange(
+                                                        field.value?.filter(
+                                                        (value) => value !== day.id
+                                                        )
+                                                    )
+                                                }}
+                                            />
+                                            </FormControl>
+                                            <FormLabel className="font-normal text-sm">
+                                                {day.label}
+                                            </FormLabel>
+                                        </FormItem>
+                                        )
+                                    }}
+                                    />
+                                ))}
+                                </div>
+                                <FormMessage />
+                            </FormItem>
+                        )}
+                    />
+                </div>
+            )}
+
+
           </CardContent>
           <CardFooter className="flex justify-end gap-2">
             {isEditing && (
@@ -499,3 +656,5 @@ export default function AdminServicesPage() {
     </div>
   );
 }
+
+    
