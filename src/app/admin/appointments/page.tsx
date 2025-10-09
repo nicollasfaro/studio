@@ -74,7 +74,7 @@ function ChatDialog({ appointmentId, clientName, serviceName }: { appointmentId:
     const firestore = useFirestore();
     const [newMessage, setNewMessage] = useState('');
     const [isSending, setIsSending] = useState(false);
-    const scrollAreaViewportRef = useRef<HTMLDivElement>(null);
+    const scrollAreaViewportRef = useRef<HTMLDivElement | null>(null);
     const { user } = useUser();
 
     const appointmentRef = useMemoFirebase(() => firestore ? doc(firestore, 'appointments', appointmentId) : null, [firestore, appointmentId]);
@@ -162,7 +162,7 @@ function ChatDialog({ appointmentId, clientName, serviceName }: { appointmentId:
                     Conversa sobre o agendamento de {serviceName}
                 </DialogDescription>
             </DialogHeader>
-            <ScrollArea ref={scrollAreaViewportRef as any} className="flex-1 px-6">
+            <ScrollArea viewportRef={scrollAreaViewportRef} className="flex-1 px-6">
                  <div className="space-y-4 py-4">
                     {isLoadingMessages && <p>Carregando mensagens...</p>}
                     {messages?.map((msg, index) => (
