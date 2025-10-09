@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useMemo, useState, useEffect, useRef, useCallback } from 'react';
@@ -47,7 +48,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { MoreHorizontal, CheckCircle, XCircle, Camera, ChevronLeft, ChevronRight, AlertTriangle, MessageSquare, Loader2, Send, Check } from 'lucide-react';
-import { useCollection, useDoc, useFirestore, useMemoFirebase } from '@/firebase';
+import { useCollection, useDoc, useFirestore, useMemoFirebase, useUser } from '@/firebase';
 import { collection, query, orderBy, doc, updateDoc, limit, startAfter, where, writeBatch, DocumentSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
 import type { Appointment, Service, ChatMessage } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
@@ -73,8 +74,8 @@ function ChatDialog({ appointmentId, clientName, serviceName }: { appointmentId:
     const firestore = useFirestore();
     const [newMessage, setNewMessage] = useState('');
     const [isSending, setIsSending] = useState(false);
-    const scrollAreaViewportRef = useRef<HTMLDivElement>(null);
-    const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const scrollAreaViewportRef = useRef<HTMLDivElement | null>(null);
+    const { user } = useUser();
 
     const appointmentRef = useMemoFirebase(() => firestore ? doc(firestore, 'appointments', appointmentId) : null, [firestore, appointmentId]);
     const { data: appointmentData } = useDoc<Appointment>(appointmentRef);
@@ -85,22 +86,24 @@ function ChatDialog({ appointmentId, clientName, serviceName }: { appointmentId:
     );
     const { data: messages, isLoading: isLoadingMessages } = useCollection<ChatMessage>(messagesRef);
     
-    // Marcar mensagens como lidas
+    // Marcar mensagens como lidas pelo admin
     useEffect(() => {
-        if (!firestore || !messages || messages.length === 0) return;
+        if (!firestore || !messages || !appointmentRef) return;
         
-        const batch = writeBatch(firestore);
         const unreadMessages = messages.filter(msg => msg.senderId !== 'admin' && !msg.isRead);
 
         if (unreadMessages.length > 0) {
+            const batch = writeBatch(firestore);
             unreadMessages.forEach(msg => {
                 const msgRef = doc(firestore, 'appointments', appointmentId, 'messages', msg.id);
                 batch.update(msgRef, { isRead: true });
             });
+            // Também marca no agendamento que o admin leu
+            batch.update(appointmentRef, { hasUnreadAdminMessage: false });
             batch.commit().catch(console.error);
         }
 
-    }, [messages, firestore, appointmentId]);
+    }, [messages, firestore, appointmentId, appointmentRef]);
 
     // Lógica de "digitando..."
     const updateTypingStatus = useCallback(debounce((isTyping: boolean) => {
@@ -126,7 +129,7 @@ function ChatDialog({ appointmentId, clientName, serviceName }: { appointmentId:
 
     const handleSendMessage = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!newMessage.trim() || !firestore) return;
+        if (!newMessage.trim() || !firestore || !appointmentRef) return;
 
         setIsSending(true);
         const messageData: Omit<ChatMessage, 'id'> = {
@@ -140,6 +143,8 @@ function ChatDialog({ appointmentId, clientName, serviceName }: { appointmentId:
 
         try {
             await addDoc(collection(firestore, 'appointments', appointmentId, 'messages'), messageData);
+            // Marca que o cliente tem uma nova mensagem não lida
+            await updateDoc(appointmentRef, { hasUnreadClientMessage: true });
             setNewMessage('');
             updateTypingStatus(false);
         } catch (error) {
@@ -157,7 +162,7 @@ function ChatDialog({ appointmentId, clientName, serviceName }: { appointmentId:
                     Conversa sobre o agendamento de {serviceName}
                 </DialogDescription>
             </DialogHeader>
-            <ScrollArea ref={scrollAreaViewportRef as any} className="flex-1 px-6">
+            <ScrollArea viewportRef={scrollAreaViewportRef} className="flex-1 px-6">
                  <div className="space-y-4 py-4">
                     {isLoadingMessages && <p>Carregando mensagens...</p>}
                     {messages?.map((msg, index) => (
@@ -400,11 +405,27 @@ function AppointmentsList({ services, appointments, isLoading }: AppointmentsLis
      return {};
   }
   
-  const renderActions = (apt: Appointment) => {
+  const ChatButton = ({ appointment }: { appointment: Appointment }) => {
+    const canChat = appointment.status === 'confirmado';
+    if (!canChat) return null;
+
+    return (
+        <Button variant="ghost" size="icon" className="relative" onClick={() => setChatDialogState({ isOpen: true, appointment })}>
+            <MessageSquare className="h-5 w-5 text-blue-500" />
+            {appointment.hasUnreadAdminMessage && (
+                <span className="absolute top-1 right-1 flex h-2.5 w-2.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500"></span>
+                </span>
+            )}
+        </Button>
+    );
+  };
+  
+  const AppointmentActionsMenu = ({ apt }: { apt: Appointment }) => {
     const service = getServiceDetails(apt.serviceId);
     const canContest = service?.isPriceFrom && apt.hairPhotoUrl && apt.status === 'Marcado';
-    const canChat = apt.status === 'confirmado';
-
+    
     return (
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -413,12 +434,6 @@ function AppointmentsList({ services, appointments, isLoading }: AppointmentsLis
             </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-            {canChat && (
-                <DropdownMenuItem onClick={() => setChatDialogState({ isOpen: true, appointment: apt })}>
-                    <MessageSquare className="mr-2 h-4 w-4 text-blue-500" />
-                    Conversar
-                </DropdownMenuItem>
-            )}
             <DropdownMenuItem onClick={() => handleStatusChange(apt, 'confirmado')} disabled={apt.status === 'confirmado' || apt.status === 'finalizado' || apt.status === 'cancelado'}>
                 <CheckCircle className="mr-2 h-4 w-4 text-green-500" />
                 Confirmar
@@ -467,7 +482,12 @@ function AppointmentsList({ services, appointments, isLoading }: AppointmentsLis
   // Mobile View - Cards
   if (isMobile) {
       return (
-        <>
+        <Dialog open={chatDialogState.isOpen || contestDialogState.isOpen} onOpenChange={(isOpen) => {
+            if (!isOpen) {
+                setChatDialogState({ isOpen: false, appointment: null });
+                setContestDialogState({ isOpen: false, appointment: null });
+            }
+        }}>
             <div className="space-y-4">
                 {appointments.map(apt => {
                     const isUpdating = updatingStatusId === apt.id;
@@ -478,16 +498,14 @@ function AppointmentsList({ services, appointments, isLoading }: AppointmentsLis
                                     <div>
                                         <div className="font-bold flex items-center gap-2">{apt.clientName}
                                         {apt.hairPhotoUrl && (
-                                            <Dialog>
-                                                <DialogTrigger asChild>
+                                          <Dialog>
+                                            <DialogTrigger asChild>
                                                 <Button variant="ghost" size="icon" className="h-6 w-6">
                                                     <Camera className="h-4 w-4 text-muted-foreground" />
                                                 </Button>
-                                                </DialogTrigger>
-                                                <DialogContent className="max-w-md">
-                                                <DialogHeader>
-                                                    <DialogTitle>Foto de Referência do Cabelo</DialogTitle>
-                                                </DialogHeader>
+                                            </DialogTrigger>
+                                            <DialogContent className="max-w-md">
+                                                <DialogHeader><DialogTitle>Foto de Referência do Cabelo</DialogTitle></DialogHeader>
                                                 <div className="mt-4 relative aspect-square">
                                                     <Image
                                                         src={apt.hairPhotoUrl}
@@ -497,14 +515,19 @@ function AppointmentsList({ services, appointments, isLoading }: AppointmentsLis
                                                         className="rounded-md"
                                                     />
                                                 </div>
-                                                </DialogContent>
-                                            </Dialog>
+                                            </DialogContent>
+                                          </Dialog>
                                         )}
                                         </div>
                                         <div className="text-sm text-muted-foreground">{apt.clientEmail}</div>
                                     </div>
-                                    <div className="absolute top-2 right-2">
-                                        {isUpdating ? <Loader2 className="h-4 w-4 animate-spin"/> : renderActions(apt)}
+                                    <div className="absolute top-1 right-1 flex items-center">
+                                        {isUpdating ? <Loader2 className="h-5 w-5 animate-spin mr-2"/> : (
+                                          <>
+                                            <ChatButton appointment={apt} />
+                                            <AppointmentActionsMenu apt={apt} />
+                                          </>
+                                        )}
                                     </div>
                                </div>
                                 <div className="text-sm space-y-1">
@@ -521,31 +544,33 @@ function AppointmentsList({ services, appointments, isLoading }: AppointmentsLis
                     )
                 })}
             </div>
-            <Dialog open={contestDialogState.isOpen} onOpenChange={(isOpen) => setContestDialogState({ isOpen, appointment: isOpen ? contestDialogState.appointment : null })}>
-                {contestDialogState.appointment && (
+            {/* Dialog Contents */}
+            {contestDialogState.appointment && (
                 <ContestDialog 
                     appointment={contestDialogState.appointment} 
                     service={getServiceDetails(contestDialogState.appointment.serviceId)}
                     onOpenChange={(isOpen) => setContestDialogState({ isOpen, appointment: isOpen ? contestDialogState.appointment : null })}
                 />
-                )}
-            </Dialog>
-            <Dialog open={chatDialogState.isOpen} onOpenChange={(isOpen) => setChatDialogState({ isOpen, appointment: isOpen ? chatDialogState.appointment : null })}>
-                {chatDialogState.appointment && (
+            )}
+            {chatDialogState.appointment && (
                 <ChatDialog 
                     appointmentId={chatDialogState.appointment.id}
                     clientName={chatDialogState.appointment.clientName}
                     serviceName={getServiceDetails(chatDialogState.appointment.serviceId)?.name}
                 />
-                )}
-            </Dialog>
-        </>
+            )}
+        </Dialog>
       )
   }
 
   // Desktop View - Table
   return (
-    <>
+    <Dialog open={chatDialogState.isOpen || contestDialogState.isOpen} onOpenChange={(isOpen) => {
+        if (!isOpen) {
+            setChatDialogState({ isOpen: false, appointment: null });
+            setContestDialogState({ isOpen: false, appointment: null });
+        }
+    }}>
       <Table>
         <TableHeader>
           <TableRow>
@@ -574,9 +599,7 @@ function AppointmentsList({ services, appointments, isLoading }: AppointmentsLis
                         </Button>
                       </DialogTrigger>
                       <DialogContent className="max-w-md">
-                        <DialogHeader>
-                          <DialogTitle>Foto de Referência do Cabelo</DialogTitle>
-                        </DialogHeader>
+                        <DialogHeader><DialogTitle>Foto de Referência do Cabelo</DialogTitle></DialogHeader>
                         <div className="mt-4 relative aspect-square">
                           <Image
                               src={apt.hairPhotoUrl}
@@ -600,31 +623,36 @@ function AppointmentsList({ services, appointments, isLoading }: AppointmentsLis
                 </Badge>
               </TableCell>
               <TableCell className="text-right">
-                {isUpdating ? <Loader2 className="h-4 w-4 animate-spin ml-auto" /> : renderActions(apt)}
+                <div className="flex items-center justify-end">
+                    {isUpdating ? <Loader2 className="h-5 w-5 animate-spin"/> : (
+                        <>
+                            <ChatButton appointment={apt} />
+                            <AppointmentActionsMenu apt={apt} />
+                        </>
+                    )}
+                </div>
               </TableCell>
             </TableRow>
           )})}
         </TableBody>
       </Table>
-      <Dialog open={contestDialogState.isOpen} onOpenChange={(isOpen) => setContestDialogState({ isOpen, appointment: isOpen ? contestDialogState.appointment : null })}>
-        {contestDialogState.appointment && (
+      
+      {/* Dialog Contents */}
+      {contestDialogState.appointment && (
           <ContestDialog 
             appointment={contestDialogState.appointment} 
             service={getServiceDetails(contestDialogState.appointment.serviceId)}
             onOpenChange={(isOpen) => setContestDialogState({ isOpen, appointment: isOpen ? contestDialogState.appointment : null })}
           />
         )}
-      </Dialog>
-      <Dialog open={chatDialogState.isOpen} onOpenChange={(isOpen) => setChatDialogState({ isOpen, appointment: isOpen ? chatDialogState.appointment : null })}>
-        {chatDialogState.appointment && (
-          <ChatDialog 
-            appointmentId={chatDialogState.appointment.id}
-            clientName={chatDialogState.appointment.clientName}
-            serviceName={getServiceDetails(chatDialogState.appointment.serviceId)?.name}
-          />
-        )}
-      </Dialog>
-    </>
+      {chatDialogState.appointment && (
+        <ChatDialog 
+          appointmentId={chatDialogState.appointment.id}
+          clientName={chatDialogState.appointment.clientName}
+          serviceName={getServiceDetails(chatDialogState.appointment.serviceId)?.name}
+        />
+      )}
+    </Dialog>
   )
 }
 
@@ -748,5 +776,3 @@ const { data: paginatedAppointments, isLoading: isLoadingAppointments, snapshots
     </Card>
   );
 }
-
-    

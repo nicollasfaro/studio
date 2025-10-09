@@ -56,7 +56,7 @@ interface AppointmentWithService extends Appointment {
   service?: Service;
 }
 
-function ChatDialog({ appointmentId, user, onOpenChange }: { appointmentId: string, user: NonNullable<ReturnType<typeof useUser>['user']>, onOpenChange: (open: boolean) => void }) {
+function ChatDialog({ appointmentId, user }: { appointmentId: string, user: NonNullable<ReturnType<typeof useUser>['user']> }) {
     const firestore = useFirestore();
     const [newMessage, setNewMessage] = useState('');
     const [isSending, setIsSending] = useState(false);
@@ -73,20 +73,24 @@ function ChatDialog({ appointmentId, user, onOpenChange }: { appointmentId: stri
 
      // Marcar mensagens como lidas
     useEffect(() => {
-        if (!firestore || !messages || messages.length === 0) return;
+        if (!firestore || !messages || !appointmentRef) return;
         
-        const batch = writeBatch(firestore);
         const unreadMessages = messages.filter(msg => msg.senderId === 'admin' && !msg.isRead);
 
         if (unreadMessages.length > 0) {
+            const batch = writeBatch(firestore);
             unreadMessages.forEach(msg => {
                 const msgRef = doc(firestore, 'appointments', appointmentId, 'messages', msg.id);
                 batch.update(msgRef, { isRead: true });
             });
+            
+            // Também marca no agendamento que o cliente leu
+            batch.update(appointmentRef, { hasUnreadClientMessage: false });
+
             batch.commit().catch(console.error);
         }
 
-    }, [messages, firestore, appointmentId]);
+    }, [messages, firestore, appointmentId, appointmentRef]);
 
 
     // Lógica de "digitando..."
@@ -111,7 +115,7 @@ function ChatDialog({ appointmentId, user, onOpenChange }: { appointmentId: stri
 
     const handleSendMessage = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!newMessage.trim() || !firestore || !user) return;
+        if (!newMessage.trim() || !firestore || !user || !appointmentRef) return;
 
         setIsSending(true);
         const messageData: Omit<ChatMessage, 'id'> = {
@@ -124,7 +128,10 @@ function ChatDialog({ appointmentId, user, onOpenChange }: { appointmentId: stri
         };
 
         try {
-            await addDoc(collection(firestore, 'appointments', appointmentId, 'messages'), messageData);
+            const messagesCollectionRef = collection(firestore, 'appointments', appointmentId, 'messages');
+            await addDoc(messagesCollectionRef, messageData);
+            // Marca que o admin tem uma nova mensagem não lida
+            await updateDoc(appointmentRef, { hasUnreadAdminMessage: true });
             setNewMessage('');
             updateTypingStatus(false);
         } catch (error) {
@@ -440,9 +447,14 @@ export default function ProfilePage() {
                           </div>
                           <div className="flex items-center">
                             {apt.status === 'confirmado' && (
-                                <Button variant="ghost" size="icon" onClick={() => setChatDialogState({ isOpen: true, appointmentId: apt.id })}>
-                                    <MessageSquare className="h-5 w-5 text-blue-500" />
-                                </Button>
+                                <div className="relative">
+                                    <Button variant="ghost" size="icon" onClick={() => setChatDialogState({ isOpen: true, appointmentId: apt.id })}>
+                                        <MessageSquare className="h-5 w-5 text-blue-500" />
+                                    </Button>
+                                    {apt.hasUnreadClientMessage && (
+                                        <span className="absolute top-0 right-0 block h-2 w-2 rounded-full bg-red-500 ring-2 ring-background" />
+                                    )}
+                                </div>
                             )}
                             {apt.status !== 'contestado' && (
                                 <DropdownMenu>
@@ -544,7 +556,6 @@ export default function ProfilePage() {
                 <ChatDialog 
                     appointmentId={chatDialogState.appointmentId}
                     user={user}
-                    onOpenChange={(isOpen) => setChatDialogState({ isOpen, appointmentId: isOpen ? chatDialogState.appointmentId : null })}
                 />
                 )}
             </Dialog>
