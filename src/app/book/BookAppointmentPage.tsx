@@ -257,18 +257,28 @@ export default function BookAppointmentPage() {
     if (isLoadingAppointments || !todaysAppointments || !allServices || !timeSlots.length || !activeSchedule || !currentService) {
       return timeSlots.map(slot => ({ ...slot, available: false }));
     }
+
+    const currentServiceHasCustomSchedule = currentService.hasCustomSchedule === true;
     
+    const conflictingAppointments = todaysAppointments.filter(apt => {
+        // When rescheduling, ignore the appointment being rescheduled from conflict checking
+        if (rescheduleId && apt.id === rescheduleId) return false;
+        if (apt.status === 'cancelado') return false; // Ignore canceled appointments
+
+        const aptService = allServices.find(s => s.id === apt.serviceId);
+        if (!aptService) return false;
+
+        // An appointment is a conflict if its schedule type matches the current service's schedule type
+        const aptServiceHasCustomSchedule = aptService.hasCustomSchedule === true;
+        return aptServiceHasCustomSchedule === currentServiceHasCustomSchedule;
+    });
+
     const bookedSlots = new Set<string>();
     const closingTime = parse(activeSchedule.endTime, 'HH:mm', new Date());
 
-    todaysAppointments.forEach(apt => {
-        // When rescheduling, ignore the appointment being rescheduled from conflict checking
-        if (rescheduleId && apt.id === rescheduleId) return;
-
-        if (apt.status === 'cancelado') return; // Ignore canceled appointments
-
+    conflictingAppointments.forEach(apt => {
         const service = allServices.find(s => s.id === apt.serviceId);
-        if (!service) return; // Ignore if service details are not found
+        if (!service) return; 
 
         const startTime = parse(format(new Date(apt.startTime), 'HH:mm'), 'HH:mm', new Date());
         const endTime = addMinutes(startTime, service.durationMinutes);
@@ -284,7 +294,6 @@ export default function BookAppointmentPage() {
     return timeSlots.map(slot => {
       const slotTime = parse(slot.time, 'HH:mm', new Date());
       const slotEndTime = addMinutes(slotTime, currentService.durationMinutes);
-      // A slot is available if it's not in the booked set AND if the service fits before closing time.
       const isAvailable = !bookedSlots.has(slot.time) && slotEndTime <= closingTime;
 
       return {
@@ -724,4 +733,5 @@ export default function BookAppointmentPage() {
     </div>
   );
 }
+
 
