@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useEffect, useMemo, ChangeEvent } from 'react';
@@ -58,7 +57,10 @@ export default function BookAppointmentPage() {
   // User Info State
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
-  const [userAddress, setUserAddress] = useState('');
+  const [userStreet, setUserStreet] = useState('');
+  const [userNumber, setUserNumber] = useState('');
+  const [userComplement, setUserComplement] = useState('');
+  const [userNeighborhood, setUserNeighborhood] = useState('');
   const [userCity, setUserCity] = useState('');
   const [userState, setUserState] = useState('');
   const [userZipCode, setUserZipCode] = useState('');
@@ -98,7 +100,10 @@ export default function BookAppointmentPage() {
     if (user && userData) {
       setName(userData.name || user.displayName || '');
       setEmail(userData.email || user.email || '');
-      setUserAddress(userData.address || '');
+      setUserStreet(userData.street || '');
+      setUserNumber(userData.number || '');
+      setUserComplement(userData.complement || '');
+      setUserNeighborhood(userData.neighborhood || '');
       setUserCity(userData.city || '');
       setUserState(userData.state || '');
       setUserZipCode(userData.zipCode || '');
@@ -166,9 +171,11 @@ export default function BookAppointmentPage() {
             const response = await fetch(`https://viacep.com.br/ws/${zip}/json/`);
             const data = await response.json();
             if (!data.erro) {
+                setUserStreet(data.logradouro);
+                setUserNeighborhood(data.bairro);
                 setUserCity(data.localidade);
                 setUserState(data.uf);
-                toast({ title: 'CEP encontrado!', description: 'Sua cidade e estado foram preenchidos.' });
+                toast({ title: 'CEP encontrado!', description: 'Seu endereço foi preenchido.' });
             } else {
                 toast({ title: 'CEP não encontrado', variant: 'destructive' });
             }
@@ -304,10 +311,10 @@ export default function BookAppointmentPage() {
   }, [todaysAppointments, allServices, isLoadingAppointments, rescheduleId, timeSlots, activeSchedule, currentService]);
 
   const userHasAddress = useMemo(() => {
-    const hasProfileAddress = !!(userData?.address && userData?.city && userData?.state && userData?.zipCode);
-    const hasFormAddress = !!(userAddress && userCity && userState && userZipCode);
+    const hasProfileAddress = !!(userData?.street && userData?.number && userData?.city && userData?.state && userData?.zipCode);
+    const hasFormAddress = !!(userStreet && userNumber && userCity && userState && userZipCode);
     return hasProfileAddress || hasFormAddress;
-  }, [userData, userAddress, userCity, userState, userZipCode]);
+  }, [userData, userStreet, userNumber, userCity, userState, userZipCode]);
 
   const handleNextStep = () => {
     if (step === 1 && !selectedServiceId) {
@@ -331,8 +338,8 @@ export default function BookAppointmentPage() {
     }
     const confirmationStep = currentService?.isPriceFrom ? 4 : 3;
     if (step === confirmationStep && !userHasAddress) {
-        if (!userAddress || !userCity || !userState || !userZipCode || !userCountry) {
-            toast({ title: 'Por favor, preencha seu endereço.', variant: 'destructive' });
+        if (!userStreet || !userNumber || !userCity || !userState || !userZipCode || !userCountry) {
+            toast({ title: 'Por favor, preencha seu endereço completo.', variant: 'destructive' });
             return;
         }
     }
@@ -412,11 +419,14 @@ export default function BookAppointmentPage() {
       }
 
       // If user address was filled in this step and they don't have one on file, save it.
-      const hasProfileAddress = !!(userData?.address && userData?.city && userData?.state && userData?.zipCode);
+      const hasProfileAddress = !!(userData?.street && userData?.number && userData?.city && userData?.state && userData?.zipCode);
       if (!hasProfileAddress) {
           const userDocRef = doc(firestore, 'users', user.uid);
           await setDoc(userDocRef, {
-              address: userAddress,
+              street: userStreet,
+              number: userNumber,
+              complement: userComplement,
+              neighborhood: userNeighborhood,
               city: userCity,
               state: userState,
               zipCode: userZipCode,
@@ -466,7 +476,7 @@ export default function BookAppointmentPage() {
   const mapSourceUrl = useMemo(() => {
     if (step !== confirmationStep || !businessLocation) return '';
 
-    const origin = encodeURIComponent(`${userAddress}, ${userCity}, ${userState}, ${userZipCode}, ${userCountry}`);
+    const origin = encodeURIComponent(`${userStreet} ${userNumber}, ${userNeighborhood}, ${userCity}, ${userState}, ${userZipCode}, ${userCountry}`);
     const destination = encodeURIComponent(`${businessLocation.address}, ${businessLocation.city}, ${businessLocation.state}, ${businessLocation.zipCode}, ${businessLocation.country}`);
     
     // Only return a valid URL if we have an origin to show directions
@@ -477,7 +487,7 @@ export default function BookAppointmentPage() {
     // Otherwise, just show the location of the business
     return `https://www.google.com/maps/embed/v1/place?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_EMBED_API_KEY}&q=${destination}`;
 
-  }, [step, businessLocation, userHasAddress, userAddress, userCity, userState, userZipCode, userCountry]);
+  }, [step, businessLocation, userHasAddress, userStreet, userNumber, userNeighborhood, userCity, userState, userZipCode, userCountry]);
 
 
   return (
@@ -673,9 +683,23 @@ export default function BookAppointmentPage() {
                           <Label htmlFor="zipCode">CEP</Label>
                           <Input id="zipCode" value={userZipCode} onChange={e => setUserZipCode(e.target.value)} placeholder="Digite seu CEP de 8 dígitos"/>
                         </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="street">Rua</Label>
+                            <Input id="street" value={userStreet} onChange={e => setUserStreet(e.target.value)} placeholder="Ex: Av. Paulista" />
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="number">Número</Label>
+                                <Input id="number" value={userNumber} onChange={e => setUserNumber(e.target.value)} placeholder="900" />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="complement">Complemento</Label>
+                                <Input id="complement" value={userComplement} onChange={e => setUserComplement(e.target.value)} placeholder="Apto 101" />
+                            </div>
+                        </div>
                          <div className="space-y-2">
-                          <Label htmlFor="address">Rua, Número e Complemento</Label>
-                          <Input id="address" value={userAddress} onChange={e => setUserAddress(e.target.value)} placeholder="Ex: Av. Paulista, 900 - Apto 101" />
+                            <Label htmlFor="neighborhood">Bairro</Label>
+                            <Input id="neighborhood" value={userNeighborhood} onChange={e => setUserNeighborhood(e.target.value)} placeholder="Bela Vista" />
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                           <div className="space-y-2">
@@ -752,5 +776,7 @@ export default function BookAppointmentPage() {
 
 
 
+
+    
 
     

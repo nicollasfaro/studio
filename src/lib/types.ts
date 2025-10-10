@@ -8,6 +8,7 @@
 
 
 
+
 export type Service = {
   id: string;
   name: string;
@@ -83,7 +84,10 @@ export type User = {
     email: string;
     createdAt: string;
     isAdmin?: boolean;
-    address?: string;
+    street?: string;
+    number?: string;
+    complement?: string;
+    neighborhood?: string;
     city?: string;
     state?: string;
     zipCode?: string;
@@ -145,5 +149,8 @@ export type WhatsAppMessage = {
     
 
     
+
+    
+
 
     

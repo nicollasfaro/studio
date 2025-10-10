@@ -62,7 +62,10 @@ import { User as UserIcon, Loader2, ArrowLeft } from 'lucide-react';
 const profileSchema = z.object({
   name: z.string().min(2, 'O nome deve ter pelo menos 2 caracteres.'),
   email: z.string().email('Email inválido.'),
-  address: z.string().optional(),
+  street: z.string().optional(),
+  number: z.string().optional(),
+  complement: z.string().optional(),
+  neighborhood: z.string().optional(),
   city: z.string().optional(),
   state: z.string().optional(),
   zipCode: z.string().optional(),
@@ -151,7 +154,10 @@ function ProfileForm({ user, userData }: { user: NonNullable<ReturnType<typeof u
     defaultValues: {
       name: userData.name || user.displayName || '',
       email: userData.email || user.email || '',
-      address: userData.address || '',
+      street: userData.street || '',
+      number: userData.number || '',
+      complement: userData.complement || '',
+      neighborhood: userData.neighborhood || '',
       city: userData.city || '',
       state: userData.state || '',
       zipCode: userData.zipCode || '',
@@ -167,10 +173,11 @@ function ProfileForm({ user, userData }: { user: NonNullable<ReturnType<typeof u
             const response = await fetch(`https://viacep.com.br/ws/${zip}/json/`);
             const data = await response.json();
             if (!data.erro) {
-                // Do not set the address field, only city and state
+                form.setValue('street', data.logradouro);
+                form.setValue('neighborhood', data.bairro);
                 form.setValue('city', data.localidade);
                 form.setValue('state', data.uf);
-                toast({ title: 'CEP encontrado!', description: 'Cidade e estado foram preenchidos.' });
+                toast({ title: 'Endereço encontrado!', description: 'Os campos de endereço foram preenchidos.' });
             } else {
                 toast({ title: 'CEP não encontrado', variant: 'destructive' });
             }
@@ -290,7 +297,7 @@ function ProfileForm({ user, userData }: { user: NonNullable<ReturnType<typeof u
               control={form.control}
               name="zipCode"
               render={({ field }) => (
-                <FormItem>
+                <FormItem className="md:col-span-1">
                   <FormLabel>CEP</FormLabel>
                   <FormControl><Input placeholder="01310-100" {...field} /></FormControl>
                   <FormMessage />
@@ -301,7 +308,7 @@ function ProfileForm({ user, userData }: { user: NonNullable<ReturnType<typeof u
               control={form.control}
               name="country"
               render={({ field }) => (
-                <FormItem>
+                <FormItem className="md:col-span-2">
                   <FormLabel>País</FormLabel>
                   <FormControl><Input {...field} /></FormControl>
                   <FormMessage />
@@ -311,16 +318,51 @@ function ProfileForm({ user, userData }: { user: NonNullable<ReturnType<typeof u
         </div>
         <FormField
           control={form.control}
-          name="address"
+          name="street"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Rua, Número e Complemento</FormLabel>
-              <FormControl><Input placeholder="Ex: Av. Paulista, 900 - Apto 101" {...field} /></FormControl>
+              <FormLabel>Rua</FormLabel>
+              <FormControl><Input placeholder="Ex: Av. Paulista" {...field} /></FormControl>
               <FormMessage />
             </FormItem>
           )}
         />
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+             <FormField
+              control={form.control}
+              name="number"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Número</FormLabel>
+                  <FormControl><Input placeholder="900" {...field} /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+             <FormField
+              control={form.control}
+              name="complement"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Complemento (Opcional)</FormLabel>
+                  <FormControl><Input placeholder="Apto 101" {...field} /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+             <FormField
+              control={form.control}
+              name="neighborhood"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Bairro</FormLabel>
+                  <FormControl><Input placeholder="Bela Vista" {...field} /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+        </div>
+         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
              <FormField
               control={form.control}
               name="city"
@@ -360,7 +402,6 @@ function ProfileForm({ user, userData }: { user: NonNullable<ReturnType<typeof u
 function PasswordForm({ user }: { user: NonNullable<ReturnType<typeof useUser>['user']> }) {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const auth = useAuth();
   
   const form = useForm<z.infer<typeof passwordSchema>>({
     resolver: zodResolver(passwordSchema),
@@ -490,3 +531,5 @@ function EditProfileSkeleton() {
     </div>
   );
 }
+
+    
