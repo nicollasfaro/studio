@@ -1,16 +1,23 @@
+
 rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
-    // As imagens da galeria são publicamente legíveis, mas apenas administradores podem escrever.
+    // Regras para a galeria de imagens
     match /gallery/{allPaths=**} {
       allow read;
-      allow write: if request.auth != null && request.auth.token.isAdmin == true;
+      allow write: if request.auth.uid == userId;
     }
-
+    
     // As imagens de perfil só podem ser lidas ou escritas pelo próprio usuário.
     match /profile-images/{userId}/{allPaths=**} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Regras para as fotos de referência de agendamentos
+    match /appointments/{userId}/{allPaths=**} {
+        allow read; // Manter público se necessário, ou restringir a `if request.auth.uid == userId`
+        allow write: if request.auth.uid == userId;
     }
   }
 }
