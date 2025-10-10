@@ -304,7 +304,11 @@ export default function BookAppointmentPage() {
 
   }, [todaysAppointments, allServices, isLoadingAppointments, rescheduleId, timeSlots, activeSchedule, currentService]);
 
-  const userHasAddress = !!(userAddress && userCity && userState && userZipCode && userCountry);
+  const userHasAddress = useMemo(() => {
+    const hasProfileAddress = !!(userData?.address && userData?.city && userData?.state && userData?.zipCode);
+    const hasFormAddress = !!(userAddress && userCity && userState && userZipCode);
+    return hasProfileAddress || hasFormAddress;
+  }, [userData, userAddress, userCity, userState, userZipCode]);
 
   const handleNextStep = () => {
     if (step === 1 && !selectedServiceId) {
@@ -408,8 +412,9 @@ export default function BookAppointmentPage() {
         appointmentData.hairPhotoUrl = hairPhotoDataUrl;
       }
 
-      // If user address was filled in this step, save it to their profile
-      if (!userHasAddress) {
+      // If user address was filled in this step and they don't have one on file, save it.
+      const hasProfileAddress = !!(userData?.address && userData?.city && userData?.state && userData?.zipCode);
+      if (!hasProfileAddress) {
           const userDocRef = doc(firestore, 'users', user.uid);
           await setDoc(userDocRef, {
               address: userAddress,
@@ -460,12 +465,18 @@ export default function BookAppointmentPage() {
   const successStep = totalSteps + 1;
   
   const mapSourceUrl = useMemo(() => {
-    if (step !== confirmationStep || !businessLocation || !userHasAddress) return '';
+    if (step !== confirmationStep || !businessLocation) return '';
 
     const origin = encodeURIComponent(`${userAddress}, ${userCity}, ${userState}, ${userZipCode}, ${userCountry}`);
     const destination = encodeURIComponent(`${businessLocation.address}, ${businessLocation.city}, ${businessLocation.state}, ${businessLocation.zipCode}, ${businessLocation.country}`);
     
-    return `https://www.google.com/maps/embed/v1/directions?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_EMBED_API_KEY}&origin=${origin}&destination=${destination}`;
+    // Only return a valid URL if we have an origin to show directions
+    if (userHasAddress) {
+        return `https://www.google.com/maps/embed/v1/directions?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_EMBED_API_KEY}&origin=${origin}&destination=${destination}`;
+    }
+    
+    // Otherwise, just show the location of the business
+    return `https://www.google.com/maps/embed/v1/place?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_EMBED_API_KEY}&q=${destination}`;
 
   }, [step, businessLocation, userHasAddress, userAddress, userCity, userState, userZipCode, userCountry]);
 
@@ -739,6 +750,7 @@ export default function BookAppointmentPage() {
     </div>
   );
 }
+
 
 
 
