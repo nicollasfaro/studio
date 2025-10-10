@@ -232,8 +232,8 @@ export const sendAppointmentConfirmationNotification = functions.firestore
     const beforeData = change.before.data();
     const afterData = change.after.data();
 
-    // A condição correta: o status anterior não era 'confirmado' E o novo status é 'confirmado'
-    if (!beforeData || !afterData || beforeData.status === "confirmado" || afterData.status !== "confirmado") {
+    // A condição correta: o novo status é 'confirmado' E o status anterior não era 'confirmado'
+    if (!beforeData || !afterData || afterData.status !== "confirmado" || beforeData.status === "confirmado") {
       return;
     }
 

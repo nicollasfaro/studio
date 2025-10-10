@@ -39,9 +39,21 @@
             "type": "string",
             "description": "The authentication provider used (e.g., 'password', 'google.com')."
         },
-        "address": {
+        "street": {
           "type": "string",
-          "description": "The user's street address."
+          "description": "The user's street name."
+        },
+        "number": {
+          "type": "string",
+          "description": "The user's house/building number."
+        },
+        "complement": {
+          "type": "string",
+          "description": "The user's address complement (e.g., Apt 101)."
+        },
+        "neighborhood": {
+          "type": "string",
+          "description": "The user's neighborhood."
         },
         "city": {
           "type": "string",
@@ -782,4 +794,6 @@
 
 
     
+    
+
     
