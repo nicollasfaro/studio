@@ -166,10 +166,9 @@ export default function BookAppointmentPage() {
             const response = await fetch(`https://viacep.com.br/ws/${zip}/json/`);
             const data = await response.json();
             if (!data.erro) {
-                setUserAddress(data.logradouro);
                 setUserCity(data.localidade);
                 setUserState(data.uf);
-                toast({ title: 'Endereço encontrado!', description: 'Seu endereço foi preenchido.' });
+                toast({ title: 'CEP encontrado!', description: 'Sua cidade e estado foram preenchidos.' });
             } else {
                 toast({ title: 'CEP não encontrado', variant: 'destructive' });
             }
@@ -675,8 +674,8 @@ export default function BookAppointmentPage() {
                           <Input id="zipCode" value={userZipCode} onChange={e => setUserZipCode(e.target.value)} placeholder="Digite seu CEP de 8 dígitos"/>
                         </div>
                          <div className="space-y-2">
-                          <Label htmlFor="address">Rua e Bairro</Label>
-                          <Input id="address" value={userAddress} onChange={e => setUserAddress(e.target.value)} />
+                          <Label htmlFor="address">Rua, Número e Complemento</Label>
+                          <Input id="address" value={userAddress} onChange={e => setUserAddress(e.target.value)} placeholder="Ex: Av. Paulista, 900 - Apto 101" />
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                           <div className="space-y-2">

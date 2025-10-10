@@ -167,10 +167,10 @@ function ProfileForm({ user, userData }: { user: NonNullable<ReturnType<typeof u
             const response = await fetch(`https://viacep.com.br/ws/${zip}/json/`);
             const data = await response.json();
             if (!data.erro) {
-                form.setValue('address', data.logradouro);
+                // Do not set the address field, only city and state
                 form.setValue('city', data.localidade);
                 form.setValue('state', data.uf);
-                toast({ title: 'Endereço encontrado!', description: 'Seus campos de endereço foram preenchidos.' });
+                toast({ title: 'CEP encontrado!', description: 'Cidade e estado foram preenchidos.' });
             } else {
                 toast({ title: 'CEP não encontrado', variant: 'destructive' });
             }
@@ -314,8 +314,8 @@ function ProfileForm({ user, userData }: { user: NonNullable<ReturnType<typeof u
           name="address"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Rua e Número</FormLabel>
-              <FormControl><Input placeholder="Ex: Rua das Flores, 123" {...field} /></FormControl>
+              <FormLabel>Rua, Número e Complemento</FormLabel>
+              <FormControl><Input placeholder="Ex: Av. Paulista, 900 - Apto 101" {...field} /></FormControl>
               <FormMessage />
             </FormItem>
           )}
