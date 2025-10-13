@@ -1,8 +1,9 @@
+
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
-import { collection, doc, updateDoc, query, orderBy, limit, startAfter, DocumentSnapshot, where } from 'firebase/firestore';
+import { collection, doc, updateDoc, query, orderBy, limit, startAfter, DocumentSnapshot } from 'firebase/firestore';
 import type { User } from '@/lib/types';
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card';
 import {
@@ -26,17 +27,98 @@ import { useUser } from '@/firebase';
 import { Button } from '@/components/ui/button';
 import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { cn } from '@/lib/utils';
-
 
 const USERS_PER_PAGE = 10;
+
+function UsersTable({ users, currentUser, handleRoleChange, updatingRoleId, isLoading }: any) {
+  const renderRoleSelector = (user: User) => {
+    const isUpdating = updatingRoleId === user.id;
+    return (
+        <div className='flex items-center gap-2'>
+            <Select
+                defaultValue={user.isAdmin ? 'admin' : 'user'}
+                onValueChange={(value) => handleRoleChange(user.id, value as 'admin' | 'user')}
+                disabled={user.id === currentUser?.uid || isUpdating}
+            >
+                <SelectTrigger className="w-[120px]">
+                    <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                    <SelectItem value="admin">Admin</SelectItem>
+                    <SelectItem value="user">Usuário</SelectItem>
+                </SelectContent>
+            </Select>
+            {isUpdating && <Loader2 className="h-4 w-4 animate-spin" />}
+        </div>
+    );
+  };
+  
+  const isMobile = useIsMobile();
+  
+  if (isLoading) {
+    return Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-20 w-full mb-4" />);
+  }
+
+  if (isMobile) {
+    return (
+      <div className="space-y-4">
+        {users?.map((user: User) => (
+            <Card key={user.id} className="p-4">
+                <div className="flex flex-col space-y-2">
+                    <div>
+                        <p className="font-bold">{user.name}</p>
+                        <p className="text-sm text-muted-foreground">{user.email}</p>
+                    </div>
+                     <div>
+                        <p className="text-sm font-medium">Função</p>
+                        {renderRoleSelector(user)}
+                    </div>
+                    <div>
+                        <p className="text-sm font-medium">Data de Criação</p>
+                        <p className="text-sm text-muted-foreground">
+                            {user.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'N/A'}
+                        </p>
+                    </div>
+                </div>
+            </Card>
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead>Nome</TableHead>
+          <TableHead>Email</TableHead>
+          <TableHead>Função</TableHead>
+          <TableHead>Data de Criação</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {users?.map((user: User) => (
+          <TableRow key={user.id}>
+            <TableCell className="font-medium">{user.name}</TableCell>
+            <TableCell>{user.email}</TableCell>
+            <TableCell>{renderRoleSelector(user)}</TableCell>
+            <TableCell>
+              {user.createdAt
+                ? new Date(user.createdAt).toLocaleDateString()
+                : 'N/A'}
+            </TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
+  );
+}
 
 // This component now receives isAdmin as a prop from the layout
 export default function AdminUsersPage({ isAdmin }: { isAdmin: boolean }) {
   const firestore = useFirestore();
   const { user: currentUser } = useUser();
   const { toast } = useToast();
-  const isMobile = useIsMobile();
 
   const [page, setPage] = useState(0);
   const [paginationSnapshots, setPaginationSnapshots] = useState<(DocumentSnapshot | null)[]>([null]);
@@ -105,86 +187,19 @@ export default function AdminUsersPage({ isAdmin }: { isAdmin: boolean }) {
     setPaginationSnapshots(prev => prev.slice(0, -1));
   };
   
-  const renderRoleSelector = (user: User) => {
-    const isUpdating = updatingRoleId === user.id;
-    return (
-        <div className='flex items-center gap-2'>
-            <Select
-                defaultValue={user.isAdmin ? 'admin' : 'user'}
-                onValueChange={(value) => handleRoleChange(user.id, value as 'admin' | 'user')}
-                disabled={user.id === currentUser?.uid || isUpdating}
-            >
-                <SelectTrigger className="w-[120px]">
-                    <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                    <SelectItem value="admin">Admin</SelectItem>
-                    <SelectItem value="user">Usuário</SelectItem>
-                </SelectContent>
-            </Select>
-            {isUpdating && <Loader2 className="h-4 w-4 animate-spin" />}
-        </div>
-    );
-  };
-
-
   return (
     <Card>
       <CardHeader>
         <CardTitle>Gerenciamento de Usuários</CardTitle>
       </CardHeader>
       <CardContent>
-        {isLoading ? (
-            Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-20 w-full mb-4" />)
-        ) : isMobile ? (
-            <div className="space-y-4">
-            {users?.map((user) => (
-                <Card key={user.id} className="p-4">
-                    <div className="flex flex-col space-y-2">
-                        <div>
-                            <p className="font-bold">{user.name}</p>
-                            <p className="text-sm text-muted-foreground">{user.email}</p>
-                        </div>
-                         <div>
-                            <p className="text-sm font-medium">Função</p>
-                            {renderRoleSelector(user)}
-                        </div>
-                        <div>
-                            <p className="text-sm font-medium">Data de Criação</p>
-                            <p className="text-sm text-muted-foreground">
-                                {user.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'N/A'}
-                            </p>
-                        </div>
-                    </div>
-                </Card>
-            ))}
-            </div>
-        ) : (
-             <Table>
-                <TableHeader>
-                    <TableRow>
-                    <TableHead>Nome</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Função</TableHead>
-                    <TableHead>Data de Criação</TableHead>
-                    </TableRow>
-                </TableHeader>
-                <TableBody>
-                    {users?.map((user) => (
-                    <TableRow key={user.id}>
-                        <TableCell className="font-medium">{user.name}</TableCell>
-                        <TableCell>{user.email}</TableCell>
-                        <TableCell>{renderRoleSelector(user)}</TableCell>
-                        <TableCell>
-                        {user.createdAt
-                            ? new Date(user.createdAt).toLocaleDateString()
-                            : 'N/A'}
-                        </TableCell>
-                    </TableRow>
-                    ))}
-                </TableBody>
-            </Table>
-        )}
+        <UsersTable
+          users={users}
+          currentUser={currentUser}
+          handleRoleChange={handleRoleChange}
+          updatingRoleId={updatingRoleId}
+          isLoading={isLoading}
+        />
        
         {!isLoading && users?.length === 0 && (
           <p className="text-center text-muted-foreground py-8">
@@ -218,3 +233,5 @@ export default function AdminUsersPage({ isAdmin }: { isAdmin: boolean }) {
     </Card>
   );
 }
+
+    

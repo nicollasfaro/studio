@@ -4,6 +4,8 @@ export type BusinessInfo = {
     name: string;
 }
 
+
+
 export type Service = {
   id: string;
   name: string;

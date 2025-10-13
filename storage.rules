@@ -1,37 +1,23 @@
+
 rules_version = '2';
+
 service firebase.storage {
   match /b/{bucket}/o {
-
-    // Helpers
-    function isSignedIn() {
-      return request.auth != null;
+    // Regras para a galeria de imagens
+    match /gallery/{allPaths=**} {
+      allow read;
+      allow write: if request.auth.uid == userId;
     }
-
-    function isAdmin() {
-      return isSignedIn() &&
-             exists(/databases/(default)/documents/users/$(request.auth.uid)) &&
-             get(/databases/(default)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    
+    // As imagens de perfil só podem ser lidas ou escritas pelo próprio usuário.
+    match /profile-images/{userId}/{allPaths=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
     }
-
-    // 📂 Galeria - leitura pública, escrita só por admin
-    match /gallery/{fileName} {
-      allow read: if true;
-      allow write: if isAdmin();
-    }
-
-    // 📂 Imagem de perfil
-    match /profile-images/{userId} {
-      allow read: if true;
-      allow write: if isSignedIn() && request.auth.uid == userId;
-    }
-
-    // 📂 Fotos de agendamento
-    match /appointments/{allPaths=**} {
-      // Usuário só pode salvar/ler se o caminho do arquivo começar com o UID dele
-      allow read, write: if isSignedIn() && request.resource.name.matches('^projects/_/buckets/[^/]+/objects/appointments/' + request.auth.uid + '.*');
-
-      // Admin pode tudo
-      allow read, write: if isAdmin();
+    
+    // Regras para as fotos de referência de agendamentos
+    match /appointments/{userId}/{allPaths=**} {
+        allow read; // Manter público se necessário, ou restringir a `if request.auth.uid == userId`
+        allow write: if request.auth.uid == userId;
     }
   }
 }
