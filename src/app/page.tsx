@@ -32,7 +32,7 @@ export default function Home() {
   const latestPromotion = promotions?.[0];
   const promotionImage = galleryImages?.find((img) => img.id === latestPromotion?.imageId);
   
-  const bookHref = user ? '/book' : '/login';
+  const bookHref = user ? (heroData?.buttonLink || '/book') : '/login';
   const promoBookHref = latestPromotion ? (user ? `/book?promo=${latestPromotion.id}` : '/login') : '/promotions';
 
   const isLoading = isLoadingServices || isLoadingPromotions || isLoadingGallery || isLoadingHero;
@@ -195,4 +195,5 @@ export default function Home() {
   );
 }
 
+    
     

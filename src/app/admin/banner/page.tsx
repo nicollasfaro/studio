@@ -46,9 +46,17 @@ const heroBannerSchema = z.object({
   largeText: z.string().min(5, 'O texto principal deve ter pelo menos 5 caracteres.'),
   smallText: z.string().min(10, 'O texto de apoio deve ter pelo menos 10 caracteres.'),
   buttonText: z.string().min(3, 'O texto do botão deve ter pelo menos 3 caracteres.'),
+  buttonLink: z.string().optional(),
 });
 
 type HeroBannerFormValues = z.infer<typeof heroBannerSchema>;
+
+const availablePages = [
+    { label: 'Página de Agendamento', value: '/book' },
+    { label: 'Página Inicial', value: '/' },
+    { label: 'Página de Serviços', value: '/services' },
+    { label: 'Página de Promoções', value: '/promotions' },
+];
 
 export default function AdminBannerPage() {
   const { toast } = useToast();
@@ -68,6 +76,7 @@ export default function AdminBannerPage() {
       largeText: '',
       smallText: '',
       buttonText: 'Agende um Horário',
+      buttonLink: '/book',
     },
   });
 
@@ -181,19 +190,43 @@ export default function AdminBannerPage() {
                 </FormItem>
               )}
             />
-            <FormField
-              control={form.control}
-              name="buttonText"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Texto do Botão</FormLabel>
-                  <FormControl>
-                    <Input placeholder="Agende um Horário" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <FormField
+                control={form.control}
+                name="buttonText"
+                render={({ field }) => (
+                    <FormItem>
+                    <FormLabel>Texto do Botão</FormLabel>
+                    <FormControl>
+                        <Input placeholder="Agende um Horário" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                    </FormItem>
+                )}
+                />
+                 <FormField
+                    control={form.control}
+                    name="buttonLink"
+                    render={({ field }) => (
+                        <FormItem>
+                        <FormLabel>Link do Botão</FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <FormControl>
+                            <SelectTrigger>
+                                <SelectValue placeholder="Selecione uma página de destino" />
+                            </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                            {availablePages.map((page) => (
+                                <SelectItem key={page.value} value={page.value}>{page.label}</SelectItem>
+                            ))}
+                            </SelectContent>
+                        </Select>
+                        <FormMessage />
+                        </FormItem>
+                    )}
+                />
+            </div>
           </CardContent>
           <CardFooter>
             <Button type="submit" disabled={form.formState.isSubmitting}>
@@ -207,4 +240,5 @@ export default function AdminBannerPage() {
   );
 }
 
+    
     

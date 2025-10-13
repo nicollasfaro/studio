@@ -602,6 +602,10 @@
         "buttonText": {
           "type": "string",
           "description": "The text for the call-to-action button."
+        },
+        "buttonLink": {
+          "type": "string",
+          "description": "The destination URL for the call-to-action button."
         }
       },
       "required": ["imageId", "largeText", "smallText", "buttonText"]
@@ -806,6 +810,8 @@
 
 
     
+    
+
     
 
     
