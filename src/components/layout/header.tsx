@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import Link from 'next/link';
@@ -56,7 +57,9 @@ export function Header() {
 
   const handleLogout = async () => {
     try {
-      await signOut(auth);
+      if(auth) {
+        await signOut(auth);
+      }
       toast({
         title: 'Logout bem-sucedido',
       });
@@ -202,3 +205,5 @@ export function Header() {
     </header>
   );
 }
+
+    
