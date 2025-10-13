@@ -4,6 +4,7 @@ import { Twitter, Instagram, Facebook } from 'lucide-react';
 import Link from 'next/link';
 import { useFirestore, useDoc, useMemoFirebase } from '@/firebase';
 import { doc } from 'firebase/firestore';
+import { useBusinessInfo } from '@/components/BusinessInfoProvider';
 
 interface SocialLinks {
     facebook?: string;
@@ -13,6 +14,7 @@ interface SocialLinks {
 
 export function Footer() {
   const firestore = useFirestore();
+  const { info: businessInfo } = useBusinessInfo();
   const socialDocRef = useMemoFirebase(() => (firestore ? doc(firestore, 'socialMedia', 'links') : null), [firestore]);
   const { data: socialLinks } = useDoc<SocialLinks>(socialDocRef);
 
@@ -20,7 +22,7 @@ export function Footer() {
     <footer className="bg-secondary/50">
       <div className="container mx-auto px-6 py-8">
         <div className="flex flex-col items-center text-center">
-          <h3 className="text-2xl font-headline text-primary">Thainnes Cuba Ciuldin</h3>
+          <h3 className="text-2xl font-headline text-primary">{businessInfo?.name || 'Thainnes Cuba Ciuldin'}</h3>
           <p className="max-w-md mx-auto mt-2 text-muted-foreground">
 Seu santuário de beleza e bem-estar.
           </p>
@@ -47,10 +49,12 @@ Seu santuário de beleza e bem-estar.
 
         <div className="text-center">
           <p className="text-sm text-muted-foreground">
-            &copy; {new Date().getFullYear()} Thainnes Cuba Ciuldin. All Rights Reserved.
+            &copy; {new Date().getFullYear()} {businessInfo?.name || 'Thainnes Cuba Ciuldin'}. All Rights Reserved.
           </p>
         </div>
       </div>
     </footer>
   );
 }
+
+    

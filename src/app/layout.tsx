@@ -1,4 +1,5 @@
 
+
 'use client';
 import './globals.css';
 import { cn } from '@/lib/utils';
@@ -7,15 +8,21 @@ import { Footer } from '@/components/layout/footer';
 import { Toaster } from '@/components/ui/toaster';
 import { FirebaseClientProvider } from '@/firebase';
 import { ThemeProvider } from '@/components/theme-provider';
+import { BusinessInfoProvider, useBusinessInfo } from '@/components/BusinessInfoProvider';
 import { useEffect } from 'react';
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+function AppLayout({ children }: { children: React.ReactNode }) {
+  const { info, isLoading } = useBusinessInfo();
 
-   useEffect(() => {
+  useEffect(() => {
+    if (info?.name) {
+      document.title = info.name;
+    } else if (!isLoading) {
+      document.title = "Thainnes Cuba Ciuldin"; // Fallback title
+    }
+  }, [info, isLoading]);
+  
+  useEffect(() => {
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker
         .register('/firebase-messaging-sw.js')
@@ -29,9 +36,24 @@ export default function RootLayout({
   }, []);
 
   return (
+    <>
+      <Header />
+      <main className="flex-1">{children}</main>
+      <Footer />
+      <Toaster />
+    </>
+  )
+}
+
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
+
+  return (
     <html lang="en" suppressHydrationWarning>
       <head>
-        <title>Thainnes Cuba Ciuldin</title>
         <meta name="description" content="Your one-stop beauty and wellness salon." />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
@@ -51,14 +73,15 @@ export default function RootLayout({
         )}
       >
         <FirebaseClientProvider>
-          <ThemeProvider>
-            <Header />
-            <main className="flex-1">{children}</main>
-            <Footer />
-            <Toaster />
-          </ThemeProvider>
+          <BusinessInfoProvider>
+            <ThemeProvider>
+              <AppLayout>{children}</AppLayout>
+            </ThemeProvider>
+          </BusinessInfoProvider>
         </FirebaseClientProvider>
       </body>
     </html>
   );
 }
+
+    

@@ -1,11 +1,8 @@
 
-
-
-
-
-
-
-
+export type BusinessInfo = {
+    id: string;
+    name: string;
+}
 
 
 
@@ -118,6 +115,7 @@ export type HeroBanner = {
   largeText: string;
   smallText: string;
   buttonText: string;
+  buttonLink?: string;
 };
     
 export type BusinessHours = {
@@ -152,5 +150,6 @@ export type WhatsAppMessage = {
 
     
 
+    
 
     

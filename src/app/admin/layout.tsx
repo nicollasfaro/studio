@@ -7,7 +7,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SidebarProvider, Sidebar, SidebarTrigger, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarContent, SidebarHeader, SidebarInset, SidebarMenuBadge, useSidebar } from '@/components/ui/sidebar';
 import { Logo } from '@/components/logo';
-import { LayoutDashboard, Users, Calendar, Scissors, Gift, Palette, Share2, Bell, Image, Home, Clock, MapPin } from 'lucide-react';
+import { LayoutDashboard, Users, Calendar, Scissors, Gift, Palette, Share2, Bell, Image, Home, Clock, MapPin, Briefcase } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useUserData } from '@/hooks/use-user-data';
 import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
@@ -41,6 +41,11 @@ function AdminSidebarMenu() {
       <SidebarMenuItem>
         <SidebarMenuButton href="/admin" leftIcon={<LayoutDashboard />} onClick={handleMenuItemClick}>
           Dashboard
+        </SidebarMenuButton>
+      </SidebarMenuItem>
+      <SidebarMenuItem>
+        <SidebarMenuButton href="/admin/info" leftIcon={<Briefcase />} onClick={handleMenuItemClick}>
+          Informações
         </SidebarMenuButton>
       </SidebarMenuItem>
       <SidebarMenuItem>
